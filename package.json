@@ -1,0 +1,82 @@
+{
+  "name": "hierarchical-approval",
+  "version": "0.1.1",
+  "description": "TypeScript-first hierarchical approval engine for ERP developers",
+  "keywords": [
+    "approval",
+    "workflow",
+    "erp",
+    "hierarchical",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "provenance": true,
+    "access": "public"
+  },
+  "main": "./dist/index.cjs",
+  "type": "module",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./adapters/memory": {
+      "types": "./dist/adapters/MemoryAdapter.d.ts",
+      "import": "./dist/adapters/MemoryAdapter.js",
+      "require": "./dist/adapters/MemoryAdapter.cjs"
+    },
+    "./adapters/postgres": {
+      "types": "./dist/adapters/PostgresAdapter.d.ts",
+      "import": "./dist/adapters/PostgresAdapter.js",
+      "require": "./dist/adapters/PostgresAdapter.cjs"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "require": "./dist/testing.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src tests",
+    "format": "prettier --write src tests",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0",
+    "@typescript-eslint/eslint-plugin": "^8.61.1",
+    "@typescript-eslint/parser": "^8.61.1",
+    "@vitest/coverage-v8": "^4.1.9",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.4",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "eventemitter3": "^5.0.4",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "pg": ">=8"
+  },
+  "peerDependenciesOptional": {
+    "pg": true
+  }
+}
