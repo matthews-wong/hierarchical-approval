@@ -9,8 +9,16 @@
     "hierarchical",
     "typescript"
   ],
-  "author": "",
+  "author": "Matthews Wong <matthews.wong@commsult.id>",
   "license": "MIT",
+  "homepage": "https://hierarchical-approval.matthewswong.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/matthews-wong/hierarchical-approval.git"
+  },
+  "bugs": {
+    "url": "https://github.com/matthews-wong/hierarchical-approval/issues"
+  },
   "sideEffects": false,
   "files": [
     "dist",

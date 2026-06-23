@@ -1,12 +1,32 @@
+<div align="center">
+
 # hierarchical-approval
 
-TypeScript-first multi-level approval workflows for enterprise systems. Multi-tenant, audit-ready, fully pluggable.
+**TypeScript-first multi-level approval workflows for enterprise systems.**
+Multi-tenant · audit-ready · fully pluggable · zero runtime dependencies you don't opt into.
+
+[![npm version](https://img.shields.io/npm/v/hierarchical-approval.svg?logo=npm&color=cb3837)](https://www.npmjs.com/package/hierarchical-approval)
+[![npm downloads](https://img.shields.io/npm/dm/hierarchical-approval.svg?color=cb3837)](https://www.npmjs.com/package/hierarchical-approval)
+[![CI](https://github.com/matthews-wong/hierarchical-approval/actions/workflows/ci.yml/badge.svg)](https://github.com/matthews-wong/hierarchical-approval/actions/workflows/ci.yml)
+[![types](https://img.shields.io/npm/types/hierarchical-approval.svg?logo=typescript&logoColor=white&color=3178c6)](https://www.typescriptlang.org/)
+[![minzipped size](https://img.shields.io/bundlephobia/minzip/hierarchical-approval?color=44cc11)](https://bundlephobia.com/package/hierarchical-approval)
+[![license](https://img.shields.io/npm/l/hierarchical-approval.svg?color=blue)](./LICENSE)
+[![tests](https://img.shields.io/badge/tests-195%20passing-44cc11.svg?logo=vitest&logoColor=white)](./tests)
+
+[**Documentation**](https://hierarchical-approval.matthewswong.com) ·
+[**npm**](https://www.npmjs.com/package/hierarchical-approval) ·
+[**Changelog**](./IMPROVEMENTS.md) ·
+[**Examples**](./examples)
+
+</div>
 
 ```sh
 npm install hierarchical-approval
 # peer dep for Postgres only
 npm install pg @types/pg
 ```
+
+> 📖 Full docs & live guides: **[hierarchical-approval.matthewswong.com](https://hierarchical-approval.matthewswong.com)**
 
 ---
 
@@ -33,7 +53,7 @@ Approval workflows are deceptively simple until they aren't. Most teams start wi
 **`approval-flow`** — Single-level only; no multi-tenancy; no audit trail; last published 2020.  
 **`workflow-engine`** — Generic state machine; you implement every guard, every condition, every audit entry yourself.  
 **`node-approval`** — No TypeScript; no idempotency; no optimistic locking.  
-**Hand-rolled** — You *will* hit the concurrent-approval race condition eventually. This library has 167 tests covering it.
+**Hand-rolled** — You *will* hit the concurrent-approval race condition eventually. This library has 195 tests covering it.
 
 ---
 
