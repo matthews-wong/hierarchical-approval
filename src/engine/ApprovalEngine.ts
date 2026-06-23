@@ -39,6 +39,7 @@ import type { Logger } from '../utils/Logger.js';
 import { noopLogger } from '../utils/Logger.js';
 import type { Clock } from '../utils/Clock.js';
 import { systemClock } from '../utils/Clock.js';
+import type { BusinessCalendar } from '../utils/BusinessCalendar.js';
 import type { IdGeneratorFn } from '../utils/IdGenerator.js';
 import { defaultIdGenerator } from '../utils/IdGenerator.js';
 import { TemplateRegistry } from './TemplateRegistry.js';
@@ -110,6 +111,17 @@ export interface BulkResult {
   total: number;
 }
 
+export interface ApprovalStatistics {
+  /** Total instances matching the filter (across all statuses). */
+  total: number;
+  /** Count per status. */
+  byStatus: Record<ApprovalInstance['status'], number>;
+  /** Instances still pending past their escalation/expiry deadline. */
+  overdue: number;
+  /** approved / (approved + rejected); 0 when nothing has been resolved. */
+  approvalRate: number;
+}
+
 export interface HealthResult {
   status: 'healthy' | 'degraded' | 'unhealthy';
   adapter: 'connected' | 'error';
@@ -146,6 +158,12 @@ export interface ApprovalEngineOptions {
   maxBulkItems?: number;
   /** Injectable clock — defaults to system clock. Enables deterministic tests and custom time sources. */
   clock?: Clock;
+  /**
+   * Optional business-day calendar. When provided, escalationAfterDays and
+   * slaDeadlineDays are interpreted as business days (skipping weekends and
+   * holidays) instead of plain calendar days. See weekendCalendar().
+   */
+  calendar?: BusinessCalendar;
   /** Custom ID generator for instances and templates. Defaults to timestamp+random. */
   generateId?: IdGeneratorFn;
   /** Custom optimistic locking retry policy. */
@@ -176,6 +194,7 @@ export class ApprovalEngine {
   private readonly tenantId: string;
   private readonly logger: Logger;
   private readonly clock: Clock;
+  private readonly calendar?: BusinessCalendar;
   private readonly generateId: IdGeneratorFn;
   private readonly maxBulkItems: number;
   private readonly retryPolicy: Required<RetryPolicy>;
@@ -185,6 +204,7 @@ export class ApprovalEngine {
     this.tenantId = opts.tenantId ?? 'default';
     this.logger = opts.logger ?? noopLogger;
     this.clock = opts.clock ?? systemClock;
+    this.calendar = opts.calendar;
     this.generateId = opts.generateId ?? defaultIdGenerator;
     this.maxBulkItems = opts.maxBulkItems ?? 200;
     this.retryPolicy = {
@@ -402,7 +422,7 @@ export class ApprovalEngine {
       escalationAfterDays: cfg.escalationAfterDays,
       escalationDueAt:
         idx === 0 && cfg.escalationAfterDays
-          ? new Date(now.getTime() + cfg.escalationAfterDays * 86_400_000)
+          ? this.deadlineFrom(now, cfg.escalationAfterDays)
           : undefined,
     }));
 
@@ -426,7 +446,7 @@ export class ApprovalEngine {
     };
 
     const slaDeadlineAt = template.slaDeadlineDays
-      ? new Date(now.getTime() + template.slaDeadlineDays * 86_400_000)
+      ? this.deadlineFrom(now, template.slaDeadlineDays)
       : undefined;
 
     const instance: ApprovalInstance = {
@@ -554,7 +574,7 @@ export class ApprovalEngine {
           this.opts.orgProvider,
         );
         if (nextLevel.escalationAfterDays) {
-          nextLevel.escalationDueAt = new Date(now.getTime() + nextLevel.escalationAfterDays * 86_400_000);
+          nextLevel.escalationDueAt = this.deadlineFrom(now, nextLevel.escalationAfterDays);
         }
         nextLevel.status = 'pending';
         instance.currentLevel = nextLevel.level;
@@ -913,7 +933,7 @@ export class ApprovalEngine {
       escalationAfterDays: cfg.escalationAfterDays,
       escalationDueAt:
         idx === 0 && cfg.escalationAfterDays
-          ? new Date(now.getTime() + cfg.escalationAfterDays * 86_400_000)
+          ? this.deadlineFrom(now, cfg.escalationAfterDays)
           : undefined,
     }));
 
@@ -938,7 +958,7 @@ export class ApprovalEngine {
     };
 
     const slaDeadlineAt = template.slaDeadlineDays
-      ? new Date(now.getTime() + template.slaDeadlineDays * 86_400_000)
+      ? this.deadlineFrom(now, template.slaDeadlineDays)
       : undefined;
 
     const newInstance: ApprovalInstance = {
@@ -1248,6 +1268,38 @@ export class ApprovalEngine {
     };
   }
 
+  /**
+   * Aggregate counts for dashboards. Accepts an optional filter (documentType,
+   * submittedBy, date range) — `status` is ignored since every status is counted.
+   * Adapter-agnostic: issues one cheap count query per status plus an overdue scan.
+   */
+  async getStatistics(filter: Omit<InstanceFilter, 'status'> = {}): Promise<ApprovalStatistics> {
+    const statuses: ApprovalInstance['status'][] = ['pending', 'approved', 'rejected', 'cancelled', 'expired'];
+
+    const counts = await Promise.all(
+      statuses.map((status) =>
+        this.opts.adapter
+          .getInstancesByFilter(this.tenantId, { ...filter, status }, { limit: 1, offset: 0 })
+          .then((r) => r.total),
+      ),
+    );
+
+    const byStatus = statuses.reduce(
+      (acc, status, i) => {
+        acc[status] = counts[i] ?? 0;
+        return acc;
+      },
+      {} as Record<ApprovalInstance['status'], number>,
+    );
+
+    const total = counts.reduce((a, b) => a + b, 0);
+    const overdueList = await this.opts.adapter.getOverdueInstances(this.tenantId, this.clock.now());
+    const resolved = byStatus.approved + byStatus.rejected;
+    const approvalRate = resolved === 0 ? 0 : byStatus.approved / resolved;
+
+    return { total, byStatus, overdue: overdueList.length, approvalRate };
+  }
+
   async shutdown(): Promise<void> {
     await this.escalation.stop();
     await this.opts.schedulerAdapter?.shutdown();
@@ -1454,6 +1506,13 @@ export class ApprovalEngine {
       }
     }
     throw lastError ?? new ApprovalConflictError(instanceId);
+  }
+
+  /** Compute a deadline `days` from `from`, honouring the business calendar if one is configured. */
+  private deadlineFrom(from: Date, days: number): Date {
+    return this.calendar
+      ? this.calendar.addBusinessDays(from, days)
+      : new Date(from.getTime() + days * 86_400_000);
   }
 
   private async requireInstance(id: string): Promise<ApprovalInstance> {

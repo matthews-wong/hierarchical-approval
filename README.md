@@ -400,6 +400,24 @@ await engine.escalate(instanceId, { escalatedBy: 'system' });
 
 Adds the escalation approver (from `template.escalation.escalateTo`) to the current level's approver list. Also fires automatically via the scheduler when `escalationAfterDays` elapses.
 
+#### Business-day deadlines
+
+By default `escalationAfterDays` and `slaDeadlineDays` count plain calendar days. Pass a `calendar` to the engine to count **business days** instead — skipping weekends and holidays:
+
+```ts
+import { ApprovalEngine, weekendCalendar } from 'hierarchical-approval';
+
+const engine = new ApprovalEngine({
+  adapter,
+  calendar: weekendCalendar({
+    holidays: [new Date('2026-12-25'), new Date('2027-01-01')],
+    // weekendDays: [5, 6], // optional — e.g. Fri/Sat weekend
+  }),
+});
+```
+
+With this calendar, a level whose `escalationAfterDays: 2` is submitted on a Friday becomes due the following Tuesday rather than Sunday. Provide your own `BusinessCalendar` implementation for region-specific rules.
+
 ### Cancel
 
 ```ts
@@ -582,6 +600,20 @@ const result = await engine.canApprove(instanceId, 'mgr-1');
 ```
 
 Never throws — always returns a structured result.
+
+### Statistics
+
+Aggregate counts for dashboards. Pass an optional filter (`documentType`, `submittedBy`, `fromDate`/`toDate`) to scope the numbers; `status` is ignored since every status is counted.
+
+```ts
+const stats = await engine.getStatistics({ documentType: 'purchase_order' });
+// {
+//   total: number,
+//   byStatus: { pending, approved, rejected, cancelled, expired },
+//   overdue: number,        // pending past an escalation/expiry deadline
+//   approvalRate: number,   // approved / (approved + rejected); 0 when none resolved
+// }
+```
 
 ### Health check
 
