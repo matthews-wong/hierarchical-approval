@@ -28,6 +28,32 @@ npm install pg @types/pg
 
 > 📖 Full docs & live guides: **[hierarchical-approval.matthewswong.com](https://hierarchical-approval.matthewswong.com)**
 
+<details>
+<summary><strong>Table of contents</strong></summary>
+
+- [Why another approval library?](#why-another-approval-library)
+- [How it works](#how-it-works) — the 30-second mental model + diagrams
+- [Quick start](#quick-start)
+- [Core concepts](#core-concepts)
+- [Installation and setup](#installation-and-setup)
+- [`new ApprovalEngine(options)`](#new-approvalengineoptions)
+- [Approver types](#approver-types)
+- [Lifecycle operations](#lifecycle-operations)
+- [Queries](#queries)
+- [Template management](#template-management)
+- [Utility methods](#utility-methods)
+- [Events](#events)
+- [Enterprise adapters](#enterprise-adapters)
+- [Custom storage adapter](#custom-storage-adapter)
+- [Testing](#testing)
+- [Error handling](#error-handling)
+- [Multi-tenancy](#multi-tenancy)
+- [Template reference](#template-reference)
+- [FAQ](#faq)
+- [License](#license)
+
+</details>
+
 ---
 
 ## Why another approval library?
@@ -54,6 +80,72 @@ Approval workflows are deceptively simple until they aren't. Most teams start wi
 **`workflow-engine`** — Generic state machine; you implement every guard, every condition, every audit entry yourself.  
 **`node-approval`** — No TypeScript; no idempotency; no optimistic locking.  
 **Hand-rolled** — You *will* hit the concurrent-approval race condition eventually. This library has 195 tests covering it.
+
+---
+
+## How it works
+
+**The 30-second mental model:** you define a reusable **template** (the approval blueprint), then **submit** documents against it. Each submission becomes an **instance** that walks through the template's **levels** one at a time. At each level the configured **approvers** act, and the level's **mode** decides when that level is satisfied. When the last level passes, the instance is `approved`.
+
+| Term | What it is |
+|---|---|
+| **Template** | A named, reusable blueprint — ordered levels, approvers, modes, conditions, escalation, SLA. Define once, reuse for every document of that type. |
+| **Instance** | One running approval: a specific document moving through a template. Holds the live state, the audit log, and a snapshot of the template at submit time. |
+| **Level** | A single step in the chain (e.g. "Manager", then "Finance"). Levels run **sequentially**. |
+| **Approver** | Who may act on a level — a fixed `user`, a `role`, or someone resolved dynamically at runtime. |
+| **Mode** | How a level passes: `any`, `all`, `majority`, `quorum` (N-of-M), or `weighted`. |
+
+### The status lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: submit()
+    pending --> pending: approve() advances a level
+    pending --> approved: last level passes / override()
+    pending --> rejected: reject()
+    pending --> cancelled: cancel()
+    pending --> expired: deadline reached
+    approved --> [*]
+    rejected --> [*]
+    cancelled --> [*]
+    expired --> [*]
+    note right of rejected
+      resubmit() spawns a new
+      linked instance from level 1
+    end note
+```
+
+### How an approval flows
+
+```mermaid
+flowchart TD
+    S(["submit()"]) --> R["Resolve approvers for the current level"]
+    R --> ACT{"An approver acts"}
+    ACT -->|approve| MET{"Level threshold met?<br/>any / all / majority / quorum / weighted"}
+    ACT -->|reject| REJ{"Level rejected?"}
+    MET -->|not yet| ACT
+    MET -->|yes| MORE{"More levels?"}
+    MORE -->|yes| ADV["Advance: resolve next level"] --> R
+    MORE -->|no| DONE(["Status: approved"])
+    REJ -->|yes| OUT(["Status: rejected"])
+    REJ -->|no| ACT
+```
+
+### Architecture — a small core with pluggable ports
+
+The engine never talks to your database, queue, or notification service directly — it talks to **interfaces you implement** (or use the built-ins). Only storage is required; everything else is opt-in.
+
+```mermaid
+flowchart LR
+    APP["Your application"] --> ENG["ApprovalEngine"]
+    ENG --> ST[("IStorageAdapter<br/>Memory / Postgres / custom")]
+    ENG -. optional .-> NO["INotificationAdapter"]
+    ENG -. optional .-> AU["IAuditAdapter"]
+    ENG -. optional .-> ME["IMetricsAdapter"]
+    ENG -. optional .-> SC["ISchedulerAdapter"]
+    ENG -. optional .-> AZ["IAuthorizationPolicy"]
+    ENG -. optional .-> MW["IOperationMiddleware"]
+```
 
 ---
 
@@ -1075,6 +1167,40 @@ Posts by the author on real-world approval workflow patterns:
 - [Accounts Payable Multi-Level Approval Workflow in NestJS](https://www.matthewswong.com/en/blog/accounts-payable-multi-approval-nestjs) — configurable amount-based AP approval chains with PostgreSQL: schema design, the chain-building algorithm, and sequential processing logic.
 - [ERP HR Leave Approval Flow](https://www.matthewswong.com/en/blog/erp-hr-leave-approval-flow) — department-based leave approval with delegation and escalation patterns in an ERP context.
 - [ERP Approval Matrix Configuration](https://www.matthewswong.com/en/blog/erp-approval-matrix-configuration) — designing a configurable approval matrix that non-engineers can maintain without a code deployment.
+
+---
+
+## FAQ
+
+**Is this a BPMN / workflow engine?**
+No. It does one thing well — **hierarchical, multi-level approvals**. There are no arbitrary task graphs, timers-as-nodes, or scripting steps. If you need a general business-process engine, reach for Camunda/Temporal; if you need approvals, this is far simpler.
+
+**Does it come with a UI?**
+No — it's a headless engine. You own the UI and notifications; the library gives you the state machine, events (`approval:*`), and queries (`getPendingFor`, `queryInstances`) to build them.
+
+**When should I *not* use it?**
+Single-approver, single-step sign-offs (a boolean column is enough); free-form DAG workflows; or anything needing a visual process designer.
+
+**How are concurrent approvals handled?**
+Every mutation uses **optimistic locking** on a `version` field with a configurable retry policy, so two approvers acting at once can't corrupt state. See [Error handling](#error-handling).
+
+**Does it need a database?**
+No — `MemoryAdapter` runs everything in-process (great for tests and small apps). For production, use the built-in `PostgresAdapter` or implement the 8-method [`IStorageAdapter`](#custom-storage-adapter) for any store.
+
+**Can approvers change while a request is in flight?**
+Yes. Approvers are resolved per-level when that level becomes active, so role membership and dynamic resolvers reflect the current org. In-flight instances are insulated from **template** edits via a snapshot taken at submit time.
+
+**How do escalation and SLA timers fire?**
+A built-in poller advances them; for distributed/production setups plug in an [`ISchedulerAdapter`](#scheduler) (BullMQ, Temporal, EventBridge). Deadlines can count calendar days or **business days** via an injectable calendar.
+
+**Is it multi-tenant?**
+Yes — every record is scoped by `tenantId`. See [Multi-tenancy](#multi-tenancy).
+
+**ESM or CommonJS?**
+Both — the package ships dual ESM + CJS builds with full TypeScript declarations.
+
+**Runnable examples?**
+See the [`examples/`](./examples) directory — purchase orders, conditional chains, quorum/weighted voting, and delegation + escalation, each runnable with `node`.
 
 ---
 
