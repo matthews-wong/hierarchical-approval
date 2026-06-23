@@ -99,35 +99,36 @@ Approval workflows are deceptively simple until they aren't. Most teams start wi
 
 ```mermaid
 stateDiagram-v2
-    [*] --> pending: submit()
-    pending --> pending: approve() advances a level
-    pending --> approved: last level passes / override()
-    pending --> rejected: reject()
-    pending --> cancelled: cancel()
+    [*] --> pending
+    pending --> pending: approve advances a level
+    pending --> approved: final level or override
+    pending --> rejected: reject
+    pending --> cancelled: cancel
     pending --> expired: deadline reached
     approved --> [*]
     rejected --> [*]
     cancelled --> [*]
     expired --> [*]
-    note right of rejected
-      resubmit() spawns a new
-      linked instance from level 1
-    end note
 ```
+
+> `submit()` creates the instance in `pending`; `resubmit()` on a rejected instance spawns a new linked instance starting again at level 1.
 
 ### How an approval flows
 
+A level is satisfied according to its mode (`any`, `all`, `majority`, `quorum`, or `weighted`):
+
 ```mermaid
 flowchart TD
-    S(["submit()"]) --> R["Resolve approvers for the current level"]
-    R --> ACT{"An approver acts"}
-    ACT -->|approve| MET{"Level threshold met?<br/>any / all / majority / quorum / weighted"}
-    ACT -->|reject| REJ{"Level rejected?"}
+    S[Submit] --> R[Resolve approvers for current level]
+    R --> ACT{An approver acts}
+    ACT -->|approve| MET{Level threshold met}
+    ACT -->|reject| REJ{Level rejected}
     MET -->|not yet| ACT
-    MET -->|yes| MORE{"More levels?"}
-    MORE -->|yes| ADV["Advance: resolve next level"] --> R
-    MORE -->|no| DONE(["Status: approved"])
-    REJ -->|yes| OUT(["Status: rejected"])
+    MET -->|yes| MORE{More levels}
+    MORE -->|yes| ADV[Advance to next level]
+    ADV --> R
+    MORE -->|no| DONE[Status approved]
+    REJ -->|yes| OUT[Status rejected]
     REJ -->|no| ACT
 ```
 
@@ -135,16 +136,18 @@ flowchart TD
 
 The engine never talks to your database, queue, or notification service directly — it talks to **interfaces you implement** (or use the built-ins). Only storage is required; everything else is opt-in.
 
+Solid arrow = required (storage). Dotted arrows = optional ports you can plug in:
+
 ```mermaid
 flowchart LR
-    APP["Your application"] --> ENG["ApprovalEngine"]
-    ENG --> ST[("IStorageAdapter<br/>Memory / Postgres / custom")]
-    ENG -. optional .-> NO["INotificationAdapter"]
-    ENG -. optional .-> AU["IAuditAdapter"]
-    ENG -. optional .-> ME["IMetricsAdapter"]
-    ENG -. optional .-> SC["ISchedulerAdapter"]
-    ENG -. optional .-> AZ["IAuthorizationPolicy"]
-    ENG -. optional .-> MW["IOperationMiddleware"]
+    APP[Your application] --> ENG[ApprovalEngine]
+    ENG --> ST[IStorageAdapter - Memory, Postgres or custom]
+    ENG -.-> NO[INotificationAdapter]
+    ENG -.-> AU[IAuditAdapter]
+    ENG -.-> ME[IMetricsAdapter]
+    ENG -.-> SC[ISchedulerAdapter]
+    ENG -.-> AZ[IAuthorizationPolicy]
+    ENG -.-> MW[IOperationMiddleware]
 ```
 
 ---
