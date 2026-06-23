@@ -49,6 +49,7 @@ export type {
   ApproveOptions,
   RejectOptions,
   DelegateOptions,
+  ReassignOptions,
   CancelOptions,
   EscalateOptions,
   ResubmitOptions,

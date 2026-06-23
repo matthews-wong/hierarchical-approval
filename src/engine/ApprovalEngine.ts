@@ -17,6 +17,7 @@ import {
   ApproveOptionsSchema,
   RejectOptionsSchema,
   DelegateOptionsSchema,
+  ReassignOptionsSchema,
   CancelOptionsSchema,
   EscalateOptionsSchema,
   ResubmitOptionsSchema,
@@ -26,6 +27,7 @@ import {
   type ApproveOptions,
   type RejectOptions,
   type DelegateOptions,
+  type ReassignOptions,
   type CancelOptions,
   type EscalateOptions,
   type ResubmitOptions,
@@ -717,6 +719,78 @@ export class ApprovalEngine {
       this.bus.emit('approval:delegated', p);
       await this.notifyAdapters('approval:delegated', instance, p);
       await this.runMiddlewareAfter({ operation: 'delegate', instanceId, actorId: opts.fromApprover, tenantId: this.tenantId, input: opts }, instance);
+      return instance;
+    });
+  }
+
+  /**
+   * Administratively replace an approver on the current level. Unlike delegate(),
+   * this is performed by a third party (e.g. an admin handling an unavailable
+   * approver) and does not require the original approver to initiate it. The
+   * target approver must still be pending — an approver who has already acted
+   * cannot be reassigned.
+   */
+  async reassign(instanceId: string, raw: ReassignOptions, auditCtx?: AuditContext): Promise<ApprovalInstance> {
+    const opts = parseOrThrow(() => ReassignOptionsSchema.parse(raw));
+    return this.withOptimisticRetry(instanceId, async (instance) => {
+      assertStatus(instance, 'pending');
+
+      if (opts.fromApprover === opts.toApprover) {
+        throw new ApprovalForbiddenError('Cannot reassign an approver to themselves.');
+      }
+
+      const level = this.currentLevelInstance(instance);
+      await this.runAuthorizationPolicy({ operation: 'reassign', actorId: opts.reassignedBy, instance, level, opts: opts as Record<string, unknown> });
+      await this.runMiddlewareBefore({ operation: 'reassign', instanceId, actorId: opts.reassignedBy, tenantId: this.tenantId, input: opts });
+
+      const idx = level.approverIds.indexOf(opts.fromApprover);
+      if (idx < 0) {
+        throw new ApprovalForbiddenError(
+          `Cannot reassign: "${opts.fromApprover}" is not an approver on level ${level.level}.`,
+        );
+      }
+      if (hasAlreadyActed(level, opts.fromApprover)) {
+        throw new ApprovalForbiddenError(
+          `Cannot reassign after acting: "${opts.fromApprover}" has already approved or rejected level ${level.level}.`,
+        );
+      }
+      if (level.approverIds.includes(opts.toApprover)) {
+        throw new ApprovalForbiddenError(
+          `Cannot reassign: "${opts.toApprover}" is already an approver on level ${level.level}.`,
+        );
+      }
+
+      const now = this.clock.now();
+      level.approverIds[idx] = opts.toApprover;
+
+      // If the slot being reassigned carries an active time-limited delegation, clear it.
+      if (level.delegatedTo === opts.fromApprover || level.delegatedFrom === opts.fromApprover) {
+        level.delegatedUntil = undefined;
+        level.delegatedFrom = undefined;
+        level.delegatedTo = undefined;
+      }
+
+      const auditEntry: AuditEntry = {
+        action: 'reassigned',
+        actorId: opts.reassignedBy,
+        level: level.level,
+        timestamp: now,
+        reason: opts.reason,
+        delegateTo: opts.toApprover,
+        ...auditCtx,
+      };
+      instance.auditLog.push(auditEntry);
+      instance.updatedAt = now;
+
+      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
+      await this.runExternalAudit(instance, auditEntry);
+      this.opts.metricsAdapter?.increment('approval.reassigned', { tenantId: this.tenantId });
+      this.logger.info('reassign: approver replaced', { tenantId: this.tenantId, instanceId, from: opts.fromApprover, to: opts.toApprover });
+      const p = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, reassignedBy: opts.reassignedBy, fromApprover: opts.fromApprover, toApprover: opts.toApprover, level: level.level, reason: opts.reason };
+      this.bus.emit('approval:reassigned', p);
+      await this.notifyAdapters('approval:reassigned', instance, p);
+      await this.runMiddlewareAfter({ operation: 'reassign', instanceId, actorId: opts.reassignedBy, tenantId: this.tenantId, input: opts }, instance);
       return instance;
     });
   }

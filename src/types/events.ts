@@ -33,6 +33,14 @@ export interface DelegatedEvent extends ApprovalEvent {
   reason: string;
 }
 
+export interface ReassignedEvent extends ApprovalEvent {
+  reassignedBy: string;
+  fromApprover: string;
+  toApprover: string;
+  level: number;
+  reason: string;
+}
+
 export interface EscalatedEvent extends ApprovalEvent {
   level: number;
   escalatedTo: string;
@@ -72,6 +80,7 @@ export interface ApprovalEventMap {
   'approval:approved': ApprovedEvent;
   'approval:rejected': RejectedEvent;
   'approval:delegated': DelegatedEvent;
+  'approval:reassigned': ReassignedEvent;
   'approval:escalated': EscalatedEvent;
   'approval:cancelled': CancelledEvent;
   'approval:completed': ApprovalInstance;

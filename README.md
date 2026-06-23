@@ -377,6 +377,21 @@ await engine.delegate(instanceId, {
 });
 ```
 
+### Reassign
+
+Administratively swap an approver on the current level — for when an assigned approver is unavailable and a third party (e.g. an admin) needs to hand the task to someone else. Unlike `delegate`, the original approver doesn't initiate it. The approver being replaced must still be pending (one who has already approved or rejected cannot be reassigned), and the new approver must not already be on the level.
+
+```ts
+await engine.reassign(instanceId, {
+  reassignedBy: 'workflow-admin',
+  fromApprover: 'mgr-1',
+  toApprover: 'mgr-2',
+  reason: 'Approver left the company',
+});
+```
+
+Emits `approval:reassigned` and records a `reassigned` audit entry.
+
 ### Escalate
 
 ```ts
@@ -600,6 +615,7 @@ engine.on('approval:approved',       (payload) => { /* level or fully approved *
 engine.on('approval:rejected',       (payload) => { /* level rejected */ });
 engine.on('approval:level_advanced', (payload) => { /* moved to next level */ });
 engine.on('approval:delegated',      (payload) => { /* approver delegated */ });
+engine.on('approval:reassigned',     (payload) => { /* approver reassigned by admin */ });
 engine.on('approval:escalated',      (payload) => { /* escalated to new approver */ });
 engine.on('approval:cancelled',      (payload) => { /* cancelled */ });
 engine.on('approval:expired',        (payload) => { /* deadline passed */ });
@@ -714,7 +730,7 @@ import { ApprovalForbiddenError } from 'hierarchical-approval';
 
 class SigningAuthorityPolicy implements IAuthorizationPolicy {
   async authorize(ctx: AuthorizationContext): Promise<string | undefined> {
-    // ctx.operation — 'approve' | 'reject' | 'delegate' | 'cancel' | 'escalate'
+    // ctx.operation — 'approve' | 'reject' | 'delegate' | 'reassign' | 'cancel' | 'escalate'
     //               | 'override' | 'resubmit' | 'addComment' | 'submit'
     // ctx.actorId   — who is performing the action
     // ctx.instance  — current instance (read-only)

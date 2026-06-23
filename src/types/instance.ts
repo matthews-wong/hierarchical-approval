@@ -9,6 +9,7 @@ export type AuditAction =
   | 'approved'
   | 'rejected'
   | 'delegated'
+  | 'reassigned'
   | 'escalated'
   | 'cancelled'
   | 'level_advanced'

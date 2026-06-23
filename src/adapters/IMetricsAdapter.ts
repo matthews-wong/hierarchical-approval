@@ -6,6 +6,7 @@ export type MetricName =
   | 'approval.expired'
   | 'approval.sla_breached'
   | 'approval.escalated'
+  | 'approval.reassigned'
   | 'approval.overridden'
   | 'approval.conflict_retry'
   | 'approval.operation_duration_ms';

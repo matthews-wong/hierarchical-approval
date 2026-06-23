@@ -6,6 +6,7 @@ export interface AuthorizationContext {
     | 'approve'
     | 'reject'
     | 'delegate'
+    | 'reassign'
     | 'cancel'
     | 'escalate'
     | 'override'
