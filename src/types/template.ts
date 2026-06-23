@@ -1,6 +1,6 @@
 import type { ApproverConfig } from './approver.js';
 
-export type ApprovalMode = 'all' | 'any' | 'majority';
+export type ApprovalMode = 'all' | 'any' | 'majority' | 'quorum' | 'weighted';
 
 /** Built-in operators. Use engine.registerConditionOperator() to add custom ones. */
 export type ConditionOperator = '>' | '<' | '>=' | '<=' | '==' | '!=' | 'in' | 'not_in' | (string & {});
@@ -17,6 +17,23 @@ export interface ApprovalLevelConfig {
   approvers: ApproverConfig[];
   mode: ApprovalMode;
   escalationAfterDays?: number;
+  /**
+   * Required when mode is 'quorum'. The minimum number of approvals needed to
+   * pass this level (an N-of-M threshold). The level is rejected as soon as it
+   * becomes impossible to reach this count.
+   */
+  minApprovals?: number;
+  /**
+   * Required when mode is 'weighted'. The cumulative approver weight needed to
+   * pass this level. The level is rejected once the remaining achievable weight
+   * can no longer reach this threshold.
+   */
+  threshold?: number;
+  /**
+   * Optional per-approver voting weights for 'weighted' mode, keyed by approver
+   * id. Approvers not listed default to a weight of 1.
+   */
+  weights?: Record<string, number>;
 }
 
 export interface ConditionRule {

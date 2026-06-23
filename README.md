@@ -137,11 +137,44 @@ An **instance** is a single document moving through a template. Key fields:
 
 Each level's `mode` field controls how many approvers are required:
 
-| Mode | Required |
-|---|---|
-| `'any'` | One approver is enough |
-| `'all'` | Every listed approver must act |
-| `'majority'` | More than half must approve |
+| Mode | Required | Extra config |
+|---|---|---|
+| `'any'` | One approver is enough | — |
+| `'all'` | Every listed approver must act | — |
+| `'majority'` | More than half must approve | — |
+| `'quorum'` | A fixed **N-of-M** threshold approves | `minApprovals` |
+| `'weighted'` | Cumulative approver **weight** meets a threshold | `threshold`, optional `weights` |
+
+A level is **rejected** as soon as the outcome becomes mathematically impossible — e.g. a `quorum` of 2-of-3 is rejected after the second rejection (only one approver remains), and a `weighted` level is rejected once the weight still achievable falls below `threshold`.
+
+```ts
+// Quorum: any 2 of these 3 directors must approve
+{
+  level: 1,
+  name: 'Board',
+  mode: 'quorum',
+  minApprovals: 2,
+  approvers: [
+    { type: 'user', userId: 'd1' },
+    { type: 'user', userId: 'd2' },
+    { type: 'user', userId: 'd3' },
+  ],
+}
+
+// Weighted: the CFO's vote (weight 3) clears the threshold alone;
+// otherwise three default-weight (1) approvers are needed.
+{
+  level: 1,
+  name: 'Exec Committee',
+  mode: 'weighted',
+  threshold: 3,
+  weights: { cfo: 3 }, // unlisted approvers default to weight 1
+  approvers: [
+    { type: 'user', userId: 'cfo' },
+    { type: 'user', userId: 'mgr' },
+  ],
+}
+```
 
 ### Conditional chains
 
@@ -956,7 +989,10 @@ interface ApprovalLevelConfig {
   level: number;                        // execution order (must be unique within template)
   name: string;                         // display name
   approvers: ApproverConfig[];          // at least one required
-  mode: 'any' | 'all' | 'majority';
+  mode: 'any' | 'all' | 'majority' | 'quorum' | 'weighted';
+  minApprovals?: number;                // required when mode is 'quorum' (N-of-M threshold)
+  threshold?: number;                   // required when mode is 'weighted' (cumulative weight to pass)
+  weights?: Record<string, number>;     // optional per-approver weights for 'weighted'; default 1
   escalationAfterDays?: number;         // per-level escalation (overrides template.escalation timing)
 }
 ```

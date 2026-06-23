@@ -256,6 +256,31 @@ export class ApprovalEngine {
         if (l.escalationAfterDays !== undefined && l.escalationAfterDays <= 0) {
           errors.push({ field: `levels[${i}].escalationAfterDays`, message: `Level ${l.level} escalationAfterDays must be a positive number.` });
         }
+
+        if (l.mode === 'quorum') {
+          if (l.minApprovals === undefined || !Number.isInteger(l.minApprovals) || l.minApprovals < 1) {
+            errors.push({ field: `levels[${i}].minApprovals`, message: `Level ${l.level} uses 'quorum' mode and requires minApprovals to be a positive integer.` });
+          } else if (l.approvers && l.minApprovals > l.approvers.length) {
+            // Conservative static check: only meaningful when every approver is a static 'user'.
+            const allStaticUsers = l.approvers.every((a) => a.type === 'user');
+            if (allStaticUsers) {
+              errors.push({ field: `levels[${i}].minApprovals`, message: `Level ${l.level} requires ${l.minApprovals} approvals but only ${l.approvers.length} approver(s) are configured.` });
+            }
+          }
+        }
+
+        if (l.mode === 'weighted') {
+          if (l.threshold === undefined || l.threshold <= 0) {
+            errors.push({ field: `levels[${i}].threshold`, message: `Level ${l.level} uses 'weighted' mode and requires threshold to be a positive number.` });
+          }
+          if (l.weights) {
+            for (const [id, w] of Object.entries(l.weights)) {
+              if (typeof w !== 'number' || w < 0 || Number.isNaN(w)) {
+                errors.push({ field: `levels[${i}].weights.${id}`, message: `Weight for "${id}" must be a non-negative number.` });
+              }
+            }
+          }
+        }
       });
     }
 
@@ -369,6 +394,9 @@ export class ApprovalEngine {
       approvedBy: [],
       rejectedBy: [],
       status: idx === 0 ? 'pending' : 'waiting',
+      minApprovals: cfg.minApprovals,
+      threshold: cfg.threshold,
+      weights: cfg.weights,
       escalationAfterDays: cfg.escalationAfterDays,
       escalationDueAt:
         idx === 0 && cfg.escalationAfterDays
@@ -805,6 +833,9 @@ export class ApprovalEngine {
       approvedBy: [],
       rejectedBy: [],
       status: idx === 0 ? 'pending' : 'waiting',
+      minApprovals: cfg.minApprovals,
+      threshold: cfg.threshold,
+      weights: cfg.weights,
       escalationAfterDays: cfg.escalationAfterDays,
       escalationDueAt:
         idx === 0 && cfg.escalationAfterDays

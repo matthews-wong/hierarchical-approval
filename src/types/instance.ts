@@ -50,6 +50,12 @@ export interface ApprovalLevelInstance {
   approvedBy: string[];
   rejectedBy: string[];
   status: LevelStatus;
+  /** Minimum approvals required to pass this level (set when mode is 'quorum'). */
+  minApprovals?: number;
+  /** Cumulative approver weight required to pass this level (set when mode is 'weighted'). */
+  threshold?: number;
+  /** Per-approver voting weights for 'weighted' mode; unlisted approvers default to 1. */
+  weights?: Record<string, number>;
   escalationDueAt?: Date;
   escalationAfterDays?: number;
   /** Set when a delegation has a time limit — the original approver is restored when this date passes. */
