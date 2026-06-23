@@ -184,12 +184,12 @@ export class MemoryAdapter implements IStorageAdapter {
     return null;
   }
 
-  async appendAuditEntry(tenantId: string, instanceId: string, entry: AuditEntry): Promise<void> {
-    const key = `${tenantId}:${instanceId}`;
-    const instance = this.instances.get(key);
-    if (!instance) return;
-    instance.auditLog.push(deepClone(entry));
-    instance.updatedAt = new Date(entry.timestamp);
+  async appendAuditEntry(_tenantId: string, _instanceId: string, _entry: AuditEntry): Promise<void> {
+    // No-op by design. The engine already pushes each entry onto instance.auditLog
+    // and persists the whole instance via saveInstance()/updateInstance(), so the
+    // embedded log is the source of truth for this adapter. Pushing here too would
+    // duplicate every entry (as a dedicated, append-only audit table would in
+    // PostgresAdapter, this method exists to satisfy that separate-sink contract).
   }
 
   /** Test helper — total stored instances across all tenants. */
