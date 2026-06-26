@@ -97,19 +97,9 @@ Approval workflows are deceptively simple until they aren't. Most teams start wi
 
 ### The status lifecycle
 
-```mermaid
-stateDiagram-v2
-    [*] --> pending
-    pending --> pending: approve advances a level
-    pending --> approved: final level or override
-    pending --> rejected: reject
-    pending --> cancelled: cancel
-    pending --> expired: deadline reached
-    approved --> [*]
-    rejected --> [*]
-    cancelled --> [*]
-    expired --> [*]
-```
+<p align="center">
+  <img src="https://raw.githubusercontent.com/matthews-wong/hierarchical-approval/main/assets/diagrams/lifecycle.png" alt="Status lifecycle: pending advances on approve, and resolves to approved, rejected, cancelled, or expired." width="640">
+</p>
 
 > `submit()` creates the instance in `pending`; `resubmit()` on a rejected instance spawns a new linked instance starting again at level 1.
 
@@ -117,20 +107,9 @@ stateDiagram-v2
 
 A level is satisfied according to its mode (`any`, `all`, `majority`, `quorum`, or `weighted`):
 
-```mermaid
-flowchart TD
-    S[Submit] --> R[Resolve approvers for current level]
-    R --> ACT{An approver acts}
-    ACT -->|approve| MET{Level threshold met}
-    ACT -->|reject| REJ{Level rejected}
-    MET -->|not yet| ACT
-    MET -->|yes| MORE{More levels}
-    MORE -->|yes| ADV[Advance to next level]
-    ADV --> R
-    MORE -->|no| DONE[Status approved]
-    REJ -->|yes| OUT[Status rejected]
-    REJ -->|no| ACT
-```
+<p align="center">
+  <img src="https://raw.githubusercontent.com/matthews-wong/hierarchical-approval/main/assets/diagrams/flow.png" alt="Approval flow: submit, resolve approvers, approvers act; when the level threshold is met advance to the next level or complete; rejection ends the instance." width="380">
+</p>
 
 ### Architecture — a small core with pluggable ports
 
@@ -138,17 +117,9 @@ The engine never talks to your database, queue, or notification service directly
 
 Solid arrow = required (storage). Dotted arrows = optional ports you can plug in:
 
-```mermaid
-flowchart LR
-    APP[Your application] --> ENG[ApprovalEngine]
-    ENG --> ST[IStorageAdapter - Memory, Postgres or custom]
-    ENG -.-> NO[INotificationAdapter]
-    ENG -.-> AU[IAuditAdapter]
-    ENG -.-> ME[IMetricsAdapter]
-    ENG -.-> SC[ISchedulerAdapter]
-    ENG -.-> AZ[IAuthorizationPolicy]
-    ENG -.-> MW[IOperationMiddleware]
-```
+<p align="center">
+  <img src="https://raw.githubusercontent.com/matthews-wong/hierarchical-approval/main/assets/diagrams/architecture.png" alt="Architecture: your application calls ApprovalEngine, which requires an IStorageAdapter (Memory, Postgres, or custom) and optionally plugs into notification, audit, metrics, scheduler, authorization, and middleware ports." width="560">
+</p>
 
 ---
 

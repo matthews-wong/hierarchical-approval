@@ -3,6 +3,15 @@
 All notable changes to `hierarchical-approval` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-06-26
+
+### Docs
+
+- Replace the README's Mermaid code blocks with pre-rendered PNG diagrams
+  referenced by absolute URL, so the status lifecycle, approval flow, and
+  architecture diagrams render on npmjs.com (which does not render Mermaid) as
+  well as on GitHub.
+
 ## [0.3.0] - 2026-06-26
 
 ### Added — enterprise plug-in layer
