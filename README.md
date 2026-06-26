@@ -932,6 +932,109 @@ Middleware errors are caught and logged — they never propagate to callers.
 
 ---
 
+## Built-in enterprise plug-ins
+
+The interfaces above are ports. The library also ships production-grade implementations of them, each on its own import subpath so you only pull in what you use (fully tree-shakeable, zero extra dependencies — `node:crypto` only).
+
+### `plugins/audit` — tamper-evident & PII-safe audit
+
+```ts
+import {
+  HashChainAuditAdapter,
+  RedactingAuditAdapter,
+  CompositeAuditAdapter,
+} from 'hierarchical-approval/plugins/audit';
+
+// Each entry is SHA-256-chained to the previous one (per tenant+instance).
+const chain = new HashChainAuditAdapter();
+
+// Redact PII before it reaches external sinks (originals are never mutated).
+const redacted = new RedactingAuditAdapter({
+  inner: chain,
+  fieldPaths: ['newValue.applicant.ssn', 'newValue.card.*'],
+  freeTextFields: ['comment', 'reason'],
+});
+
+const engine = new ApprovalEngine({ adapter, auditAdapter: redacted });
+
+// Later — prove the log was not altered, deleted, or reordered:
+const result = chain.verify(tenantId, instanceId);
+// { ok: true } | { ok: false, brokenAt: <seq> }
+```
+
+`verify()` detects content tampering, deletion, reordering, **and tail truncation** (via an in-process high-water mark, or an explicit `expectedLength` anchor that survives restarts). Use `CompositeAuditAdapter` to fan out to several sinks (Kafka, S3, CloudTrail) with per-child fault isolation.
+
+### `plugins/metrics` — Prometheus & dashboards
+
+```ts
+import {
+  PrometheusMetricsAdapter,
+  InMemoryMetricsAdapter,
+} from 'hierarchical-approval/plugins/metrics';
+
+const metrics = new PrometheusMetricsAdapter();
+const engine = new ApprovalEngine({ adapter, metricsAdapter: metrics });
+
+// Expose on /metrics:
+res.type('text/plain').send(metrics.scrape()); // valid Prometheus exposition format
+```
+
+`InMemoryMetricsAdapter.snapshot()` returns counters and timing stats (count/sum/min/max/avg/p50/p95) for dashboards and tests; `CompositeMetricsAdapter` feeds both at once.
+
+### `plugins/resilience` — RBAC, rate limiting, structured logging
+
+```ts
+import {
+  RbacAuthorizationPolicy,
+  CompositeAuthorizationPolicy,
+  RateLimitMiddleware,
+  LoggingMiddleware,
+} from 'hierarchical-approval/plugins/resilience';
+
+const engine = new ApprovalEngine({
+  adapter,
+  authorizationPolicy: new RbacAuthorizationPolicy({
+    defaultMode: 'deny', // closed by default — unlisted operations are denied
+    rules: {
+      approve: { roles: ['manager', 'director'] }, // match: 'any' by default
+      override: { roles: ['admin'] },
+    },
+    roleProvider: (actorId, tenantId) => roleStore.rolesFor(actorId, tenantId),
+  }),
+  middleware: [
+    new RateLimitMiddleware({ capacity: 20, refillTokensPerSecond: 5 }), // token bucket per actor+op
+    new LoggingMiddleware({ logger }),
+  ],
+});
+```
+
+`CompositeAuthorizationPolicy` combines policies with AND (first denial wins) or OR (any allow) semantics.
+
+### `plugins/notify` — reliable, multi-channel delivery
+
+```ts
+import {
+  OutboxNotificationAdapter,
+  TemplatedNotificationAdapter,
+  CompositeNotificationAdapter,
+} from 'hierarchical-approval/plugins/notify';
+
+// At-least-once delivery: transactional outbox + exponential backoff + dead-letter.
+const outbox = new OutboxNotificationAdapter({
+  transport: async (event) => emailGateway.send(event),
+  maxAttempts: 5,
+});
+
+const engine = new ApprovalEngine({ adapter, notificationAdapter: outbox });
+
+await outbox.drain();         // deliver due items (call from a worker/cron)
+await outbox.deadLettered();  // inspect permanently-failed events
+```
+
+`TemplatedNotificationAdapter` renders a human-readable message per event type; `CompositeNotificationAdapter` fans out to multiple channels with fault isolation.
+
+---
+
 ## Custom storage adapter
 
 Implement `IStorageAdapter` to use any database:

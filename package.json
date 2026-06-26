@@ -53,6 +53,26 @@
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js",
       "require": "./dist/testing.cjs"
+    },
+    "./plugins/audit": {
+      "types": "./dist/plugins/audit.d.ts",
+      "import": "./dist/plugins/audit.js",
+      "require": "./dist/plugins/audit.cjs"
+    },
+    "./plugins/metrics": {
+      "types": "./dist/plugins/metrics.d.ts",
+      "import": "./dist/plugins/metrics.js",
+      "require": "./dist/plugins/metrics.cjs"
+    },
+    "./plugins/notify": {
+      "types": "./dist/plugins/notify.d.ts",
+      "import": "./dist/plugins/notify.js",
+      "require": "./dist/plugins/notify.cjs"
+    },
+    "./plugins/resilience": {
+      "types": "./dist/plugins/resilience.d.ts",
+      "import": "./dist/plugins/resilience.js",
+      "require": "./dist/plugins/resilience.cjs"
     }
   },
   "scripts": {
