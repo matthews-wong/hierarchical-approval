@@ -120,6 +120,13 @@ export interface ApprovalStatistics {
   overdue: number;
   /** approved / (approved + rejected); 0 when nothing has been resolved. */
   approvalRate: number;
+  /**
+   * Counts broken down per template name. Only populated (non-empty) when the
+   * global statistics are scoped with a filter that already lists the tenant's
+   * templates — i.e. this engine always returns the per-template breakdown for
+   * its own tenant. Absent when no instances match the filter.
+   */
+  byTemplate: Record<string, { total: number; approved: number; rejected: number; pending: number }>;
 }
 
 export interface HealthResult {
@@ -1297,7 +1304,43 @@ export class ApprovalEngine {
     const resolved = byStatus.approved + byStatus.rejected;
     const approvalRate = resolved === 0 ? 0 : byStatus.approved / resolved;
 
-    return { total, byStatus, overdue: overdueList.length, approvalRate };
+    // Per-template breakdown. Issue one aggregate query per template so the
+    // result is accurate even when combined with the other filters (documentType,
+    // submittedBy, date range). Adapter-agnostic: built only from
+    // getInstancesByFilter counts plus a per-template approved/rejected count.
+    const templates = await this.registry.list();
+    const byTemplate: ApprovalStatistics['byTemplate'] = {};
+    if (templates.length > 0) {
+      await Promise.all(
+        templates.map(async (template) => {
+          const base = { ...filter, templateName: template.name };
+          const [tTotal, tApproved, tRejected, tPending] = await Promise.all([
+            this.opts.adapter
+              .getInstancesByFilter(this.tenantId, base, { limit: 1, offset: 0 })
+              .then((r) => r.total),
+            this.opts.adapter
+              .getInstancesByFilter(this.tenantId, { ...base, status: 'approved' }, { limit: 1, offset: 0 })
+              .then((r) => r.total),
+            this.opts.adapter
+              .getInstancesByFilter(this.tenantId, { ...base, status: 'rejected' }, { limit: 1, offset: 0 })
+              .then((r) => r.total),
+            this.opts.adapter
+              .getInstancesByFilter(this.tenantId, { ...base, status: 'pending' }, { limit: 1, offset: 0 })
+              .then((r) => r.total),
+          ]);
+          if (tTotal > 0) {
+            byTemplate[template.name] = {
+              total: tTotal,
+              approved: tApproved,
+              rejected: tRejected,
+              pending: tPending,
+            };
+          }
+        }),
+      );
+    }
+
+    return { total, byStatus, overdue: overdueList.length, approvalRate, byTemplate };
   }
 
   async shutdown(): Promise<void> {

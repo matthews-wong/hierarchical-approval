@@ -4,7 +4,7 @@ This document summarizes the enhancements made to **hierarchical-approval** on t
 of its initial feature set. Each section maps to one focused, independently
 committed iteration, with rationale, the public API it adds, and how it is tested.
 
-> **Status:** 195 tests passing · clean dual ESM/CJS build (`.d.ts` included) · `src` type-checks and lints clean.
+> **Status:** 382 tests passing · clean dual ESM/CJS build (`.d.ts` included) · `src` type-checks and lints clean.
 
 ---
 
@@ -187,6 +187,48 @@ deadlines, verified with a fixed injectable clock).
 
 ---
 
+## 5. Per-template statistics — `getStatistics().byTemplate`
+
+**Commit:** `feat(engine): add per-template breakdown to getStatistics()`
+
+### Why
+Operators run many workflow templates (purchase orders, invoices, expense
+reports) in a single tenant. The existing `byStatus` surface answers "how many
+are approved?" but not "**per template**, how many are approved / rejected /
+pending?" — the question every per-workflow dashboard needs.
+
+### What was added
+`ApprovalStatistics.byTemplate` is a map keyed by template name:
+```ts
+// getStatistics() now also returns:
+byTemplate: {
+  'Simple':   { total: 2, approved: 1, rejected: 1, pending: 0 },
+  'Invoice':  { total: 1, approved: 0, rejected: 0, pending: 1 },
+}
+```
+Each entry carries `total / approved / rejected / pending`. The breakdown
+respects the other filters (`documentType`, `submittedBy`, date range) and is
+empty when no templates are defined.
+
+To power this, `InstanceFilter` gained an optional `templateName` field, which
+is now honoured by `MemoryAdapter` and `PostgresAdapter` (both
+`getInstancesByFilter` and `getInstancesByCursor`). The field is optional, so
+existing callers are unaffected.
+
+### Implementation notes
+- `byTemplate` is **adapter-agnostic** — computed purely from existing
+  `getInstancesByFilter` counts plus `TemplateRegistry.list()`. No new adapter
+  methods, so Memory, Postgres, and any custom adapter all work unchanged.
+- One aggregate (count) query per template per status slice; for a tenant with
+  N templates that is `4 * N` cheap count queries — bounded and constant in
+  instance volume.
+
+### Tests
+`tests/integration/engine.statistics.test.ts` — per-template breakdown,
+combined `documentType` filter, and the empty-template case.
+
+---
+
 ## Public API additions at a glance
 
 | Symbol | Kind | Iteration |
@@ -199,9 +241,12 @@ deadlines, verified with a fixed injectable clock).
 | `ApprovalStatistics` | type | 3 |
 | `BusinessCalendar`, `WeekendCalendarOptions`, `weekendCalendar()` | type/factory | 4 |
 | `ApprovalEngineOptions.calendar` | option | 4 |
+| `ApprovalStatistics.byTemplate` | field | 5 |
+| `InstanceFilter.templateName` | field | 5 |
 
 ## Possible future iterations
 - **Parallel branch groups** — true concurrent branches (e.g. Finance *and*
   Legal) that join before a downstream level.
-- **Per-template / per-status analytics** breakdowns in `getStatistics`.
+- **Per-status analytics** — `byStatus` already ships per status; the per-template
+  breakdown (`byTemplate`) was added in iteration 5.
 - **Cycle-time metrics** (average time-to-decision) in the statistics surface.

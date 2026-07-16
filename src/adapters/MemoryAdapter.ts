@@ -35,6 +35,7 @@ function applyFilter(instance: ApprovalInstance, filter: InstanceFilter): boolea
   if (filter.status && instance.status !== filter.status) return false;
   if (filter.documentType && instance.documentType !== filter.documentType) return false;
   if (filter.submittedBy && instance.submittedBy !== filter.submittedBy) return false;
+  if (filter.templateName && instance.templateName !== filter.templateName) return false;
   if (filter.fromDate && instance.createdAt < filter.fromDate) return false;
   if (filter.toDate && instance.createdAt > filter.toDate) return false;
   return true;

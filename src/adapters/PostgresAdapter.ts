@@ -314,6 +314,7 @@ export class PostgresAdapter implements IStorageAdapter {
     if (filter.status) { conditions.push(`status = $${idx++}`); params.push(filter.status); }
     if (filter.documentType) { conditions.push(`document_type = $${idx++}`); params.push(filter.documentType); }
     if (filter.submittedBy) { conditions.push(`submitted_by = $${idx++}`); params.push(filter.submittedBy); }
+    if (filter.templateName) { conditions.push(`template_name = $${idx++}`); params.push(filter.templateName); }
     if (filter.fromDate) { conditions.push(`created_at >= $${idx++}`); params.push(filter.fromDate.toISOString()); }
     if (filter.toDate) { conditions.push(`created_at <= $${idx++}`); params.push(filter.toDate.toISOString()); }
 
@@ -419,6 +420,7 @@ export class PostgresAdapter implements IStorageAdapter {
     if (filter.status) { conditions.push(`status = $${idx++}`); params.push(filter.status); }
     if (filter.documentType) { conditions.push(`document_type = $${idx++}`); params.push(filter.documentType); }
     if (filter.submittedBy) { conditions.push(`submitted_by = $${idx++}`); params.push(filter.submittedBy); }
+    if (filter.templateName) { conditions.push(`template_name = $${idx++}`); params.push(filter.templateName); }
 
     const { cursor, limit, direction = 'forward' } = opts;
 

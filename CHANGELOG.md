@@ -3,6 +3,28 @@
 All notable changes to `hierarchical-approval` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Per-template analytics in `getStatistics()`** — the returned
+  `ApprovalStatistics` now includes a `byTemplate` map keyed by template name,
+  each entry carrying `{ total, approved, rejected, pending }`. This lets
+  dashboards break down approval volume and approval rate per workflow template
+  without callers hand-rolling per-template queries.
+  - To support this, `InstanceFilter` gained an optional `templateName` field,
+    now honoured by `MemoryAdapter` (`getInstancesByFilter`,
+    `getInstancesByCursor`) and `PostgresAdapter` (`getInstancesByFilter`,
+    `getInstancesByCursor`). Both adapters remain backward-compatible — existing
+    callers that omit the field are unaffected.
+  - `byTemplate` is adapter-agnostic: built only from existing
+    `getInstancesByFilter` counts plus `TemplateRegistry.list()`, so it works
+    with any storage adapter with no new adapter methods. It respects the other
+    filters (`documentType`, `submittedBy`, date range) and is empty when no
+    templates are defined.
+- Tests in `tests/integration/engine.statistics.test.ts` cover the per-template
+  breakdown, combined filtering, and the empty-template case.
+
 ## [0.3.1] - 2026-06-26
 
 ### Docs

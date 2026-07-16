@@ -28,6 +28,7 @@ export interface InstanceFilter {
   status?: ApprovalStatus;
   documentType?: string;
   submittedBy?: string;
+  templateName?: string;
   fromDate?: Date;
   toDate?: Date;
 }
