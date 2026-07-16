@@ -3,6 +3,33 @@
 All notable changes to `hierarchical-approval` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — richer statistics surface
+
+`engine.getStatistics()` now aggregates beyond status counts:
+
+- **`byTemplate`** — a `Record<templateName, count>` breakdown of matching
+  instances, so dashboards can show volume per workflow without hand-rolled
+  queries.
+- **`avgCycleTimeMs`** — average time-to-resolution (`updatedAt - createdAt`)
+  across resolved instances (approved, rejected, cancelled, expired). `0` when
+  nothing has been resolved.
+- **`medianCycleTimeMs`** — median time-to-resolution across resolved instances.
+  `0` when nothing has been resolved.
+
+Both cycle-time metrics exclude still-pending instances (whose resolution time
+is unknown). The method stays adapter-agnostic — it reuses the existing
+`getInstancesByFilter` (paginated, page size capped at `maxBulkItems`) and
+`getOverdueInstances`, so it works with any storage adapter with no new adapter
+methods.
+
+### Tests
+
+- `tests/integration/engine.statistics.test.ts` — per-template breakdown,
+  average + median cycle time over resolved instances (with a controllable clock),
+  and zero-valued cycle-time metrics when nothing is resolved.
+
 ## [0.3.1] - 2026-06-26
 
 ### Docs

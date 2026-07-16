@@ -120,6 +120,22 @@ export interface ApprovalStatistics {
   overdue: number;
   /** approved / (approved + rejected); 0 when nothing has been resolved. */
   approvalRate: number;
+  /**
+   * Count of instances per template name, keyed by `templateName`. Only
+   * templates with at least one matching instance are present.
+   */
+  byTemplate: Record<string, number>;
+  /**
+   * Average time-to-resolution (ms) across resolved instances (approved,
+   * rejected, cancelled, expired) — i.e. `updatedAt - createdAt`. `0` when no
+   * instance has been resolved yet.
+   */
+  avgCycleTimeMs: number;
+  /**
+   * Median time-to-resolution (ms) across resolved instances. `0` when no
+   * instance has been resolved yet.
+   */
+  medianCycleTimeMs: number;
 }
 
 export interface HealthResult {
@@ -185,6 +201,14 @@ export interface ApprovalEngineOptions {
 }
 
 // ─── Engine ───────────────────────────────────────────────────────────────
+
+/** Median of an array of numbers. Returns 0 for an empty array. Non-mutating. */
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
+}
 
 export class ApprovalEngine {
   private readonly bus = new EventBus();
@@ -1269,9 +1293,11 @@ export class ApprovalEngine {
   }
 
   /**
-   * Aggregate counts for dashboards. Accepts an optional filter (documentType,
-   * submittedBy, date range) — `status` is ignored since every status is counted.
-   * Adapter-agnostic: issues one cheap count query per status plus an overdue scan.
+   * Aggregate counts and cycle-time metrics for dashboards. Accepts an optional
+   * filter (documentType, submittedBy, date range) — `status` is ignored since
+   * every status is counted. Adapter-agnostic: issues one cheap count query per
+   * status, a single overdue scan, and one paginated fetch of matching
+   * instances for the per-template breakdown and cycle-time metrics.
    */
   async getStatistics(filter: Omit<InstanceFilter, 'status'> = {}): Promise<ApprovalStatistics> {
     const statuses: ApprovalInstance['status'][] = ['pending', 'approved', 'rejected', 'cancelled', 'expired'];
@@ -1297,7 +1323,40 @@ export class ApprovalEngine {
     const resolved = byStatus.approved + byStatus.rejected;
     const approvalRate = resolved === 0 ? 0 : byStatus.approved / resolved;
 
-    return { total, byStatus, overdue: overdueList.length, approvalRate };
+    // Per-template breakdown + cycle-time metrics need instance payloads. Fetch
+    // every matching instance in pages (cap each page at maxBulkItems) so this
+    // stays correct on adapters without a dedicated "list all" call.
+    const byTemplate: Record<string, number> = {};
+    const cycleTimesMs: number[] = [];
+    const RESOLVED: ReadonlySet<ApprovalInstance['status']> = new Set<ApprovalInstance['status']>([
+      'approved',
+      'rejected',
+      'cancelled',
+      'expired',
+    ]);
+    const pageSize = this.maxBulkItems;
+    let offset = 0;
+
+    for (;;) {
+      const page = await this.opts.adapter.getInstancesByFilter(this.tenantId, filter, {
+        limit: pageSize,
+        offset,
+      });
+      for (const inst of page.items) {
+        byTemplate[inst.templateName] = (byTemplate[inst.templateName] ?? 0) + 1;
+        if (RESOLVED.has(inst.status)) {
+          const ms = inst.updatedAt.getTime() - inst.createdAt.getTime();
+          if (Number.isFinite(ms) && ms >= 0) cycleTimesMs.push(ms);
+        }
+      }
+      if (page.items.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    const avgCycleTimeMs = cycleTimesMs.length === 0 ? 0 : cycleTimesMs.reduce((a, b) => a + b, 0) / cycleTimesMs.length;
+    const medianCycleTimeMs = cycleTimesMs.length === 0 ? 0 : median(cycleTimesMs);
+
+    return { total, byStatus, overdue: overdueList.length, approvalRate, byTemplate, avgCycleTimeMs, medianCycleTimeMs };
   }
 
   async shutdown(): Promise<void> {

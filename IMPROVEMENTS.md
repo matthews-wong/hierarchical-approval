@@ -203,5 +203,9 @@ deadlines, verified with a fixed injectable clock).
 ## Possible future iterations
 - **Parallel branch groups** — true concurrent branches (e.g. Finance *and*
   Legal) that join before a downstream level.
-- **Per-template / per-status analytics** breakdowns in `getStatistics`.
-- **Cycle-time metrics** (average time-to-decision) in the statistics surface.
+- ~~**Per-template / per-status analytics** breakdowns in `getStatistics`~~ —
+  **done** (Unreleased): `byTemplate` count breakdown added. Per-status already
+  covered by `byStatus`.
+- ~~**Cycle-time metrics** (average time-to-decision) in the statistics surface~~ —
+  **done** (Unreleased): `avgCycleTimeMs` and `medianCycleTimeMs` added to
+  `getStatistics`.
