@@ -15,6 +15,14 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      # TypeScript 7.0 is the native-port ("tsgo") release. The rest of the
+      # toolchain — typescript-eslint (peer <6.1.0), tsup, and typedoc — does
+      # not support it yet, so a lone bump breaks `npm ci`. Adopt TS 7 manually
+      # once the whole toolchain is compatible, then remove this rule.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
     groups:
       dev-dependencies:
         dependency-type: development
