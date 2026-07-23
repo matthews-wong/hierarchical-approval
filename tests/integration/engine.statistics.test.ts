@@ -64,4 +64,35 @@ describe('ApprovalEngine — getStatistics', () => {
     expect(stats.byStatus.pending).toBe(1);
     await engine.shutdown();
   });
+
+  it('breaks down counts per template', async () => {
+    const engine = makeEngine();
+    await engine.defineTemplate({ ...template, name: 'Simple', documentType: 'doc' });
+    await engine.defineTemplate({ ...template, name: 'Invoice', documentType: 'invoice' });
+
+    // Simple: 1 approved, 1 rejected
+    const s1 = await engine.submit({ templateName: 'Simple', documentId: 'S-1', documentType: 'doc', submittedBy: 'sub' });
+    await engine.approve(s1.id, { approverId: 'appr' });
+    const s2 = await engine.submit({ templateName: 'Simple', documentId: 'S-2', documentType: 'doc', submittedBy: 'sub' });
+    await engine.reject(s2.id, { approverId: 'appr', reason: 'no' });
+    // Invoice: 1 pending
+    await engine.submit({ templateName: 'Invoice', documentId: 'I-1', documentType: 'invoice', submittedBy: 'sub' });
+
+    const stats = await engine.getStatistics();
+    expect(Object.keys(stats.byTemplate).sort()).toEqual(['Invoice', 'Simple']);
+    expect(stats.byTemplate.Simple).toEqual({ total: 2, approved: 1, rejected: 1, pending: 0 });
+    expect(stats.byTemplate.Invoice).toEqual({ total: 1, approved: 0, rejected: 0, pending: 1 });
+
+    // Combined filter + byTemplate: only the doc-typed template shows up
+    const docStats = await engine.getStatistics({ documentType: 'doc' });
+    expect(Object.keys(docStats.byTemplate)).toEqual(['Simple']);
+    await engine.shutdown();
+  });
+
+  it('returns an empty byTemplate when no templates are defined', async () => {
+    const engine = makeEngine();
+    const stats = await engine.getStatistics();
+    expect(stats.byTemplate).toEqual({});
+    await engine.shutdown();
+  });
 });

@@ -5,6 +5,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.4.0] - 2026-07-23
 
+### Added — per-template analytics
+
+- **Per-template breakdown in `getStatistics()`** — the returned
+  `ApprovalStatistics` now includes a `byTemplate` map keyed by template name,
+  each entry carrying `{ total, approved, rejected, pending }`. This lets
+  dashboards break down approval volume and approval rate per workflow template
+  without callers hand-rolling per-template queries.
+  - To support this, `InstanceFilter` gained an optional `templateName` field,
+    now honoured by `MemoryAdapter` (`getInstancesByFilter`,
+    `getInstancesByCursor`) and `PostgresAdapter` (`getInstancesByFilter`,
+    `getInstancesByCursor`). Both adapters remain backward-compatible — existing
+    callers that omit the field are unaffected.
+  - `byTemplate` is adapter-agnostic: built only from existing
+    `getInstancesByFilter` counts plus `TemplateRegistry.list()`, so it works
+    with any storage adapter with no new adapter methods. It respects the other
+    filters (`documentType`, `submittedBy`, date range) and is empty when no
+    templates are defined.
+
 ### Added — OpenTelemetry tracing plug-in
 
 - **`hierarchical-approval/plugins/tracing`** — distributed tracing as an
@@ -46,9 +64,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Tests
 
-- Test suite grew from 380 to 395 passing tests covering the tracing span
+- Test suite grew from 380 to 397 passing tests covering the tracing span
   lifecycle, creation attributes, LIFO concurrency pairing, configuration, the
-  no-op default, and the public-export surface.
+  no-op default, the public-export surface, and the per-template statistics
+  breakdown (combined filtering and the empty-template case).
 
 ## [0.3.1] - 2026-06-26
 
