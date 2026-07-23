@@ -1074,6 +1074,65 @@ Every operation is wrapped in a span named `approval.<operation>` (e.g. `approva
 
 ---
 
+## NestJS integration
+
+First-class NestJS support ships as the `hierarchical-approval/nestjs` subpath. `@nestjs/common` is an **optional peer dependency** — you only pull it in if you use this module.
+
+```ts
+import { Module } from '@nestjs/common';
+import { HierarchicalApprovalModule } from 'hierarchical-approval/nestjs';
+import { MemoryAdapter } from 'hierarchical-approval/adapters/memory';
+
+@Module({
+  imports: [
+    HierarchicalApprovalModule.forRoot({
+      adapter: new MemoryAdapter(),
+      isGlobal: true, // inject ApprovalEngine anywhere without re-importing
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+Inject the configured engine with the `@InjectApprovalEngine()` decorator:
+
+```ts
+import { Injectable } from '@nestjs/common';
+import { ApprovalEngine } from 'hierarchical-approval';
+import { InjectApprovalEngine } from 'hierarchical-approval/nestjs';
+
+@Injectable()
+export class InvoiceService {
+  constructor(@InjectApprovalEngine() private readonly approvals: ApprovalEngine) {}
+
+  submit(invoiceId: string, amount: number) {
+    return this.approvals.submit({
+      templateName: 'Invoice',
+      documentId: invoiceId,
+      documentType: 'invoice',
+      submittedBy: 'system',
+      data: { amount },
+    });
+  }
+}
+```
+
+Configure asynchronously from your `ConfigService` (or any provider) with `forRootAsync`:
+
+```ts
+HierarchicalApprovalModule.forRootAsync({
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    adapter: new PostgresAdapter({ connectionString: config.get('DATABASE_URL') }),
+  }),
+});
+```
+
+The module registers the engine under the `APPROVAL_ENGINE` token and stops its escalation scheduler on application shutdown via `onModuleDestroy` (call `app.enableShutdownHooks()` to activate Nest's shutdown lifecycle).
+
+---
+
 ## Custom storage adapter
 
 Implement `IStorageAdapter` to use any database:

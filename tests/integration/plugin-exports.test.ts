@@ -73,4 +73,11 @@ describe('plugin public exports', () => {
       expect(m, `tracing should export ${name}`).toHaveProperty(name);
     }
   });
+
+  it('nestjs barrel exposes its documented surface', async () => {
+    const m = await import('../../src/nestjs/index.js');
+    for (const name of ['HierarchicalApprovalModule', 'APPROVAL_ENGINE', 'InjectApprovalEngine']) {
+      expect(m, `nestjs should export ${name}`).toHaveProperty(name);
+    }
+  });
 });

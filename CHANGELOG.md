@@ -3,6 +3,33 @@
 All notable changes to `hierarchical-approval` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — NestJS integration
+
+- **`hierarchical-approval/nestjs`** — first-class NestJS support on its own
+  tree-shakeable subpath. `@nestjs/common` is an **optional peer dependency**.
+  - `HierarchicalApprovalModule.forRoot(options)` and `.forRootAsync(asyncOptions)`
+    provide a configured `ApprovalEngine` under the `APPROVAL_ENGINE` token, with
+    an `isGlobal` flag and `imports`/`inject`/`useFactory` async wiring.
+  - `@InjectApprovalEngine()` decorator for injecting the engine into services.
+  - The module stops the engine's escalation scheduler on application shutdown
+    via `onModuleDestroy`.
+
+### Added — adoption & discoverability
+
+- `examples/playground/` — a StackBlitz-ready, in-browser runnable demo of a
+  purchase-order approval chain, plus "Try it live" (RunKit + StackBlitz) links
+  in the README.
+- Expanded npm `keywords` for problem-based search (approval-workflow,
+  maker-checker, four-eyes, delegation, escalation, …).
+
+### Fixed
+
+- Replaced the non-standard `peerDependenciesOptional` field with the correct
+  `peerDependenciesMeta`, so `pg` (and now `@nestjs/common`) are properly marked
+  optional and no longer emit install-time peer warnings.
+
 ## [0.4.0] - 2026-07-23
 
 ### Added — per-template analytics

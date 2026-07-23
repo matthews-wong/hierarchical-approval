@@ -6,6 +6,7 @@ export default defineConfig({
     'adapters/MemoryAdapter': 'src/adapters/MemoryAdapter.ts',
     'adapters/PostgresAdapter': 'src/adapters/PostgresAdapter.ts',
     testing: 'src/testing/ApprovalTestKit.ts',
+    nestjs: 'src/nestjs/index.ts',
     'plugins/audit': 'src/plugins/audit/index.ts',
     'plugins/metrics': 'src/plugins/metrics/index.ts',
     'plugins/notify': 'src/plugins/notify/index.ts',

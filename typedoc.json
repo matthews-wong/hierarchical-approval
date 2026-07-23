@@ -6,6 +6,7 @@
     "src/adapters/MemoryAdapter.ts",
     "src/adapters/PostgresAdapter.ts",
     "src/testing/ApprovalTestKit.ts",
+    "src/nestjs/index.ts",
     "src/plugins/audit/index.ts",
     "src/plugins/metrics/index.ts",
     "src/plugins/notify/index.ts",
