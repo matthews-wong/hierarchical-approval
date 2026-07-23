@@ -1,6 +1,6 @@
 {
   "name": "hierarchical-approval",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "TypeScript-first hierarchical approval engine for ERP developers",
   "keywords": [
     "approval",
@@ -74,6 +74,11 @@
       "types": "./dist/plugins/resilience.d.ts",
       "import": "./dist/plugins/resilience.js",
       "require": "./dist/plugins/resilience.cjs"
+    },
+    "./plugins/tracing": {
+      "types": "./dist/plugins/tracing.d.ts",
+      "import": "./dist/plugins/tracing.js",
+      "require": "./dist/plugins/tracing.cjs"
     }
   },
   "scripts": {
@@ -84,7 +89,9 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src tests",
     "format": "prettier --write src tests",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "docs": "typedoc",
+    "docs:watch": "typedoc --watch"
   },
   "devDependencies": {
     "@types/pg": "^8.20.0",
@@ -95,6 +102,7 @@
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.8.4",
     "tsup": "^8.5.1",
+    "typedoc": "^0.28.20",
     "typescript": "^5.9.3",
     "vitest": "^4.1.9"
   },

@@ -3,6 +3,53 @@
 All notable changes to `hierarchical-approval` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-23
+
+### Added — OpenTelemetry tracing plug-in
+
+- **`hierarchical-approval/plugins/tracing`** — distributed tracing as an
+  `IOperationMiddleware`, published on its own tree-shakeable subpath with
+  **zero runtime dependencies**.
+  - `TracingMiddleware` wraps every engine operation in a span named
+    `approval.<operation>` carrying `approval.tenant_id`, `approval.actor_id`,
+    and `approval.instance_id` attributes. On success it records
+    `approval.result_status`/`approval.result_level` and status `OK`; on failure
+    it calls `recordException`, tags `approval.error_code`, sets status `ERROR`,
+    and re-throws (tracing never swallows an error). Overlapping same-key
+    operations are paired LIFO via a per-correlation-key span stack.
+  - `Tracer`/`TraceSpan`/`SpanStatus` ports model the `@opentelemetry/api`
+    surface, so a real OpenTelemetry `Tracer` (`trace.getTracer(...)`) is
+    structurally assignable and can be passed directly — the library never
+    imports `@opentelemetry/api`. `SpanStatusCode` mirrors OTel's numeric codes.
+  - `noopTracer` is the default, so adding the middleware without wiring a
+    backend is a no-op.
+
+### Added — repository governance & supply chain
+
+- `SECURITY.md` (private vulnerability disclosure policy, supported versions),
+  `CONTRIBUTING.md`, and a Contributor Covenant `CODE_OF_CONDUCT.md`.
+- GitHub issue forms (bug report, feature request) + `config.yml`, a pull-request
+  template, and `CODEOWNERS`.
+- Dependabot configuration for weekly npm and GitHub Actions updates.
+
+### Added — API documentation
+
+- TypeDoc API reference generation via `npm run docs` (and `docs:watch`),
+  covering the main entry point and every published subpath.
+- CI validates that the API reference generates; a `docs.yml` workflow deploys it
+  to GitHub Pages on release tags and manual dispatch.
+
+### Changed
+
+- `package.json` `exports` and the build now also expose the `plugins/tracing`
+  subpath in ESM, CJS, and `.d.ts`.
+
+### Tests
+
+- Test suite grew from 380 to 395 passing tests covering the tracing span
+  lifecycle, creation attributes, LIFO concurrency pairing, configuration, the
+  no-op default, and the public-export surface.
+
 ## [0.3.1] - 2026-06-26
 
 ### Docs
