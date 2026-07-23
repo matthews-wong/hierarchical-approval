@@ -1,0 +1,12 @@
+{
+  "name": "hierarchical-approval-playground",
+  "private": true,
+  "type": "module",
+  "description": "In-browser playground for hierarchical-approval (StackBlitz-ready).",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "hierarchical-approval": "latest"
+  }
+}

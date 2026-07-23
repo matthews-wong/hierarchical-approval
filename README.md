@@ -11,7 +11,7 @@ Multi-tenant · audit-ready · fully pluggable · zero runtime dependencies you 
 [![types](https://img.shields.io/npm/types/hierarchical-approval.svg?logo=typescript&logoColor=white&color=3178c6)](https://www.typescriptlang.org/)
 [![minzipped size](https://img.shields.io/bundlephobia/minzip/hierarchical-approval?color=44cc11)](https://bundlephobia.com/package/hierarchical-approval)
 [![license](https://img.shields.io/npm/l/hierarchical-approval.svg?color=blue)](./LICENSE)
-[![tests](https://img.shields.io/badge/tests-195%20passing-44cc11.svg?logo=vitest&logoColor=white)](./tests)
+[![tests](https://img.shields.io/badge/tests-397%20passing-44cc11.svg?logo=vitest&logoColor=white)](./tests)
 
 [**Documentation**](https://hierarchical-approval.matthewswong.com) ·
 [**npm**](https://www.npmjs.com/package/hierarchical-approval) ·
@@ -27,6 +27,11 @@ npm install pg @types/pg
 ```
 
 > 📖 Full docs & live guides: **[hierarchical-approval.matthewswong.com](https://hierarchical-approval.matthewswong.com)**
+
+### ▶️ Try it live (no install)
+
+- **[Run in your browser on RunKit →](https://npm.runkit.com/hierarchical-approval)** — `require('hierarchical-approval')` in an instant notebook.
+- **[Open the interactive playground on StackBlitz →](https://stackblitz.com/github/matthews-wong/hierarchical-approval/tree/main/examples/playground)** — a full purchase-order approval chain running in-browser.
 
 <details>
 <summary><strong>Table of contents</strong></summary>
