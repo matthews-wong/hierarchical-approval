@@ -10,6 +10,7 @@ export default defineConfig({
     'plugins/metrics': 'src/plugins/metrics/index.ts',
     'plugins/notify': 'src/plugins/notify/index.ts',
     'plugins/resilience': 'src/plugins/resilience/index.ts',
+    'plugins/tracing': 'src/plugins/tracing/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

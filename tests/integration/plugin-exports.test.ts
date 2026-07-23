@@ -61,4 +61,16 @@ describe('plugin public exports', () => {
       expect(m, `resilience should export ${name}`).toHaveProperty(name);
     }
   });
+
+  it('tracing barrel exposes its documented surface', async () => {
+    const m = await import('../../src/plugins/tracing/index.js');
+    for (const name of [
+      'TracingMiddleware',
+      'defaultTracingCorrelationKeyFn',
+      'noopTracer',
+      'SpanStatusCode',
+    ]) {
+      expect(m, `tracing should export ${name}`).toHaveProperty(name);
+    }
+  });
 });

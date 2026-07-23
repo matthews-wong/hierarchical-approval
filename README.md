@@ -62,24 +62,24 @@ Approval workflows are deceptively simple until they aren't. Most teams start wi
 
 `hierarchical-approval` gives that logic a permanent, tested home:
 
-| Pain point | What this library does |
-|---|---|
-| Hardcoded approval chains | Named **templates** — define once, reuse across any document type |
-| Race conditions on concurrent approvals | **Optimistic locking** with a version field + configurable retry policy |
-| Duplicate submissions (network retry, double-click) | Built-in **idempotency** keyed by tenant + document + template |
-| No compliance trail | Immutable **audit log** with old/new state diff on every mutation |
-| `new Date()` in production code makes tests unreliable | Injectable **Clock** interface — freeze time without monkey-patching |
-| "Escalate to skip-level manager after 48 h" | Built-in **escalation scheduler** with delegation + time-limited proxying |
-| SLA as an afterthought | **SLA tracking** baked in; `approval:sla_breached` event fires automatically |
-| Test suites hit a real database | **`ApprovalTestKit`** + **`ManualClock`** — deterministic, zero I/O |
-| Kafka/Datadog/BullMQ integration needed | Six **pluggable adapter interfaces** for notifications, metrics, audit, scheduling, auth, and middleware |
+| Pain point                                             | What this library does                                                                                   |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Hardcoded approval chains                              | Named **templates** — define once, reuse across any document type                                        |
+| Race conditions on concurrent approvals                | **Optimistic locking** with a version field + configurable retry policy                                  |
+| Duplicate submissions (network retry, double-click)    | Built-in **idempotency** keyed by tenant + document + template                                           |
+| No compliance trail                                    | Immutable **audit log** with old/new state diff on every mutation                                        |
+| `new Date()` in production code makes tests unreliable | Injectable **Clock** interface — freeze time without monkey-patching                                     |
+| "Escalate to skip-level manager after 48 h"            | Built-in **escalation scheduler** with delegation + time-limited proxying                                |
+| SLA as an afterthought                                 | **SLA tracking** baked in; `approval:sla_breached` event fires automatically                             |
+| Test suites hit a real database                        | **`ApprovalTestKit`** + **`ManualClock`** — deterministic, zero I/O                                      |
+| Kafka/Datadog/BullMQ integration needed                | Six **pluggable adapter interfaces** for notifications, metrics, audit, scheduling, auth, and middleware |
 
 ### Compared to existing libraries
 
 **`approval-flow`** — Single-level only; no multi-tenancy; no audit trail; last published 2020.  
 **`workflow-engine`** — Generic state machine; you implement every guard, every condition, every audit entry yourself.  
 **`node-approval`** — No TypeScript; no idempotency; no optimistic locking.  
-**Hand-rolled** — You *will* hit the concurrent-approval race condition eventually. This library has 195 tests covering it.
+**Hand-rolled** — You _will_ hit the concurrent-approval race condition eventually. This library has 195 tests covering it.
 
 ---
 
@@ -87,13 +87,13 @@ Approval workflows are deceptively simple until they aren't. Most teams start wi
 
 **The 30-second mental model:** you define a reusable **template** (the approval blueprint), then **submit** documents against it. Each submission becomes an **instance** that walks through the template's **levels** one at a time. At each level the configured **approvers** act, and the level's **mode** decides when that level is satisfied. When the last level passes, the instance is `approved`.
 
-| Term | What it is |
-|---|---|
-| **Template** | A named, reusable blueprint — ordered levels, approvers, modes, conditions, escalation, SLA. Define once, reuse for every document of that type. |
+| Term         | What it is                                                                                                                                               |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Template** | A named, reusable blueprint — ordered levels, approvers, modes, conditions, escalation, SLA. Define once, reuse for every document of that type.         |
 | **Instance** | One running approval: a specific document moving through a template. Holds the live state, the audit log, and a snapshot of the template at submit time. |
-| **Level** | A single step in the chain (e.g. "Manager", then "Finance"). Levels run **sequentially**. |
-| **Approver** | Who may act on a level — a fixed `user`, a `role`, or someone resolved dynamically at runtime. |
-| **Mode** | How a level passes: `any`, `all`, `majority`, `quorum` (N-of-M), or `weighted`. |
+| **Level**    | A single step in the chain (e.g. "Manager", then "Finance"). Levels run **sequentially**.                                                                |
+| **Approver** | Who may act on a level — a fixed `user`, a `role`, or someone resolved dynamically at runtime.                                                           |
+| **Mode**     | How a level passes: `any`, `all`, `majority`, `quorum` (N-of-M), or `weighted`.                                                                          |
 
 ### The status lifecycle
 
@@ -203,32 +203,32 @@ Templates are **snapshotted** at submit time. You can update a template (via `up
 
 An **instance** is a single document moving through a template. Key fields:
 
-| Field | Type | Description |
-|---|---|---|
-| `id` | `string` | Unique instance ID |
-| `status` | `'pending' \| 'approved' \| 'rejected' \| 'cancelled' \| 'expired'` | Current status |
-| `currentLevel` | `number` | Active level number |
-| `version` | `number` | Optimistic lock version |
-| `levels` | `ApprovalLevelInstance[]` | Per-level state (approverIds, approvedBy, rejectedBy) |
-| `auditLog` | `AuditEntry[]` | Full immutable history |
-| `idempotencyKey` | `string` | Dedup key — same submit returns the same instance |
-| `slaDeadlineAt` | `Date?` | When the SLA expires |
-| `slaBreachedAt` | `Date?` | When the SLA was breached (set automatically) |
-| `expiresAt` | `Date?` | Hard deadline — instance auto-expires after this |
-| `deadlineAction` | `'cancel' \| 'reject'` | What to do when `expiresAt` passes |
-| `parentInstanceId` | `string?` | Set on resubmitted instances |
-| `templateSnapshot` | `object` | Frozen copy of escalation/SLA config at submit time |
+| Field              | Type                                                                | Description                                           |
+| ------------------ | ------------------------------------------------------------------- | ----------------------------------------------------- |
+| `id`               | `string`                                                            | Unique instance ID                                    |
+| `status`           | `'pending' \| 'approved' \| 'rejected' \| 'cancelled' \| 'expired'` | Current status                                        |
+| `currentLevel`     | `number`                                                            | Active level number                                   |
+| `version`          | `number`                                                            | Optimistic lock version                               |
+| `levels`           | `ApprovalLevelInstance[]`                                           | Per-level state (approverIds, approvedBy, rejectedBy) |
+| `auditLog`         | `AuditEntry[]`                                                      | Full immutable history                                |
+| `idempotencyKey`   | `string`                                                            | Dedup key — same submit returns the same instance     |
+| `slaDeadlineAt`    | `Date?`                                                             | When the SLA expires                                  |
+| `slaBreachedAt`    | `Date?`                                                             | When the SLA was breached (set automatically)         |
+| `expiresAt`        | `Date?`                                                             | Hard deadline — instance auto-expires after this      |
+| `deadlineAction`   | `'cancel' \| 'reject'`                                              | What to do when `expiresAt` passes                    |
+| `parentInstanceId` | `string?`                                                           | Set on resubmitted instances                          |
+| `templateSnapshot` | `object`                                                            | Frozen copy of escalation/SLA config at submit time   |
 
 ### Approval modes
 
 Each level's `mode` field controls how many approvers are required:
 
-| Mode | Required | Extra config |
-|---|---|---|
-| `'any'` | One approver is enough | — |
-| `'all'` | Every listed approver must act | — |
-| `'majority'` | More than half must approve | — |
-| `'quorum'` | A fixed **N-of-M** threshold approves | `minApprovals` |
+| Mode         | Required                                         | Extra config                    |
+| ------------ | ------------------------------------------------ | ------------------------------- |
+| `'any'`      | One approver is enough                           | —                               |
+| `'all'`      | Every listed approver must act                   | —                               |
+| `'majority'` | More than half must approve                      | —                               |
+| `'quorum'`   | A fixed **N-of-M** threshold approves            | `minApprovals`                  |
 | `'weighted'` | Cumulative approver **weight** meets a threshold | `threshold`, optional `weights` |
 
 A level is **rejected** as soon as the outcome becomes mathematically impossible — e.g. a `quorum` of 2-of-3 is rejected after the second rejection (only one approver remains), and a `weighted` level is rejected once the weight still achievable falls below `threshold`.
@@ -271,7 +271,9 @@ conditions: [
   // Add level 3 only when amount exceeds $50k
   {
     when: { field: 'amount', operator: '>', value: 50000 },
-    addLevels: [{ level: 3, name: 'CFO', approvers: [{ type: 'user', userId: 'cfo' }], mode: 'any' }],
+    addLevels: [
+      { level: 3, name: 'CFO', approvers: [{ type: 'user', userId: 'cfo' }], mode: 'any' },
+    ],
   },
   // Skip manager level for internal transfers
   {
@@ -284,9 +286,16 @@ conditions: [
       { field: 'region', operator: 'in', value: ['APAC', 'EMEA'] },
       { field: 'amount', operator: '>=', value: 5000 },
     ],
-    addLevels: [{ level: 4, name: 'Regional VP', approvers: [{ type: 'role', role: 'regional-vp' }], mode: 'any' }],
+    addLevels: [
+      {
+        level: 4,
+        name: 'Regional VP',
+        approvers: [{ type: 'role', role: 'regional-vp' }],
+        mode: 'any',
+      },
+    ],
   },
-]
+];
 ```
 
 **Built-in operators:** `>`, `<`, `>=`, `<=`, `==`, `!=`, `in`, `not_in`
@@ -294,11 +303,15 @@ conditions: [
 **Register custom operators** at engine level:
 
 ```ts
-engine.registerConditionOperator('contains', (actual, expected) =>
-  typeof actual === 'string' && actual.includes(String(expected)));
+engine.registerConditionOperator(
+  'contains',
+  (actual, expected) => typeof actual === 'string' && actual.includes(String(expected)),
+);
 
-engine.registerConditionOperator('between', (actual, [min, max]: number[]) =>
-  Number(actual) >= min && Number(actual) <= max);
+engine.registerConditionOperator(
+  'between',
+  (actual, [min, max]: number[]) => Number(actual) >= min && Number(actual) <= max,
+);
 ```
 
 ---
@@ -314,8 +327,8 @@ import { PostgresAdapter } from 'hierarchical-approval/adapters/postgres';
 const adapter = new PostgresAdapter({
   connectionString: process.env.DATABASE_URL,
   // or: pool — bring your own pg.Pool
-  schema: 'public',       // default
-  tablePrefix: 'ha',      // prefix for all table names (validated: /^[a-z][a-z0-9_]*$/)
+  schema: 'public', // default
+  tablePrefix: 'ha', // prefix for all table names (validated: /^[a-z][a-z0-9_]*$/)
   statementTimeoutMs: 5000,
   ssl: { rejectUnauthorized: true },
 });
@@ -339,24 +352,24 @@ const engine = new ApprovalEngine({ adapter: new MemoryAdapter(), tenantId: 'dev
 
 All options except `adapter` are optional.
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `adapter` | `IStorageAdapter` | **required** | Storage backend |
-| `tenantId` | `string` | `'default'` | Tenant scope — all data is isolated per tenant |
-| `clock` | `Clock` | `systemClock` | Injectable time source — `{ now(): Date }` |
-| `generateId` | `IdGeneratorFn` | timestamp + random | Custom ID generator (ULID, UUID v7, etc.) |
-| `retryPolicy` | `RetryPolicy` | `{ maxAttempts: 3, baseDelayMs: 50, jitter: true }` | Optimistic lock retry behaviour |
-| `idempotencyKeyFn` | `IdempotencyKeyFn` | SHA-256 of tenant+docType+docId+template | Custom dedup key strategy |
-| `notificationAdapter` | `INotificationAdapter` | — | Typed events after each approval action |
-| `auditAdapter` | `IAuditAdapter` | — | Write-once external audit sink |
-| `metricsAdapter` | `IMetricsAdapter` | — | Prometheus / Datadog counters + timings |
-| `schedulerAdapter` | `ISchedulerAdapter` | built-in `setInterval` poll | BullMQ / Temporal / EventBridge escalation |
-| `authorizationPolicy` | `IAuthorizationPolicy` | — | Per-operation authorization rules |
-| `middleware` | `IOperationMiddleware[]` | — | Before / after / onError hooks on every operation |
-| `orgProvider` | `OrgProvider` | — | Resolves role members and org hierarchy |
-| `logger` | `Logger` | `noopLogger` | Pino-compatible logger |
-| `escalationPollIntervalMs` | `number` | `60_000` | Escalation poll interval (ms) — set `0` to disable polling |
-| `maxBulkItems` | `number` | `200` | Max instances per `bulkApprove` / `bulkReject` call |
+| Option                     | Type                     | Default                                             | Description                                                |
+| -------------------------- | ------------------------ | --------------------------------------------------- | ---------------------------------------------------------- |
+| `adapter`                  | `IStorageAdapter`        | **required**                                        | Storage backend                                            |
+| `tenantId`                 | `string`                 | `'default'`                                         | Tenant scope — all data is isolated per tenant             |
+| `clock`                    | `Clock`                  | `systemClock`                                       | Injectable time source — `{ now(): Date }`                 |
+| `generateId`               | `IdGeneratorFn`          | timestamp + random                                  | Custom ID generator (ULID, UUID v7, etc.)                  |
+| `retryPolicy`              | `RetryPolicy`            | `{ maxAttempts: 3, baseDelayMs: 50, jitter: true }` | Optimistic lock retry behaviour                            |
+| `idempotencyKeyFn`         | `IdempotencyKeyFn`       | SHA-256 of tenant+docType+docId+template            | Custom dedup key strategy                                  |
+| `notificationAdapter`      | `INotificationAdapter`   | —                                                   | Typed events after each approval action                    |
+| `auditAdapter`             | `IAuditAdapter`          | —                                                   | Write-once external audit sink                             |
+| `metricsAdapter`           | `IMetricsAdapter`        | —                                                   | Prometheus / Datadog counters + timings                    |
+| `schedulerAdapter`         | `ISchedulerAdapter`      | built-in `setInterval` poll                         | BullMQ / Temporal / EventBridge escalation                 |
+| `authorizationPolicy`      | `IAuthorizationPolicy`   | —                                                   | Per-operation authorization rules                          |
+| `middleware`               | `IOperationMiddleware[]` | —                                                   | Before / after / onError hooks on every operation          |
+| `orgProvider`              | `OrgProvider`            | —                                                   | Resolves role members and org hierarchy                    |
+| `logger`                   | `Logger`                 | `noopLogger`                                        | Pino-compatible logger                                     |
+| `escalationPollIntervalMs` | `number`                 | `60_000`                                            | Escalation poll interval (ms) — set `0` to disable polling |
+| `maxBulkItems`             | `number`                 | `200`                                               | Max instances per `bulkApprove` / `bulkReject` call        |
 
 ---
 
@@ -402,7 +415,11 @@ interface OrgProvider {
   getUsersByDepartment?(dept: string, tenantId?: string): Promise<string[]> | string[];
   getManagerOf?(userId: string, tenantId?: string): Promise<string | null> | string | null;
   getSkipLevelManagerOf?(userId: string, tenantId?: string): Promise<string | null> | string | null;
-  getUsersByAttribute?(attr: string, value: unknown, tenantId?: string): Promise<string[]> | string[];
+  getUsersByAttribute?(
+    attr: string,
+    value: unknown,
+    tenantId?: string,
+  ): Promise<string[]> | string[];
 }
 ```
 
@@ -414,14 +431,14 @@ interface OrgProvider {
 
 ```ts
 const instance = await engine.submit({
-  templateName: 'purchase-order',  // must exist
+  templateName: 'purchase-order', // must exist
   documentId: 'po-0042',
   documentType: 'purchase_order',
   submittedBy: 'alice',
-  data: { amount: 15000 },         // evaluated against template conditions
-  metadata: { source: 'web-ui' },  // arbitrary metadata, not evaluated
+  data: { amount: 15000 }, // evaluated against template conditions
+  metadata: { source: 'web-ui' }, // arbitrary metadata, not evaluated
   expiresAt: new Date('2025-12-31'), // hard deadline (optional)
-  deadlineAction: 'reject',          // what to do when deadline passes (default: 'cancel')
+  deadlineAction: 'reject', // what to do when deadline passes (default: 'cancel')
 });
 ```
 
@@ -432,7 +449,7 @@ Submitting the same `(tenantId, documentType, documentId, templateName)` again w
 ```ts
 await engine.approve(instanceId, {
   approverId: 'mgr-1',
-  comment: 'Approved for Q4 budget',   // optional
+  comment: 'Approved for Q4 budget', // optional
 });
 ```
 
@@ -443,8 +460,8 @@ Advancing the last level sets `instance.status = 'approved'` and emits `approval
 ```ts
 await engine.reject(instanceId, {
   approverId: 'mgr-1',
-  reason: 'Over budget cap',           // required
-  returnTo: 'previous',                // optional: 'originator' | 'previous'
+  reason: 'Over budget cap', // required
+  returnTo: 'previous', // optional: 'originator' | 'previous'
 });
 ```
 
@@ -459,7 +476,7 @@ await engine.delegate(instanceId, {
   fromApprover: 'mgr-1',
   toApprover: 'deputy-mgr',
   reason: 'On leave',
-  until: new Date('2025-11-15'),   // optional — delegation auto-reverts after this date
+  until: new Date('2025-11-15'), // optional — delegation auto-reverts after this date
 });
 ```
 
@@ -521,7 +538,7 @@ Creates a new instance linked to the rejected original via `parentInstanceId`:
 const newInstance = await engine.resubmit(instanceId, {
   resubmittedBy: 'alice',
   reason: 'Revised amount',
-  updatedData: { amount: 9000 },   // merged with original data
+  updatedData: { amount: 9000 }, // merged with original data
 });
 ```
 
@@ -569,11 +586,15 @@ Individual failures do not abort the batch — they are collected in `result.fai
 Every mutating operation accepts an optional second argument to attach request metadata to the audit entry:
 
 ```ts
-await engine.approve(instanceId, { approverId: 'mgr-1' }, {
-  ipAddress: req.ip,
-  userAgent: req.headers['user-agent'],
-  sessionId: req.session.id,
-});
+await engine.approve(
+  instanceId,
+  { approverId: 'mgr-1' },
+  {
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'],
+    sessionId: req.session.id,
+  },
+);
 ```
 
 ---
@@ -597,11 +618,11 @@ const { items, total } = await engine.getPendingFor('mgr-1', { limit: 20, offset
 ```ts
 const { items, total } = await engine.queryInstances(
   {
-    status: 'pending',           // optional
-    documentType: 'invoice',     // optional
-    submittedBy: 'alice',        // optional
+    status: 'pending', // optional
+    documentType: 'invoice', // optional
+    submittedBy: 'alice', // optional
     fromDate: new Date('2025-01-01'), // optional
-    toDate: new Date('2025-12-31'),   // optional
+    toDate: new Date('2025-12-31'), // optional
   },
   { limit: 50, offset: 0 },
 );
@@ -612,10 +633,7 @@ const { items, total } = await engine.queryInstances(
 ```ts
 let cursor: string | undefined;
 do {
-  const page = await engine.queryInstancesByCursor(
-    { status: 'pending' },
-    { limit: 100, cursor },
-  );
+  const page = await engine.queryInstancesByCursor({ status: 'pending' }, { limit: 100, cursor });
   await processPage(page.items);
   cursor = page.nextCursor;
 } while (cursor);
@@ -728,19 +746,45 @@ await engine.shutdown();
 ## Events
 
 ```ts
-engine.on('approval:submitted',      (payload) => { /* instance submitted */ });
-engine.on('approval:approved',       (payload) => { /* level or fully approved */ });
-engine.on('approval:rejected',       (payload) => { /* level rejected */ });
-engine.on('approval:level_advanced', (payload) => { /* moved to next level */ });
-engine.on('approval:delegated',      (payload) => { /* approver delegated */ });
-engine.on('approval:reassigned',     (payload) => { /* approver reassigned by admin */ });
-engine.on('approval:escalated',      (payload) => { /* escalated to new approver */ });
-engine.on('approval:cancelled',      (payload) => { /* cancelled */ });
-engine.on('approval:expired',        (payload) => { /* deadline passed */ });
-engine.on('approval:overridden',     (payload) => { /* override applied */ });
-engine.on('approval:resubmitted',    (payload) => { /* new instance from rejected */ });
-engine.on('approval:sla_breached',   (payload) => { /* SLA deadline passed */ });
-engine.on('approval:completed',      (instance) => { /* fully approved or overridden */ });
+engine.on('approval:submitted', (payload) => {
+  /* instance submitted */
+});
+engine.on('approval:approved', (payload) => {
+  /* level or fully approved */
+});
+engine.on('approval:rejected', (payload) => {
+  /* level rejected */
+});
+engine.on('approval:level_advanced', (payload) => {
+  /* moved to next level */
+});
+engine.on('approval:delegated', (payload) => {
+  /* approver delegated */
+});
+engine.on('approval:reassigned', (payload) => {
+  /* approver reassigned by admin */
+});
+engine.on('approval:escalated', (payload) => {
+  /* escalated to new approver */
+});
+engine.on('approval:cancelled', (payload) => {
+  /* cancelled */
+});
+engine.on('approval:expired', (payload) => {
+  /* deadline passed */
+});
+engine.on('approval:overridden', (payload) => {
+  /* override applied */
+});
+engine.on('approval:resubmitted', (payload) => {
+  /* new instance from rejected */
+});
+engine.on('approval:sla_breached', (payload) => {
+  /* SLA deadline passed */
+});
+engine.on('approval:completed', (instance) => {
+  /* fully approved or overridden */
+});
 
 engine.off('approval:approved', handler);
 ```
@@ -791,7 +835,9 @@ class KafkaAudit implements IAuditAdapter {
   ): Promise<void> {
     await producer.send({
       topic: 'approvals.audit',
-      messages: [{ value: JSON.stringify({ tenantId, instanceId, entry, version: instance.version }) }],
+      messages: [
+        { value: JSON.stringify({ tenantId, instanceId, entry, version: instance.version }) },
+      ],
     });
   }
 }
@@ -998,11 +1044,28 @@ const outbox = new OutboxNotificationAdapter({
 
 const engine = new ApprovalEngine({ adapter, notificationAdapter: outbox });
 
-await outbox.drain();         // deliver due items (call from a worker/cron)
-await outbox.deadLettered();  // inspect permanently-failed events
+await outbox.drain(); // deliver due items (call from a worker/cron)
+await outbox.deadLettered(); // inspect permanently-failed events
 ```
 
 `TemplatedNotificationAdapter` renders a human-readable message per event type; `CompositeNotificationAdapter` fans out to multiple channels with fault isolation.
+
+### `plugins/tracing` — OpenTelemetry distributed tracing
+
+```ts
+import { trace } from '@opentelemetry/api';
+import { TracingMiddleware } from 'hierarchical-approval/plugins/tracing';
+
+const engine = new ApprovalEngine({
+  adapter,
+  middleware: [
+    // A real OpenTelemetry Tracer is structurally compatible — pass it directly.
+    new TracingMiddleware({ tracer: trace.getTracer('hierarchical-approval') }),
+  ],
+});
+```
+
+Every operation is wrapped in a span named `approval.<operation>` (e.g. `approval.approve`) carrying `approval.tenant_id`, `approval.actor_id` and `approval.instance_id` attributes. On success the span records the resulting `approval.result_status`/`approval.result_level` and status `OK`; on failure it calls `recordException`, tags `approval.error_code`, and sets status `ERROR` — then re-throws (tracing never swallows an error). There is **no hard dependency** on `@opentelemetry/api`: the middleware defaults to a no-op tracer, so you install and wire OpenTelemetry only if you want traces.
 
 ---
 
@@ -1066,16 +1129,23 @@ test('finance level activates above $10k', async () => {
     levels: [
       { level: 1, name: 'Manager', approvers: [{ type: 'user', userId: 'mgr' }], mode: 'any' },
     ],
-    conditions: [{
-      when: { field: 'amount', operator: '>', value: 10000 },
-      addLevels: [{ level: 2, name: 'Finance', approvers: [{ type: 'user', userId: 'fin' }], mode: 'any' }],
-    }],
+    conditions: [
+      {
+        when: { field: 'amount', operator: '>', value: 10000 },
+        addLevels: [
+          { level: 2, name: 'Finance', approvers: [{ type: 'user', userId: 'fin' }], mode: 'any' },
+        ],
+      },
+    ],
     slaDeadlineDays: 2,
   });
 
   const { id } = await engine.submit({
-    templateName: 'po', documentId: 'po-1', documentType: 'purchase_order',
-    submittedBy: 'alice', data: { amount: 50000 },
+    templateName: 'po',
+    documentId: 'po-1',
+    documentType: 'purchase_order',
+    submittedBy: 'alice',
+    data: { amount: 50000 },
   });
 
   const inst = await engine.getInstance(id);
@@ -1104,8 +1174,11 @@ test('SLA breach fires after 2 days', async () => {
   });
 
   const { id } = await engine.submit({
-    templateName: 'invoice', documentId: 'inv-1', documentType: 'invoice',
-    submittedBy: 'alice', data: {},
+    templateName: 'invoice',
+    documentId: 'inv-1',
+    documentType: 'invoice',
+    submittedBy: 'alice',
+    data: {},
   });
 
   const breached: string[] = [];
@@ -1127,9 +1200,9 @@ test('SLA breach fires after 2 days', async () => {
 ```ts
 const clock = new ManualClock(new Date('2025-01-01T00:00:00Z'));
 
-clock.now();              // → Date at current virtual time
-clock.advance(60_000);    // +60 seconds
-clock.advanceDays(7);     // +7 days
+clock.now(); // → Date at current virtual time
+clock.advance(60_000); // +60 seconds
+clock.advanceDays(7); // +7 days
 clock.set(new Date('2026-06-01')); // jump to exact date
 ```
 
@@ -1177,13 +1250,13 @@ try {
 }
 ```
 
-| Class | HTTP | Thrown when |
-|---|---|---|
-| `ApprovalNotFoundError` | 404 | Instance or template not found |
-| `ApprovalTemplateNotFoundError` | 404 | Template missing at submit time |
-| `ApprovalForbiddenError` | 403 | Self-approval, unauthorized actor, disabled override |
-| `ApprovalConflictError` | 409 | Optimistic lock version mismatch (after all retries) |
-| `ApprovalValidationError` | 422 | Zod input validation failure, invalid template config |
+| Class                           | HTTP | Thrown when                                           |
+| ------------------------------- | ---- | ----------------------------------------------------- |
+| `ApprovalNotFoundError`         | 404  | Instance or template not found                        |
+| `ApprovalTemplateNotFoundError` | 404  | Template missing at submit time                       |
+| `ApprovalForbiddenError`        | 403  | Self-approval, unauthorized actor, disabled override  |
+| `ApprovalConflictError`         | 409  | Optimistic lock version mismatch (after all retries)  |
+| `ApprovalValidationError`       | 422  | Zod input validation failure, invalid template config |
 
 ---
 
@@ -1198,7 +1271,11 @@ const sharedAdapter = new PostgresAdapter({ connectionString: process.env.DATABA
 
 // Per-request pattern
 function getEngine(tenantId: string): ApprovalEngine {
-  return new ApprovalEngine({ adapter: sharedAdapter, tenantId, orgProvider: orgProviders[tenantId] });
+  return new ApprovalEngine({
+    adapter: sharedAdapter,
+    tenantId,
+    orgProvider: orgProviders[tenantId],
+  });
 }
 ```
 
@@ -1210,27 +1287,27 @@ function getEngine(tenantId: string): ApprovalEngine {
 
 ```ts
 interface ApprovalTemplateConfig {
-  name: string;                         // unique per tenant
-  documentType: string;                 // e.g. 'purchase_order'
-  levels: ApprovalLevelConfig[];        // at least one required
-  conditions?: ConditionRule[];         // optional conditional levels
+  name: string; // unique per tenant
+  documentType: string; // e.g. 'purchase_order'
+  levels: ApprovalLevelConfig[]; // at least one required
+  conditions?: ConditionRule[]; // optional conditional levels
   escalation?: {
-    afterDays: number;                  // escalate if not acted on in N days
-    escalateTo: ApproverConfig;         // who gets added as approver
+    afterDays: number; // escalate if not acted on in N days
+    escalateTo: ApproverConfig; // who gets added as approver
   };
-  slaDeadlineDays?: number;             // overall SLA; emits sla_breached when elapsed
-  allowOverride?: boolean;              // enables engine.override() (default: false)
+  slaDeadlineDays?: number; // overall SLA; emits sla_breached when elapsed
+  allowOverride?: boolean; // enables engine.override() (default: false)
 }
 
 interface ApprovalLevelConfig {
-  level: number;                        // execution order (must be unique within template)
-  name: string;                         // display name
-  approvers: ApproverConfig[];          // at least one required
+  level: number; // execution order (must be unique within template)
+  name: string; // display name
+  approvers: ApproverConfig[]; // at least one required
   mode: 'any' | 'all' | 'majority' | 'quorum' | 'weighted';
-  minApprovals?: number;                // required when mode is 'quorum' (N-of-M threshold)
-  threshold?: number;                   // required when mode is 'weighted' (cumulative weight to pass)
-  weights?: Record<string, number>;     // optional per-approver weights for 'weighted'; default 1
-  escalationAfterDays?: number;         // per-level escalation (overrides template.escalation timing)
+  minApprovals?: number; // required when mode is 'quorum' (N-of-M threshold)
+  threshold?: number; // required when mode is 'weighted' (cumulative weight to pass)
+  weights?: Record<string, number>; // optional per-approver weights for 'weighted'; default 1
+  escalationAfterDays?: number; // per-level escalation (overrides template.escalation timing)
 }
 ```
 
@@ -1255,7 +1332,7 @@ No. It does one thing well — **hierarchical, multi-level approvals**. There ar
 **Does it come with a UI?**
 No — it's a headless engine. You own the UI and notifications; the library gives you the state machine, events (`approval:*`), and queries (`getPendingFor`, `queryInstances`) to build them.
 
-**When should I *not* use it?**
+**When should I _not_ use it?**
 Single-approver, single-step sign-offs (a boolean column is enough); free-form DAG workflows; or anything needing a visual process designer.
 
 **How are concurrent approvals handled?**
