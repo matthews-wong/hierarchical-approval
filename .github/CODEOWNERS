@@ -1,0 +1,14 @@
+# Code owners for hierarchical-approval.
+# These owners are requested for review automatically on any matching PR.
+# See https://docs.github.com/repositories/managing-your-repositories-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repo.
+*                       @matthews-wong
+
+# Public API surface & release plumbing get extra scrutiny.
+/src/index.ts           @matthews-wong
+/src/engine/            @matthews-wong
+/src/adapters/          @matthews-wong
+/package.json           @matthews-wong
+/tsup.config.ts         @matthews-wong
+/.github/               @matthews-wong
