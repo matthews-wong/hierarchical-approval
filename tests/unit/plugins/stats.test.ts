@@ -16,4 +16,11 @@ describe('percentileNearestRank', () => {
     // p50: ceil(0.5 * 3) = ceil(1.5) = 2. Index 1 -> 20
     expect(percentileNearestRank([10, 20, 30], 50)).toBe(20);
   });
+
+  it('calculates p100 for multiple items', () => {
+    // sorted: [10, 20, 30]
+    // p100: ceil(1.0 * 3) = 3. Index 2 -> 30
+    expect(percentileNearestRank([10, 20, 30], 100)).toBe(30);
+  });
+
 });
