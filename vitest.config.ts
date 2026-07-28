@@ -4,11 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
+    pool: 'forks',
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
