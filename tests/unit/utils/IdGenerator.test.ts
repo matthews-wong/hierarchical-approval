@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { defaultIdGenerator } from '../../src/utils/IdGenerator.js';
+import { defaultIdGenerator } from '../../../src/utils/IdGenerator.js';
 
 describe('defaultIdGenerator', () => {
   it('generates IDs with expected prefix', () => {
