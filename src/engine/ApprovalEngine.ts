@@ -1300,7 +1300,7 @@ export class ApprovalEngine {
     );
 
     const total = counts.reduce((a, b) => a + b, 0);
-    const overdueList = await this.opts.adapter.getOverdueInstances(this.tenantId, this.clock.now());
+    const overdueList = await this.opts.adapter.getOverdueInstances(this.tenantId, this.clock.now(), filter);
     const resolved = byStatus.approved + byStatus.rejected;
     const approvalRate = resolved === 0 ? 0 : byStatus.approved / resolved;
 

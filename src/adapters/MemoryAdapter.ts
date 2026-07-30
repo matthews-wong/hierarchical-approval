@@ -110,10 +110,12 @@ export class MemoryAdapter implements IStorageAdapter {
     return paginate(all.map((i) => reviveDates(deepClone(i))), opts);
   }
 
-  async getOverdueInstances(tenantId: string, asOf: Date): Promise<ApprovalInstance[]> {
+  async getOverdueInstances(tenantId: string, asOf: Date, filter: InstanceFilter = {}): Promise<ApprovalInstance[]> {
     return [...this.instances.values()]
       .filter((i) => {
         if (i.tenantId !== tenantId || i.status !== 'pending') return false;
+        if (filter.documentType && i.documentType !== filter.documentType) return false;
+        if (filter.submittedBy && i.submittedBy !== filter.submittedBy) return false;
         // Escalation overdue
         const currentLevel = i.levels.find((l) => l.level === i.currentLevel);
         const hasOverdueEscalation =
