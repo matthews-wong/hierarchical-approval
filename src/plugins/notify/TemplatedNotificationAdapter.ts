@@ -146,7 +146,7 @@ export class TemplatedNotificationAdapter implements INotificationAdapter {
 
       await this.send(message);
     } catch (err) {
-      this.logger.error('TemplatedNotificationAdapter: failed to render/send notification', err, {
+      this.logger.fatal('TemplatedNotificationAdapter: failed to render/send notification', err, {
         type: event.type,
         instanceId: event.instanceId,
         tenantId: event.tenantId,
