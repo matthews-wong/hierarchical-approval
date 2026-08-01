@@ -12,4 +12,10 @@ describe('defaultIdGenerator', () => {
     const id2 = defaultIdGenerator('inst');
     expect(id1).not.toBe(id2);
   });
+
+  it('generates a reasonable ID length', () => {
+    const id = defaultIdGenerator('inst');
+    expect(id.length).toBeGreaterThan(10);
+    expect(id.length).toBeLessThan(40);
+  });
 });
