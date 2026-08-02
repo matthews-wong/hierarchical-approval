@@ -40,7 +40,7 @@ import { noopLogger } from '../utils/Logger.js';
 import type { Clock } from '../utils/Clock.js';
 import { systemClock } from '../utils/Clock.js';
 import type { BusinessCalendar } from '../utils/BusinessCalendar.js';
-import type { IdGeneratorFn } from '../utils/IdGenerator.js';
+import type { IdGeneratorFn, IdGeneratorPrefix } from '../utils/IdGenerator.js';
 import { defaultIdGenerator } from '../utils/IdGenerator.js';
 import { TemplateRegistry } from './TemplateRegistry.js';
 import { LevelResolver, type OrgProvider, type ApproverResolverFn } from './LevelResolver.js';
