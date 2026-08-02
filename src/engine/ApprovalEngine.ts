@@ -172,7 +172,7 @@ export interface ApprovalEngineOptions {
    */
   calendar?: BusinessCalendar;
   /** Custom ID generator for instances and templates. Defaults to timestamp+random. */
-  generateId?: IdGeneratorFn;
+  generateId?: (prefix: IdGeneratorPrefix) => string;
   /** Custom optimistic locking retry policy. */
   retryPolicy?: RetryPolicy;
   /** Custom idempotency key derivation function. Default: SHA-256 of tenant+documentType+documentId+templateName. */
@@ -202,7 +202,7 @@ export class ApprovalEngine {
   private readonly logger: Logger;
   private readonly clock: Clock;
   private readonly calendar?: BusinessCalendar;
-  private readonly generateId: IdGeneratorFn;
+  private readonly generateId: (prefix: IdGeneratorPrefix) => string;
   private readonly maxBulkItems: number;
   private readonly retryPolicy: Required<RetryPolicy>;
   private readonly idempotencyKeyFn: IdempotencyKeyFn;
