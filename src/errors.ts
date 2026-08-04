@@ -18,6 +18,7 @@ export class ApprovalError extends Error {
       FORBIDDEN: 403,
       VALIDATION: 422,
       TEMPLATE_NOT_FOUND: 404,
+      INTERNAL: 500,
     };
     return map[this.code] ?? 500;
   }
