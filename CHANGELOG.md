@@ -25,6 +25,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   maker-checker, four-eyes, delegation, escalation, …).
 
 ### Fixed
+- Add `INTERNAL` (500) to `ApprovalError.toHttpStatus()` for completeness.
 
 - Replaced the non-standard `peerDependenciesOptional` field with the correct
   `peerDependenciesMeta`, so `pg` (and now `@nestjs/common`) are properly marked
