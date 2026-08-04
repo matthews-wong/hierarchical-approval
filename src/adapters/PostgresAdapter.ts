@@ -338,7 +338,7 @@ export class PostgresAdapter implements IStorageAdapter {
 
   async getOverdueInstances(tenantId: string, asOf: Date, filter: InstanceFilter = {}): Promise<ApprovalInstance[]> {
     const pool = await this.getPool();
-    const values: any[] = [tenantId, asOf.toISOString()];
+    const values: unknown[] = [tenantId, asOf.toISOString()];
     let query = `SELECT * FROM ${this.p}_instances
        WHERE tenant_id = $1
          AND status = 'pending'`;
