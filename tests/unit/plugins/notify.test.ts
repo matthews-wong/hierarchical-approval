@@ -7,7 +7,10 @@ import {
   type IOutboxStore,
   type OutboxRecord,
 } from '../../../src/plugins/notify/index.js';
-import type { INotificationAdapter, NotificationEvent } from '../../../src/adapters/INotificationAdapter.js';
+import type {
+  INotificationAdapter,
+  NotificationEvent,
+} from '../../../src/adapters/INotificationAdapter.js';
 import { ManualClock, spyLogger } from './_helpers.js';
 
 function makeEvent(over: Partial<NotificationEvent> = {}): NotificationEvent {
@@ -181,7 +184,13 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
       calls++;
       if (calls < 4) throw new Error('fail');
     });
-    const adapter = new OutboxNotificationAdapter({ transport, clock, maxAttempts: 5, baseDelayMs: 10, backoffFactor: 1 });
+    const adapter = new OutboxNotificationAdapter({
+      transport,
+      clock,
+      maxAttempts: 5,
+      baseDelayMs: 10,
+      backoffFactor: 1,
+    });
     await adapter.notify(makeEvent());
     // backoffFactor 1 => every retry waits 10ms.
     for (let t = 0; t <= 40; t += 10) {
@@ -198,7 +207,13 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     const transport = vi.fn(async () => {
       throw new Error('always');
     });
-    const adapter = new OutboxNotificationAdapter({ transport, clock, maxAttempts: 3, baseDelayMs: 10, backoffFactor: 1 });
+    const adapter = new OutboxNotificationAdapter({
+      transport,
+      clock,
+      maxAttempts: 3,
+      baseDelayMs: 10,
+      backoffFactor: 1,
+    });
     await adapter.notify(makeEvent());
     for (let t = 0; t <= 30; t += 10) {
       clock.set(t);
@@ -243,7 +258,12 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
       calls++;
       if (calls === 1) throw new Error('fail');
     });
-    const adapter = new OutboxNotificationAdapter({ transport, clock, maxAttempts: 3, baseDelayMs: 1000 });
+    const adapter = new OutboxNotificationAdapter({
+      transport,
+      clock,
+      maxAttempts: 3,
+      baseDelayMs: 1000,
+    });
     await adapter.notify(makeEvent());
     await adapter.drain(); // fail -> retry @1000
     // Clock not advanced: nothing delivered prematurely.
@@ -252,7 +272,10 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
   });
 
   it('drain on an empty outbox returns 0 and does not throw', async () => {
-    const adapter = new OutboxNotificationAdapter({ transport: () => {}, clock: new ManualClock(0) });
+    const adapter = new OutboxNotificationAdapter({
+      transport: () => {},
+      clock: new ManualClock(0),
+    });
     expect(await adapter.drain()).toBe(0);
   });
 
@@ -319,7 +342,12 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
       pending: async () => [],
       deadLettered: async () => [],
     };
-    const adapter = new OutboxNotificationAdapter({ transport: () => {}, store, logger, clock: new ManualClock(0) });
+    const adapter = new OutboxNotificationAdapter({
+      transport: () => {},
+      store,
+      logger,
+      clock: new ManualClock(0),
+    });
     expect(await adapter.drain()).toBe(0);
     expect(logger.error).toHaveBeenCalled();
   });
@@ -474,7 +502,19 @@ describe('TemplatedNotificationAdapter', () => {
       unknownPlaceholderToken: 'N/A',
       templates: { 'approval:cancelled': { subject: 'reason={comment}', body: '' } },
     });
-    await adapter.notify(makeEvent({ type: 'approval:cancelled', payload: { instanceId: 'x', documentId: 'd', documentType: 't', timestamp: new Date(), cancelledBy: 'u', reason: 'r' } as NotificationEvent['payload'] }));
+    await adapter.notify(
+      makeEvent({
+        type: 'approval:cancelled',
+        payload: {
+          instanceId: 'x',
+          documentId: 'd',
+          documentType: 't',
+          timestamp: new Date(),
+          cancelledBy: 'u',
+          reason: 'r',
+        } as NotificationEvent['payload'],
+      }),
+    );
     expect(sent[0]!.subject).toBe('reason=N/A');
   });
 
@@ -574,7 +614,7 @@ describe('TemplatedNotificationAdapter', () => {
       logger,
     });
     await expect(adapter.notify(makeEvent())).resolves.toBeUndefined();
-    expect(logger.error).toHaveBeenCalledOnce();
+    expect(logger.fatal).toHaveBeenCalledOnce();
   });
 
   it('payload field absent on a different event type interpolates safely (no throw)', async () => {
@@ -589,7 +629,14 @@ describe('TemplatedNotificationAdapter', () => {
     await adapter.notify(
       makeEvent({
         type: 'approval:cancelled',
-        payload: { instanceId: 'i', documentId: 'd', documentType: 't', timestamp: new Date(), cancelledBy: 'u', reason: 'r' } as NotificationEvent['payload'],
+        payload: {
+          instanceId: 'i',
+          documentId: 'd',
+          documentType: 't',
+          timestamp: new Date(),
+          cancelledBy: 'u',
+          reason: 'r',
+        } as NotificationEvent['payload'],
       }),
     );
     expect(sent[0]!.body).toBe('c=');
