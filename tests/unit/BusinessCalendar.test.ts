@@ -41,4 +41,13 @@ describe('weekendCalendar', () => {
     const d = new Date('2026-06-22T09:00:00');
     expect(cal.addBusinessDays(d, 0).getTime()).toBe(d.getTime());
   });
+
+  it('adds a fractional day as elapsed clock time after whole business days', () => {
+    const cal = weekendCalendar();
+    // Friday 2026-06-19 09:00 + 1.5 business days -> Monday 2026-06-22 21:00
+    const friday = new Date('2026-06-19T09:00:00');
+    const result = cal.addBusinessDays(friday, 1.5);
+    expect(result.getDate()).toBe(22);
+    expect(result.getHours()).toBe(21);
+  });
 });
