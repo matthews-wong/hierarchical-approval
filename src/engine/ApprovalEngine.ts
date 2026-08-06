@@ -1,5 +1,12 @@
 import { createHash } from 'node:crypto';
-import type { IStorageAdapter, InstanceFilter, PaginationOpts, PaginatedResult, CursorPaginationOpts, CursorPaginatedResult } from '../adapters/IStorageAdapter.js';
+import type {
+  IStorageAdapter,
+  InstanceFilter,
+  PaginationOpts,
+  PaginatedResult,
+  CursorPaginationOpts,
+  CursorPaginatedResult,
+} from '../adapters/IStorageAdapter.js';
 import type {
   ApprovalTemplate,
   ApprovalTemplateConfig,
@@ -40,12 +47,16 @@ import { noopLogger } from '../utils/Logger.js';
 import type { Clock } from '../utils/Clock.js';
 import { systemClock } from '../utils/Clock.js';
 import type { BusinessCalendar } from '../utils/BusinessCalendar.js';
-import type { IdGeneratorFn, IdGeneratorPrefix } from '../utils/IdGenerator.js';
+import type { IdGeneratorPrefix } from '../utils/IdGenerator.js';
 import { defaultIdGenerator } from '../utils/IdGenerator.js';
 import { TemplateRegistry } from './TemplateRegistry.js';
 import { LevelResolver, type OrgProvider, type ApproverResolverFn } from './LevelResolver.js';
 import { EscalationScheduler } from './EscalationScheduler.js';
-import { evaluateConditions, registerConditionOperator, type ConditionOperatorFn } from './ConditionEvaluator.js';
+import {
+  evaluateConditions,
+  registerConditionOperator,
+  type ConditionOperatorFn,
+} from './ConditionEvaluator.js';
 import {
   assertStatus,
   assertApproverOnLevel,
@@ -78,7 +89,12 @@ export {
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_BASE_DELAY_MS = 50;
-const TERMINAL_STATUSES = new Set<ApprovalInstance['status']>(['approved', 'rejected', 'cancelled', 'expired']);
+const TERMINAL_STATUSES = new Set<ApprovalInstance['status']>([
+  'approved',
+  'rejected',
+  'cancelled',
+  'expired',
+]);
 
 // ─── Exported result types ─────────────────────────────────────────────────
 
@@ -89,7 +105,12 @@ export interface ValidationResult {
 
 export interface CanApproveResult {
   eligible: boolean;
-  reason?: 'not_an_approver' | 'already_acted' | 'self_approval' | 'wrong_status' | 'delegated_away';
+  reason?:
+    | 'not_an_approver'
+    | 'already_acted'
+    | 'self_approval'
+    | 'wrong_status'
+    | 'delegated_away';
 }
 
 export interface PreviewChainLevel {
@@ -126,7 +147,10 @@ export interface ApprovalStatistics {
    * templates — i.e. this engine always returns the per-template breakdown for
    * its own tenant. Absent when no instances match the filter.
    */
-  byTemplate: Record<string, { total: number; approved: number; rejected: number; pending: number }>;
+  byTemplate: Record<
+    string,
+    { total: number; approved: number; rejected: number; pending: number }
+  >;
 }
 
 export interface HealthResult {
@@ -230,10 +254,18 @@ export class ApprovalEngine {
     this.escalation = new EscalationScheduler({
       adapter: opts.adapter,
       tenantId: this.tenantId,
-      onEscalate: async (id) => { await this.escalateInternal(id); },
-      onExpire: async (id, action) => { await this.expireInstance(id, action); },
-      onSlaBreach: async (id) => { await this.markSlaBreached(id); },
-      onRevertDelegation: async (id, level, from) => { await this.revertDelegation(id, level, from); },
+      onEscalate: async (id) => {
+        await this.escalateInternal(id);
+      },
+      onExpire: async (id, action) => {
+        await this.expireInstance(id, action);
+      },
+      onSlaBreach: async (id) => {
+        await this.markSlaBreached(id);
+      },
+      onRevertDelegation: async (id, level, from) => {
+        await this.revertDelegation(id, level, from);
+      },
       pollIntervalMs: opts.escalationPollIntervalMs ?? 60_000,
       logger: this.logger,
       clock: this.clock,
@@ -275,37 +307,62 @@ export class ApprovalEngine {
       const levelNums = new Set<number>();
       config.levels.forEach((l, i) => {
         if (levelNums.has(l.level)) {
-          errors.push({ field: `levels[${i}].level`, message: `Duplicate level number: ${l.level}.` });
+          errors.push({
+            field: `levels[${i}].level`,
+            message: `Duplicate level number: ${l.level}.`,
+          });
         }
         levelNums.add(l.level);
 
         if (!l.approvers || l.approvers.length === 0) {
-          errors.push({ field: `levels[${i}].approvers`, message: `Level ${l.level} must have at least one approver.` });
+          errors.push({
+            field: `levels[${i}].approvers`,
+            message: `Level ${l.level} must have at least one approver.`,
+          });
         }
         if (l.escalationAfterDays !== undefined && l.escalationAfterDays <= 0) {
-          errors.push({ field: `levels[${i}].escalationAfterDays`, message: `Level ${l.level} escalationAfterDays must be a positive number.` });
+          errors.push({
+            field: `levels[${i}].escalationAfterDays`,
+            message: `Level ${l.level} escalationAfterDays must be a positive number.`,
+          });
         }
 
         if (l.mode === 'quorum') {
-          if (l.minApprovals === undefined || !Number.isInteger(l.minApprovals) || l.minApprovals < 1) {
-            errors.push({ field: `levels[${i}].minApprovals`, message: `Level ${l.level} uses 'quorum' mode and requires minApprovals to be a positive integer.` });
+          if (
+            l.minApprovals === undefined ||
+            !Number.isInteger(l.minApprovals) ||
+            l.minApprovals < 1
+          ) {
+            errors.push({
+              field: `levels[${i}].minApprovals`,
+              message: `Level ${l.level} uses 'quorum' mode and requires minApprovals to be a positive integer.`,
+            });
           } else if (l.approvers && l.minApprovals > l.approvers.length) {
             // Conservative static check: only meaningful when every approver is a static 'user'.
             const allStaticUsers = l.approvers.every((a) => a.type === 'user');
             if (allStaticUsers) {
-              errors.push({ field: `levels[${i}].minApprovals`, message: `Level ${l.level} requires ${l.minApprovals} approvals but only ${l.approvers.length} approver(s) are configured.` });
+              errors.push({
+                field: `levels[${i}].minApprovals`,
+                message: `Level ${l.level} requires ${l.minApprovals} approvals but only ${l.approvers.length} approver(s) are configured.`,
+              });
             }
           }
         }
 
         if (l.mode === 'weighted') {
           if (l.threshold === undefined || l.threshold <= 0) {
-            errors.push({ field: `levels[${i}].threshold`, message: `Level ${l.level} uses 'weighted' mode and requires threshold to be a positive number.` });
+            errors.push({
+              field: `levels[${i}].threshold`,
+              message: `Level ${l.level} uses 'weighted' mode and requires threshold to be a positive number.`,
+            });
           }
           if (l.weights) {
             for (const [id, w] of Object.entries(l.weights)) {
               if (typeof w !== 'number' || w < 0 || Number.isNaN(w)) {
-                errors.push({ field: `levels[${i}].weights.${id}`, message: `Weight for "${id}" must be a non-negative number.` });
+                errors.push({
+                  field: `levels[${i}].weights.${id}`,
+                  message: `Weight for "${id}" must be a non-negative number.`,
+                });
               }
             }
           }
@@ -376,7 +433,13 @@ export class ApprovalEngine {
     const startMs = this.clock.now().getTime();
     const template = await this.registry.get(opts.templateName);
 
-    const idempotencyKey = this.idempotencyKeyFn(this.tenantId, opts.documentType, opts.documentId, opts.templateName, opts.data);
+    const idempotencyKey = this.idempotencyKeyFn(
+      this.tenantId,
+      opts.documentType,
+      opts.documentId,
+      opts.templateName,
+      opts.data,
+    );
     const existing = await this.opts.adapter.getIdempotentInstance(this.tenantId, idempotencyKey);
     if (existing && !TERMINAL_STATUSES.has(existing.status)) {
       this.logger.info('submit: returning idempotent existing instance', {
@@ -484,7 +547,12 @@ export class ApprovalEngine {
       },
     };
 
-    await this.runMiddlewareBefore({ operation: 'submit', actorId: opts.submittedBy, tenantId: this.tenantId, input: opts });
+    await this.runMiddlewareBefore({
+      operation: 'submit',
+      actorId: opts.submittedBy,
+      tenantId: this.tenantId,
+      input: opts,
+    });
     await this.opts.adapter.saveInstance(instance);
 
     this.logger.info('submit: instance created', {
@@ -494,8 +562,15 @@ export class ApprovalEngine {
       templateName: opts.templateName,
     });
 
-    this.opts.metricsAdapter?.increment('approval.submitted', { tenantId: this.tenantId, templateName: template.name });
-    this.opts.metricsAdapter?.timing('approval.operation_duration_ms', this.clock.now().getTime() - startMs, { operation: 'submit' });
+    this.opts.metricsAdapter?.increment('approval.submitted', {
+      tenantId: this.tenantId,
+      templateName: template.name,
+    });
+    this.opts.metricsAdapter?.timing(
+      'approval.operation_duration_ms',
+      this.clock.now().getTime() - startMs,
+      { operation: 'submit' },
+    );
 
     const eventPayload = {
       instanceId: instance.id,
@@ -508,12 +583,19 @@ export class ApprovalEngine {
     this.bus.emit('approval:submitted', eventPayload);
     await this.notifyAdapters('approval:submitted', instance, eventPayload);
     await this.runExternalAudit(instance, auditEntry);
-    await this.runMiddlewareAfter({ operation: 'submit', actorId: opts.submittedBy, tenantId: this.tenantId, input: opts }, instance);
+    await this.runMiddlewareAfter(
+      { operation: 'submit', actorId: opts.submittedBy, tenantId: this.tenantId, input: opts },
+      instance,
+    );
 
     return instance;
   }
 
-  async approve(instanceId: string, raw: ApproveOptions, auditCtx?: AuditContext): Promise<ApprovalInstance> {
+  async approve(
+    instanceId: string,
+    raw: ApproveOptions,
+    auditCtx?: AuditContext,
+  ): Promise<ApprovalInstance> {
     const opts = parseOrThrow(() => ApproveOptionsSchema.parse(raw));
     const startMs = this.clock.now().getTime();
     return this.withOptimisticRetry(instanceId, async (instance) => {
@@ -526,8 +608,20 @@ export class ApprovalEngine {
       }
 
       const level = this.currentLevelInstance(instance);
-      await this.runAuthorizationPolicy({ operation: 'approve', actorId: opts.approverId, instance, level, opts: opts as Record<string, unknown> });
-      await this.runMiddlewareBefore({ operation: 'approve', instanceId, actorId: opts.approverId, tenantId: this.tenantId, input: opts });
+      await this.runAuthorizationPolicy({
+        operation: 'approve',
+        actorId: opts.approverId,
+        instance,
+        level,
+        opts: opts as Record<string, unknown>,
+      });
+      await this.runMiddlewareBefore({
+        operation: 'approve',
+        instanceId,
+        actorId: opts.approverId,
+        tenantId: this.tenantId,
+        input: opts,
+      });
 
       assertApproverOnLevel(level, opts.approverId);
       if (hasAlreadyActed(level, opts.approverId)) {
@@ -563,14 +657,42 @@ export class ApprovalEngine {
           await this.opts.adapter.updateInstance(instance, instance.version);
           await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
           await this.runExternalAudit(instance, auditEntry);
-          this.logger.info('approve: instance fully approved', { tenantId: this.tenantId, instanceId });
-          this.opts.metricsAdapter?.increment('approval.approved', { tenantId: this.tenantId, isFinal: 'true' });
-          this.opts.metricsAdapter?.timing('approval.operation_duration_ms', this.clock.now().getTime() - startMs, { operation: 'approve' });
-          const p = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, approverId: opts.approverId, level: level.level, comment: opts.comment, isFinal: true };
+          this.logger.info('approve: instance fully approved', {
+            tenantId: this.tenantId,
+            instanceId,
+          });
+          this.opts.metricsAdapter?.increment('approval.approved', {
+            tenantId: this.tenantId,
+            isFinal: 'true',
+          });
+          this.opts.metricsAdapter?.timing(
+            'approval.operation_duration_ms',
+            this.clock.now().getTime() - startMs,
+            { operation: 'approve' },
+          );
+          const p = {
+            instanceId,
+            documentId: instance.documentId,
+            documentType: instance.documentType,
+            timestamp: now,
+            approverId: opts.approverId,
+            level: level.level,
+            comment: opts.comment,
+            isFinal: true,
+          };
           this.bus.emit('approval:approved', p);
           this.bus.emit('approval:completed', instance);
           await this.notifyAdapters('approval:approved', instance, p);
-          await this.runMiddlewareAfter({ operation: 'approve', instanceId, actorId: opts.approverId, tenantId: this.tenantId, input: opts }, instance);
+          await this.runMiddlewareAfter(
+            {
+              operation: 'approve',
+              instanceId,
+              actorId: opts.approverId,
+              tenantId: this.tenantId,
+              input: opts,
+            },
+            instance,
+          );
           return instance;
         }
 
@@ -589,31 +711,90 @@ export class ApprovalEngine {
         await this.opts.adapter.updateInstance(instance, instance.version);
         await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
         await this.runExternalAudit(instance, auditEntry);
-        this.opts.metricsAdapter?.increment('approval.approved', { tenantId: this.tenantId, isFinal: 'false' });
-        this.opts.metricsAdapter?.timing('approval.operation_duration_ms', this.clock.now().getTime() - startMs, { operation: 'approve' });
-        const pAdv = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, approverId: opts.approverId, level: level.level, comment: opts.comment, isFinal: false };
+        this.opts.metricsAdapter?.increment('approval.approved', {
+          tenantId: this.tenantId,
+          isFinal: 'false',
+        });
+        this.opts.metricsAdapter?.timing(
+          'approval.operation_duration_ms',
+          this.clock.now().getTime() - startMs,
+          { operation: 'approve' },
+        );
+        const pAdv = {
+          instanceId,
+          documentId: instance.documentId,
+          documentType: instance.documentType,
+          timestamp: now,
+          approverId: opts.approverId,
+          level: level.level,
+          comment: opts.comment,
+          isFinal: false,
+        };
         this.bus.emit('approval:approved', pAdv);
-        const pLvl = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, fromLevel: level.level, toLevel: nextLevel.level, newApprovers: nextLevel.approverIds };
+        const pLvl = {
+          instanceId,
+          documentId: instance.documentId,
+          documentType: instance.documentType,
+          timestamp: now,
+          fromLevel: level.level,
+          toLevel: nextLevel.level,
+          newApprovers: nextLevel.approverIds,
+        };
         this.bus.emit('approval:level_advanced', pLvl);
         await this.notifyAdapters('approval:level_advanced', instance, pLvl);
-        await this.runMiddlewareAfter({ operation: 'approve', instanceId, actorId: opts.approverId, tenantId: this.tenantId, input: opts }, instance);
+        await this.runMiddlewareAfter(
+          {
+            operation: 'approve',
+            instanceId,
+            actorId: opts.approverId,
+            tenantId: this.tenantId,
+            input: opts,
+          },
+          instance,
+        );
       } else {
         await this.opts.adapter.updateInstance(instance, instance.version);
         await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
         await this.runExternalAudit(instance, auditEntry);
         this.opts.metricsAdapter?.increment('approval.approved', { tenantId: this.tenantId });
-        this.opts.metricsAdapter?.timing('approval.operation_duration_ms', this.clock.now().getTime() - startMs, { operation: 'approve' });
-        const p = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, approverId: opts.approverId, level: level.level, comment: opts.comment, isFinal: false };
+        this.opts.metricsAdapter?.timing(
+          'approval.operation_duration_ms',
+          this.clock.now().getTime() - startMs,
+          { operation: 'approve' },
+        );
+        const p = {
+          instanceId,
+          documentId: instance.documentId,
+          documentType: instance.documentType,
+          timestamp: now,
+          approverId: opts.approverId,
+          level: level.level,
+          comment: opts.comment,
+          isFinal: false,
+        };
         this.bus.emit('approval:approved', p);
         await this.notifyAdapters('approval:approved', instance, p);
-        await this.runMiddlewareAfter({ operation: 'approve', instanceId, actorId: opts.approverId, tenantId: this.tenantId, input: opts }, instance);
+        await this.runMiddlewareAfter(
+          {
+            operation: 'approve',
+            instanceId,
+            actorId: opts.approverId,
+            tenantId: this.tenantId,
+            input: opts,
+          },
+          instance,
+        );
       }
 
       return instance;
     });
   }
 
-  async reject(instanceId: string, raw: RejectOptions, auditCtx?: AuditContext): Promise<ApprovalInstance> {
+  async reject(
+    instanceId: string,
+    raw: RejectOptions,
+    auditCtx?: AuditContext,
+  ): Promise<ApprovalInstance> {
     const opts = parseOrThrow(() => RejectOptionsSchema.parse(raw));
     return this.withOptimisticRetry(instanceId, async (instance) => {
       assertStatus(instance, 'pending');
@@ -625,8 +806,20 @@ export class ApprovalEngine {
       }
 
       const level = this.currentLevelInstance(instance);
-      await this.runAuthorizationPolicy({ operation: 'reject', actorId: opts.approverId, instance, level, opts: opts as Record<string, unknown> });
-      await this.runMiddlewareBefore({ operation: 'reject', instanceId, actorId: opts.approverId, tenantId: this.tenantId, input: opts });
+      await this.runAuthorizationPolicy({
+        operation: 'reject',
+        actorId: opts.approverId,
+        instance,
+        level,
+        opts: opts as Record<string, unknown>,
+      });
+      await this.runMiddlewareBefore({
+        operation: 'reject',
+        instanceId,
+        actorId: opts.approverId,
+        tenantId: this.tenantId,
+        input: opts,
+      });
 
       assertApproverOnLevel(level, opts.approverId);
       if (hasAlreadyActed(level, opts.approverId)) {
@@ -670,10 +863,28 @@ export class ApprovalEngine {
           await this.opts.adapter.updateInstance(instance, instance.version);
           await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
           await this.runExternalAudit(instance, auditEntry);
-          const p = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, approverId: opts.approverId, level: level.level, reason: opts.reason, returnTo: 'previous' as const };
+          const p = {
+            instanceId,
+            documentId: instance.documentId,
+            documentType: instance.documentType,
+            timestamp: now,
+            approverId: opts.approverId,
+            level: level.level,
+            reason: opts.reason,
+            returnTo: 'previous' as const,
+          };
           this.bus.emit('approval:rejected', p);
           await this.notifyAdapters('approval:rejected', instance, p);
-          await this.runMiddlewareAfter({ operation: 'reject', instanceId, actorId: opts.approverId, tenantId: this.tenantId, input: opts }, instance);
+          await this.runMiddlewareAfter(
+            {
+              operation: 'reject',
+              instanceId,
+              actorId: opts.approverId,
+              tenantId: this.tenantId,
+              input: opts,
+            },
+            instance,
+          );
           return instance;
         }
 
@@ -683,10 +894,28 @@ export class ApprovalEngine {
         await this.runExternalAudit(instance, auditEntry);
         this.opts.metricsAdapter?.increment('approval.rejected', { tenantId: this.tenantId });
         this.logger.info('reject: instance rejected', { tenantId: this.tenantId, instanceId });
-        const p = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, approverId: opts.approverId, level: level.level, reason: opts.reason, returnTo: opts.returnTo === 'originator' ? 'originator' as const : null };
+        const p = {
+          instanceId,
+          documentId: instance.documentId,
+          documentType: instance.documentType,
+          timestamp: now,
+          approverId: opts.approverId,
+          level: level.level,
+          reason: opts.reason,
+          returnTo: opts.returnTo === 'originator' ? ('originator' as const) : null,
+        };
         this.bus.emit('approval:rejected', p);
         await this.notifyAdapters('approval:rejected', instance, p);
-        await this.runMiddlewareAfter({ operation: 'reject', instanceId, actorId: opts.approverId, tenantId: this.tenantId, input: opts }, instance);
+        await this.runMiddlewareAfter(
+          {
+            operation: 'reject',
+            instanceId,
+            actorId: opts.approverId,
+            tenantId: this.tenantId,
+            input: opts,
+          },
+          instance,
+        );
       } else {
         await this.opts.adapter.updateInstance(instance, instance.version);
         await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
@@ -707,8 +936,20 @@ export class ApprovalEngine {
       }
 
       const level = this.currentLevelInstance(instance);
-      await this.runAuthorizationPolicy({ operation: 'delegate', actorId: opts.fromApprover, instance, level, opts: opts as Record<string, unknown> });
-      await this.runMiddlewareBefore({ operation: 'delegate', instanceId, actorId: opts.fromApprover, tenantId: this.tenantId, input: opts });
+      await this.runAuthorizationPolicy({
+        operation: 'delegate',
+        actorId: opts.fromApprover,
+        instance,
+        level,
+        opts: opts as Record<string, unknown>,
+      });
+      await this.runMiddlewareBefore({
+        operation: 'delegate',
+        instanceId,
+        actorId: opts.fromApprover,
+        tenantId: this.tenantId,
+        input: opts,
+      });
 
       assertApproverOnLevel(level, opts.fromApprover);
       if (hasAlreadyActed(level, opts.fromApprover)) {
@@ -742,10 +983,28 @@ export class ApprovalEngine {
       await this.opts.adapter.updateInstance(instance, instance.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
-      const p = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, fromApprover: opts.fromApprover, toApprover: opts.toApprover, level: level.level, reason: opts.reason };
+      const p = {
+        instanceId,
+        documentId: instance.documentId,
+        documentType: instance.documentType,
+        timestamp: now,
+        fromApprover: opts.fromApprover,
+        toApprover: opts.toApprover,
+        level: level.level,
+        reason: opts.reason,
+      };
       this.bus.emit('approval:delegated', p);
       await this.notifyAdapters('approval:delegated', instance, p);
-      await this.runMiddlewareAfter({ operation: 'delegate', instanceId, actorId: opts.fromApprover, tenantId: this.tenantId, input: opts }, instance);
+      await this.runMiddlewareAfter(
+        {
+          operation: 'delegate',
+          instanceId,
+          actorId: opts.fromApprover,
+          tenantId: this.tenantId,
+          input: opts,
+        },
+        instance,
+      );
       return instance;
     });
   }
@@ -757,7 +1016,11 @@ export class ApprovalEngine {
    * target approver must still be pending — an approver who has already acted
    * cannot be reassigned.
    */
-  async reassign(instanceId: string, raw: ReassignOptions, auditCtx?: AuditContext): Promise<ApprovalInstance> {
+  async reassign(
+    instanceId: string,
+    raw: ReassignOptions,
+    auditCtx?: AuditContext,
+  ): Promise<ApprovalInstance> {
     const opts = parseOrThrow(() => ReassignOptionsSchema.parse(raw));
     return this.withOptimisticRetry(instanceId, async (instance) => {
       assertStatus(instance, 'pending');
@@ -767,8 +1030,20 @@ export class ApprovalEngine {
       }
 
       const level = this.currentLevelInstance(instance);
-      await this.runAuthorizationPolicy({ operation: 'reassign', actorId: opts.reassignedBy, instance, level, opts: opts as Record<string, unknown> });
-      await this.runMiddlewareBefore({ operation: 'reassign', instanceId, actorId: opts.reassignedBy, tenantId: this.tenantId, input: opts });
+      await this.runAuthorizationPolicy({
+        operation: 'reassign',
+        actorId: opts.reassignedBy,
+        instance,
+        level,
+        opts: opts as Record<string, unknown>,
+      });
+      await this.runMiddlewareBefore({
+        operation: 'reassign',
+        instanceId,
+        actorId: opts.reassignedBy,
+        tenantId: this.tenantId,
+        input: opts,
+      });
 
       const idx = level.approverIds.indexOf(opts.fromApprover);
       if (idx < 0) {
@@ -813,24 +1088,63 @@ export class ApprovalEngine {
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
       this.opts.metricsAdapter?.increment('approval.reassigned', { tenantId: this.tenantId });
-      this.logger.info('reassign: approver replaced', { tenantId: this.tenantId, instanceId, from: opts.fromApprover, to: opts.toApprover });
-      const p = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, reassignedBy: opts.reassignedBy, fromApprover: opts.fromApprover, toApprover: opts.toApprover, level: level.level, reason: opts.reason };
+      this.logger.info('reassign: approver replaced', {
+        tenantId: this.tenantId,
+        instanceId,
+        from: opts.fromApprover,
+        to: opts.toApprover,
+      });
+      const p = {
+        instanceId,
+        documentId: instance.documentId,
+        documentType: instance.documentType,
+        timestamp: now,
+        reassignedBy: opts.reassignedBy,
+        fromApprover: opts.fromApprover,
+        toApprover: opts.toApprover,
+        level: level.level,
+        reason: opts.reason,
+      };
       this.bus.emit('approval:reassigned', p);
       await this.notifyAdapters('approval:reassigned', instance, p);
-      await this.runMiddlewareAfter({ operation: 'reassign', instanceId, actorId: opts.reassignedBy, tenantId: this.tenantId, input: opts }, instance);
+      await this.runMiddlewareAfter(
+        {
+          operation: 'reassign',
+          instanceId,
+          actorId: opts.reassignedBy,
+          tenantId: this.tenantId,
+          input: opts,
+        },
+        instance,
+      );
       return instance;
     });
   }
 
-  async cancel(instanceId: string, raw: CancelOptions, auditCtx?: AuditContext): Promise<ApprovalInstance> {
+  async cancel(
+    instanceId: string,
+    raw: CancelOptions,
+    auditCtx?: AuditContext,
+  ): Promise<ApprovalInstance> {
     const opts = parseOrThrow(() => CancelOptionsSchema.parse(raw));
     return this.withOptimisticRetry(instanceId, async (instance) => {
       if (instance.status === 'approved' || instance.status === 'rejected') {
         throw new ApprovalError(`Cannot cancel a "${instance.status}" approval.`, 'CANNOT_CANCEL');
       }
 
-      await this.runAuthorizationPolicy({ operation: 'cancel', actorId: opts.cancelledBy, instance, opts: opts as Record<string, unknown> });
-      await this.runMiddlewareBefore({ operation: 'cancel', instanceId, actorId: opts.cancelledBy, tenantId: this.tenantId, input: opts });
+      await this.runAuthorizationPolicy({
+        operation: 'cancel',
+        actorId: opts.cancelledBy,
+        instance,
+        opts: opts as Record<string, unknown>,
+      });
+      await this.runMiddlewareBefore({
+        operation: 'cancel',
+        instanceId,
+        actorId: opts.cancelledBy,
+        tenantId: this.tenantId,
+        input: opts,
+      });
 
       const now = this.clock.now();
       instance.status = 'cancelled';
@@ -851,26 +1165,61 @@ export class ApprovalEngine {
       await this.runExternalAudit(instance, auditEntry);
       this.opts.metricsAdapter?.increment('approval.cancelled', { tenantId: this.tenantId });
       this.logger.info('cancel: instance cancelled', { tenantId: this.tenantId, instanceId });
-      const p = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, cancelledBy: opts.cancelledBy, reason: opts.reason };
+      const p = {
+        instanceId,
+        documentId: instance.documentId,
+        documentType: instance.documentType,
+        timestamp: now,
+        cancelledBy: opts.cancelledBy,
+        reason: opts.reason,
+      };
       this.bus.emit('approval:cancelled', p);
       await this.notifyAdapters('approval:cancelled', instance, p);
-      await this.runMiddlewareAfter({ operation: 'cancel', instanceId, actorId: opts.cancelledBy, tenantId: this.tenantId, input: opts }, instance);
+      await this.runMiddlewareAfter(
+        {
+          operation: 'cancel',
+          instanceId,
+          actorId: opts.cancelledBy,
+          tenantId: this.tenantId,
+          input: opts,
+        },
+        instance,
+      );
       return instance;
     });
   }
 
-  async escalate(instanceId: string, raw: EscalateOptions, auditCtx?: AuditContext): Promise<ApprovalInstance> {
+  async escalate(
+    instanceId: string,
+    raw: EscalateOptions,
+    auditCtx?: AuditContext,
+  ): Promise<ApprovalInstance> {
     parseOrThrow(() => EscalateOptionsSchema.parse(raw));
     return this.escalateInternal(instanceId, raw.escalatedBy, auditCtx);
   }
 
   /** Add a comment to an instance without approving or rejecting. */
-  async addComment(instanceId: string, raw: AddCommentOptions, auditCtx?: AuditContext): Promise<void> {
+  async addComment(
+    instanceId: string,
+    raw: AddCommentOptions,
+    auditCtx?: AuditContext,
+  ): Promise<void> {
     const opts = parseOrThrow(() => AddCommentOptionsSchema.parse(raw));
     const instance = await this.requireInstance(instanceId);
 
-    await this.runAuthorizationPolicy({ operation: 'addComment', actorId: opts.actorId, instance, opts: opts as Record<string, unknown> });
-    await this.runMiddlewareBefore({ operation: 'addComment', instanceId, actorId: opts.actorId, tenantId: this.tenantId, input: opts });
+    await this.runAuthorizationPolicy({
+      operation: 'addComment',
+      actorId: opts.actorId,
+      instance,
+      opts: opts as Record<string, unknown>,
+    });
+    await this.runMiddlewareBefore({
+      operation: 'addComment',
+      instanceId,
+      actorId: opts.actorId,
+      tenantId: this.tenantId,
+      input: opts,
+    });
 
     const now = this.clock.now();
     const auditEntry: AuditEntry = {
@@ -888,11 +1237,21 @@ export class ApprovalEngine {
     await this.opts.adapter.updateInstance(instance, instance.version);
     await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
     await this.runExternalAudit(instance, auditEntry);
-    await this.runMiddlewareAfter({ operation: 'addComment', instanceId, actorId: opts.actorId, tenantId: this.tenantId, input: opts });
+    await this.runMiddlewareAfter({
+      operation: 'addComment',
+      instanceId,
+      actorId: opts.actorId,
+      tenantId: this.tenantId,
+      input: opts,
+    });
   }
 
   /** Resubmit a rejected instance, creating a new linked instance from level 1. */
-  async resubmit(instanceId: string, raw: ResubmitOptions, auditCtx?: AuditContext): Promise<ApprovalInstance> {
+  async resubmit(
+    instanceId: string,
+    raw: ResubmitOptions,
+    auditCtx?: AuditContext,
+  ): Promise<ApprovalInstance> {
     const opts = parseOrThrow(() => ResubmitOptionsSchema.parse(raw));
     const original = await this.requireInstance(instanceId);
 
@@ -902,8 +1261,19 @@ export class ApprovalEngine {
       );
     }
 
-    await this.runAuthorizationPolicy({ operation: 'resubmit', actorId: opts.resubmittedBy, instance: original, opts: opts as Record<string, unknown> });
-    await this.runMiddlewareBefore({ operation: 'resubmit', instanceId, actorId: opts.resubmittedBy, tenantId: this.tenantId, input: opts });
+    await this.runAuthorizationPolicy({
+      operation: 'resubmit',
+      actorId: opts.resubmittedBy,
+      instance: original,
+      opts: opts as Record<string, unknown>,
+    });
+    await this.runMiddlewareBefore({
+      operation: 'resubmit',
+      instanceId,
+      actorId: opts.resubmittedBy,
+      tenantId: this.tenantId,
+      input: opts,
+    });
 
     const template = await this.registry.get(original.templateName);
     const mergedData = { ...original.data, ...(opts.updatedData ?? {}) };
@@ -914,7 +1284,9 @@ export class ApprovalEngine {
       .sort((a, b) => a.level - b.level);
 
     if (allLevelCfgs.length === 0) {
-      throw new ApprovalValidationError('Template has no active levels after condition evaluation.');
+      throw new ApprovalValidationError(
+        'Template has no active levels after condition evaluation.',
+      );
     }
 
     const levelNums = new Set(allLevelCfgs.map((l) => l.level));
@@ -1013,7 +1385,16 @@ export class ApprovalEngine {
     };
     this.bus.emit('approval:resubmitted', p);
     await this.notifyAdapters('approval:resubmitted', newInstance, p);
-    await this.runMiddlewareAfter({ operation: 'resubmit', instanceId, actorId: opts.resubmittedBy, tenantId: this.tenantId, input: opts }, newInstance);
+    await this.runMiddlewareAfter(
+      {
+        operation: 'resubmit',
+        instanceId,
+        actorId: opts.resubmittedBy,
+        tenantId: this.tenantId,
+        input: opts,
+      },
+      newInstance,
+    );
 
     return newInstance;
   }
@@ -1091,7 +1472,11 @@ export class ApprovalEngine {
   }
 
   /** Emergency bypass — completes the instance as 'approved', skipping remaining levels. Requires template.allowOverride = true. */
-  async override(instanceId: string, raw: OverrideOptions, auditCtx?: AuditContext): Promise<ApprovalInstance> {
+  async override(
+    instanceId: string,
+    raw: OverrideOptions,
+    auditCtx?: AuditContext,
+  ): Promise<ApprovalInstance> {
     const opts = parseOrThrow(() => OverrideOptionsSchema.parse(raw));
     return this.withOptimisticRetry(instanceId, async (instance) => {
       assertStatus(instance, 'pending');
@@ -1106,13 +1491,22 @@ export class ApprovalEngine {
       }
 
       if (opts.overriddenBy === instance.submittedBy) {
-        throw new ApprovalForbiddenError(
-          'Override cannot be performed by the original submitter.',
-        );
+        throw new ApprovalForbiddenError('Override cannot be performed by the original submitter.');
       }
 
-      await this.runAuthorizationPolicy({ operation: 'override', actorId: opts.overriddenBy, instance, opts: opts as Record<string, unknown> });
-      await this.runMiddlewareBefore({ operation: 'override', instanceId, actorId: opts.overriddenBy, tenantId: this.tenantId, input: opts });
+      await this.runAuthorizationPolicy({
+        operation: 'override',
+        actorId: opts.overriddenBy,
+        instance,
+        opts: opts as Record<string, unknown>,
+      });
+      await this.runMiddlewareBefore({
+        operation: 'override',
+        instanceId,
+        actorId: opts.overriddenBy,
+        tenantId: this.tenantId,
+        input: opts,
+      });
 
       const now = this.clock.now();
       instance.status = 'approved';
@@ -1150,14 +1544,27 @@ export class ApprovalEngine {
       this.bus.emit('approval:overridden', p);
       this.bus.emit('approval:completed', instance);
       await this.notifyAdapters('approval:overridden', instance, p);
-      await this.runMiddlewareAfter({ operation: 'override', instanceId, actorId: opts.overriddenBy, tenantId: this.tenantId, input: opts }, instance);
+      await this.runMiddlewareAfter(
+        {
+          operation: 'override',
+          instanceId,
+          actorId: opts.overriddenBy,
+          tenantId: this.tenantId,
+          input: opts,
+        },
+        instance,
+      );
 
       return instance;
     });
   }
 
   /** Approve multiple instances in one call. Never throws — failures collected in result.failed. */
-  async bulkApprove(instanceIds: string[], raw: ApproveOptions, auditCtx?: AuditContext): Promise<BulkResult> {
+  async bulkApprove(
+    instanceIds: string[],
+    raw: ApproveOptions,
+    auditCtx?: AuditContext,
+  ): Promise<BulkResult> {
     const opts = parseOrThrow(() => ApproveOptionsSchema.parse(raw));
     this.guardBulkSize(instanceIds);
 
@@ -1166,14 +1573,21 @@ export class ApprovalEngine {
       try {
         result.succeeded.push(await this.approve(id, opts, auditCtx));
       } catch (err) {
-        result.failed.push({ instanceId: id, error: err instanceof ApprovalError ? err : new ApprovalError(String(err), 'UNKNOWN') });
+        result.failed.push({
+          instanceId: id,
+          error: err instanceof ApprovalError ? err : new ApprovalError(String(err), 'UNKNOWN'),
+        });
       }
     }
     return result;
   }
 
   /** Reject multiple instances in one call. Never throws — failures collected in result.failed. */
-  async bulkReject(instanceIds: string[], raw: RejectOptions, auditCtx?: AuditContext): Promise<BulkResult> {
+  async bulkReject(
+    instanceIds: string[],
+    raw: RejectOptions,
+    auditCtx?: AuditContext,
+  ): Promise<BulkResult> {
     const opts = parseOrThrow(() => RejectOptionsSchema.parse(raw));
     this.guardBulkSize(instanceIds);
 
@@ -1182,7 +1596,10 @@ export class ApprovalEngine {
       try {
         result.succeeded.push(await this.reject(id, opts, auditCtx));
       } catch (err) {
-        result.failed.push({ instanceId: id, error: err instanceof ApprovalError ? err : new ApprovalError(String(err), 'UNKNOWN') });
+        result.failed.push({
+          instanceId: id,
+          error: err instanceof ApprovalError ? err : new ApprovalError(String(err), 'UNKNOWN'),
+        });
       }
     }
     return result;
@@ -1251,7 +1668,10 @@ export class ApprovalEngine {
 
     if (adapterStatus === 'connected') {
       try {
-        const overdue = await this.opts.adapter.getOverdueInstances(this.tenantId, this.clock.now());
+        const overdue = await this.opts.adapter.getOverdueInstances(
+          this.tenantId,
+          this.clock.now(),
+        );
         overdueCount = overdue.length;
       } catch {
         adapterStatus = 'error';
@@ -1259,11 +1679,7 @@ export class ApprovalEngine {
     }
 
     const status =
-      adapterStatus === 'error'
-        ? 'unhealthy'
-        : overdueCount > 0
-          ? 'degraded'
-          : 'healthy';
+      adapterStatus === 'error' ? 'unhealthy' : overdueCount > 0 ? 'degraded' : 'healthy';
 
     return {
       status,
@@ -1281,7 +1697,13 @@ export class ApprovalEngine {
    * Adapter-agnostic: issues one cheap count query per status plus an overdue scan.
    */
   async getStatistics(filter: Omit<InstanceFilter, 'status'> = {}): Promise<ApprovalStatistics> {
-    const statuses: ApprovalInstance['status'][] = ['pending', 'approved', 'rejected', 'cancelled', 'expired'];
+    const statuses: ApprovalInstance['status'][] = [
+      'pending',
+      'approved',
+      'rejected',
+      'cancelled',
+      'expired',
+    ];
 
     const counts = await Promise.all(
       statuses.map((status) =>
@@ -1300,7 +1722,11 @@ export class ApprovalEngine {
     );
 
     const total = counts.reduce((a, b) => a + b, 0);
-    const overdueList = await this.opts.adapter.getOverdueInstances(this.tenantId, this.clock.now(), filter);
+    const overdueList = await this.opts.adapter.getOverdueInstances(
+      this.tenantId,
+      this.clock.now(),
+      filter,
+    );
     const resolved = byStatus.approved + byStatus.rejected;
     const approvalRate = resolved === 0 ? 0 : byStatus.approved / resolved;
 
@@ -1319,13 +1745,25 @@ export class ApprovalEngine {
               .getInstancesByFilter(this.tenantId, base, { limit: 1, offset: 0 })
               .then((r) => r.total),
             this.opts.adapter
-              .getInstancesByFilter(this.tenantId, { ...base, status: 'approved' }, { limit: 1, offset: 0 })
+              .getInstancesByFilter(
+                this.tenantId,
+                { ...base, status: 'approved' },
+                { limit: 1, offset: 0 },
+              )
               .then((r) => r.total),
             this.opts.adapter
-              .getInstancesByFilter(this.tenantId, { ...base, status: 'rejected' }, { limit: 1, offset: 0 })
+              .getInstancesByFilter(
+                this.tenantId,
+                { ...base, status: 'rejected' },
+                { limit: 1, offset: 0 },
+              )
               .then((r) => r.total),
             this.opts.adapter
-              .getInstancesByFilter(this.tenantId, { ...base, status: 'pending' }, { limit: 1, offset: 0 })
+              .getInstancesByFilter(
+                this.tenantId,
+                { ...base, status: 'pending' },
+                { limit: 1, offset: 0 },
+              )
               .then((r) => r.total),
           ]);
           if (tTotal > 0) {
@@ -1358,8 +1796,9 @@ export class ApprovalEngine {
     return this.withOptimisticRetry(instanceId, async (instance) => {
       if (instance.status !== 'pending') return instance;
 
-      const escalationConfig = instance.templateSnapshot?.escalation
-        ?? (await this.registry.get(instance.templateName)).escalation;
+      const escalationConfig =
+        instance.templateSnapshot?.escalation ??
+        (await this.registry.get(instance.templateName)).escalation;
       if (!escalationConfig) return instance;
 
       const newApprovers = await this.resolver.resolveApprovers(
@@ -1371,10 +1810,13 @@ export class ApprovalEngine {
 
       const filteredApprovers = newApprovers.filter((id) => id !== instance.submittedBy);
       if (filteredApprovers.length === 0) {
-        this.logger.warn('escalateInternal: escalation resolved to submitter only — no approvers added', {
-          tenantId: this.tenantId,
-          instanceId,
-        });
+        this.logger.warn(
+          'escalateInternal: escalation resolved to submitter only — no approvers added',
+          {
+            tenantId: this.tenantId,
+            instanceId,
+          },
+        );
         return instance;
       }
 
@@ -1399,15 +1841,29 @@ export class ApprovalEngine {
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
       this.opts.metricsAdapter?.increment('approval.escalated', { tenantId: this.tenantId });
-      this.logger.info('escalate: instance escalated', { tenantId: this.tenantId, instanceId, escalatedTo });
-      const p = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, level: level.level, escalatedTo };
+      this.logger.info('escalate: instance escalated', {
+        tenantId: this.tenantId,
+        instanceId,
+        escalatedTo,
+      });
+      const p = {
+        instanceId,
+        documentId: instance.documentId,
+        documentType: instance.documentType,
+        timestamp: now,
+        level: level.level,
+        escalatedTo,
+      };
       this.bus.emit('approval:escalated', p);
       await this.notifyAdapters('approval:escalated', instance, p);
       return instance;
     });
   }
 
-  private async expireInstance(instanceId: string, deadlineAction: 'cancel' | 'reject'): Promise<void> {
+  private async expireInstance(
+    instanceId: string,
+    deadlineAction: 'cancel' | 'reject',
+  ): Promise<void> {
     try {
       await this.withOptimisticRetry(instanceId, async (instance) => {
         if (instance.status !== 'pending') return instance;
@@ -1436,7 +1892,13 @@ export class ApprovalEngine {
           deadlineAction,
         });
 
-        const p = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, deadlineAction };
+        const p = {
+          instanceId,
+          documentId: instance.documentId,
+          documentType: instance.documentType,
+          timestamp: now,
+          deadlineAction,
+        };
         this.bus.emit('approval:expired', p);
         await this.notifyAdapters('approval:expired', instance, p);
 
@@ -1461,7 +1923,13 @@ export class ApprovalEngine {
 
         this.logger.warn('markSlaBreached: SLA breached', { tenantId: this.tenantId, instanceId });
 
-        const p = { instanceId, documentId: instance.documentId, documentType: instance.documentType, timestamp: now, slaDeadlineAt: instance.slaDeadlineAt ?? now };
+        const p = {
+          instanceId,
+          documentId: instance.documentId,
+          documentType: instance.documentType,
+          timestamp: now,
+          slaDeadlineAt: instance.slaDeadlineAt ?? now,
+        };
         this.bus.emit('approval:sla_breached', p);
         await this.notifyAdapters('approval:sla_breached', instance, p);
 
@@ -1472,7 +1940,11 @@ export class ApprovalEngine {
     }
   }
 
-  private async revertDelegation(instanceId: string, levelNumber: number, fromApprover: string): Promise<void> {
+  private async revertDelegation(
+    instanceId: string,
+    levelNumber: number,
+    fromApprover: string,
+  ): Promise<void> {
     try {
       await this.withOptimisticRetry(instanceId, async (instance) => {
         if (instance.status !== 'pending') return instance;
@@ -1525,7 +1997,10 @@ export class ApprovalEngine {
         let delay = Math.min(baseDelayMs * attempt, maxDelayMs);
         if (jitter) delay += Math.random() * baseDelayMs;
         await sleep(delay);
-        this.opts.metricsAdapter?.increment('approval.conflict_retry', { tenantId: this.tenantId, attempt: String(attempt) });
+        this.opts.metricsAdapter?.increment('approval.conflict_retry', {
+          tenantId: this.tenantId,
+          attempt: String(attempt),
+        });
         this.logger.warn('withOptimisticRetry: retrying after conflict', {
           tenantId: this.tenantId,
           instanceId,
@@ -1577,7 +2052,9 @@ export class ApprovalEngine {
   }
 
   private findNextLevel(instance: ApprovalInstance): ApprovalLevelInstance | null {
-    return instance.levels.find((l) => l.level > instance.currentLevel && l.status === 'waiting') ?? null;
+    return (
+      instance.levels.find((l) => l.level > instance.currentLevel && l.status === 'waiting') ?? null
+    );
   }
 
   private findPreviousLevel(instance: ApprovalInstance): ApprovalLevelInstance | null {
@@ -1605,7 +2082,9 @@ export class ApprovalEngine {
       if (denial) throw new ApprovalForbiddenError(denial);
     } catch (err) {
       if (err instanceof ApprovalForbiddenError) throw err;
-      this.logger.error('authorizationPolicy.authorize threw unexpectedly', err, { tenantId: this.tenantId });
+      this.logger.error('authorizationPolicy.authorize threw unexpectedly', err, {
+        tenantId: this.tenantId,
+      });
       throw err;
     }
   }
@@ -1621,7 +2100,10 @@ export class ApprovalEngine {
     }
   }
 
-  private async runMiddlewareAfter(ctx: OperationContext, result?: ApprovalInstance | void): Promise<void> {
+  private async runMiddlewareAfter(
+    ctx: OperationContext,
+    result?: ApprovalInstance | void,
+  ): Promise<void> {
     if (!this.opts.middleware?.length) return;
     for (const mw of this.opts.middleware) {
       try {
@@ -1653,7 +2135,10 @@ export class ApprovalEngine {
     try {
       await this.opts.notificationAdapter.notify(notifEvent);
     } catch (err) {
-      this.logger.error('notificationAdapter.notify threw', err, { tenantId: this.tenantId, instanceId: instance.id });
+      this.logger.error('notificationAdapter.notify threw', err, {
+        tenantId: this.tenantId,
+        instanceId: instance.id,
+      });
     }
   }
 
@@ -1662,7 +2147,10 @@ export class ApprovalEngine {
     try {
       await this.opts.auditAdapter.append(this.tenantId, instance.id, entry, instance);
     } catch (err) {
-      this.logger.error('auditAdapter.append threw', err, { tenantId: this.tenantId, instanceId: instance.id });
+      this.logger.error('auditAdapter.append threw', err, {
+        tenantId: this.tenantId,
+        instanceId: instance.id,
+      });
     }
   }
 }
@@ -1698,9 +2186,6 @@ function parseOrThrow<T>(fn: () => T): T {
   try {
     return fn();
   } catch (err) {
-    throw new ApprovalValidationError(
-      err instanceof Error ? err.message : 'Invalid input',
-      err,
-    );
+    throw new ApprovalValidationError(err instanceof Error ? err.message : 'Invalid input', err);
   }
 }
