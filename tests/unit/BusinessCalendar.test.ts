@@ -41,4 +41,14 @@ describe('weekendCalendar', () => {
     const d = new Date('2026-06-22T09:00:00');
     expect(cal.addBusinessDays(d, 0).getTime()).toBe(d.getTime());
   });
+
+  it('adds the fractional remainder as elapsed time within the business day', () => {
+    const cal = weekendCalendar();
+    // Friday 2026-06-19T09:00 + 1.5 business days -> Mon 06-22 (skips the
+    // weekend) at 09:00 + 0.5 * 24h of elapsed clock time = 21:00.
+    const friday = new Date('2026-06-19T09:00:00');
+    const result = cal.addBusinessDays(friday, 1.5);
+    expect(result.getDate()).toBe(22);
+    expect(result.getHours()).toBe(21);
+  });
 });
