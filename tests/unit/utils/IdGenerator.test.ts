@@ -16,4 +16,9 @@ describe('defaultIdGenerator', () => {
     expect(id.length).toBeGreaterThan(10);
     expect(id.length).toBeLessThan(40);
   });
+
+  it('generates unique IDs across rapid calls', () => {
+    const ids = new Set(Array.from({ length: 1000 }, () => defaultIdGenerator('inst')));
+    expect(ids.size).toBe(1000);
+  });
 });
