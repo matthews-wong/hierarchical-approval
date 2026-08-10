@@ -51,4 +51,28 @@ describe('weekendCalendar', () => {
     expect(result.getDate()).toBe(22);
     expect(result.getHours()).toBe(21);
   });
+
+  it('advances to the next business day when starting on a weekend', () => {
+    const cal = weekendCalendar();
+    // Saturday 2026-06-20 + 1 business day -> Monday 2026-06-22
+    const saturday = new Date('2026-06-20T09:00:00');
+    const result = cal.addBusinessDays(saturday, 1);
+    expect(result.getDate()).toBe(22);
+    expect(result.getDay()).toBe(1); // Monday
+  });
+
+  it('applies a pure fractional offset within the same business day', () => {
+    const cal = weekendCalendar();
+    // Monday 2026-06-22T09:00 + 0.5 business days -> 21:00 the same day
+    const monday = new Date('2026-06-22T09:00:00');
+    const result = cal.addBusinessDays(monday, 0.5);
+    expect(result.getDate()).toBe(22);
+    expect(result.getHours()).toBe(21);
+  });
+
+  it('returns the original instant for NaN day counts', () => {
+    const cal = weekendCalendar();
+    const d = new Date('2026-06-22T09:00:00');
+    expect(cal.addBusinessDays(d, Number.NaN).getTime()).toBe(d.getTime());
+  });
 });
