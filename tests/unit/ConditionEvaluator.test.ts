@@ -64,4 +64,38 @@ describe('ConditionEvaluator', () => {
     expect(evaluateConditions(inRule, { type: 'A' }).addLevels).toHaveLength(1);
     expect(evaluateConditions(inRule, { type: 'C' }).addLevels).toHaveLength(0);
   });
+
+  it('handles not_in operator', () => {
+    const notInRule: ConditionRule[] = [
+      { when: { field: 'region', operator: 'not_in', value: ['EU', 'APAC'] }, addLevels: [extraLevel] },
+    ];
+    expect(evaluateConditions(notInRule, { region: 'US' }).addLevels).toHaveLength(1);
+    expect(evaluateConditions(notInRule, { region: 'EU' }).addLevels).toHaveLength(0);
+  });
+
+  it('handles <, >=, <=, != operators', () => {
+    const ltRule: ConditionRule[] = [
+      { when: { field: 'amount', operator: '<', value: 10000 }, addLevels: [extraLevel] },
+    ];
+    expect(evaluateConditions(ltRule, { amount: 5000 }).addLevels).toHaveLength(1);
+    expect(evaluateConditions(ltRule, { amount: 15000 }).addLevels).toHaveLength(0);
+
+    const gteRule: ConditionRule[] = [
+      { when: { field: 'amount', operator: '>=', value: 10000 }, addLevels: [extraLevel] },
+    ];
+    expect(evaluateConditions(gteRule, { amount: 10000 }).addLevels).toHaveLength(1);
+    expect(evaluateConditions(gteRule, { amount: 9999 }).addLevels).toHaveLength(0);
+
+    const lteRule: ConditionRule[] = [
+      { when: { field: 'amount', operator: '<=', value: 10000 }, addLevels: [extraLevel] },
+    ];
+    expect(evaluateConditions(lteRule, { amount: 10000 }).addLevels).toHaveLength(1);
+    expect(evaluateConditions(lteRule, { amount: 10001 }).addLevels).toHaveLength(0);
+
+    const neqRule: ConditionRule[] = [
+      { when: { field: 'dept', operator: '!=', value: 'finance' }, addLevels: [extraLevel] },
+    ];
+    expect(evaluateConditions(neqRule, { dept: 'engineering' }).addLevels).toHaveLength(1);
+    expect(evaluateConditions(neqRule, { dept: 'finance' }).addLevels).toHaveLength(0);
+  });
 });
