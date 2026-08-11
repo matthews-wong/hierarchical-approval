@@ -31,6 +31,10 @@ function reviveDates(instance: ApprovalInstance): ApprovalInstance {
   };
 }
 
+function reviveTemplateDates(template: ApprovalTemplate): ApprovalTemplate {
+  return { ...template, createdAt: new Date(template.createdAt) };
+}
+
 function applyFilter(instance: ApprovalInstance, filter: InstanceFilter): boolean {
   if (filter.status && instance.status !== filter.status) return false;
   if (filter.documentType && instance.documentType !== filter.documentType) return false;
@@ -53,14 +57,15 @@ export class MemoryAdapter implements IStorageAdapter {
   }
 
   async getTemplate(tenantId: string, name: string): Promise<ApprovalTemplate | null> {
-    return deepClone(this.templates.get(`${tenantId}:${name}`) ?? null);
+    const template = this.templates.get(`${tenantId}:${name}`);
+    return template ? reviveTemplateDates(deepClone(template)) : null;
   }
 
   async listTemplates(tenantId: string): Promise<ApprovalTemplate[]> {
     const result: ApprovalTemplate[] = [];
     for (const [key, template] of this.templates) {
       if (key.startsWith(`${tenantId}:`)) {
-        result.push(deepClone(template));
+        result.push(reviveTemplateDates(deepClone(template)));
       }
     }
     return result;
