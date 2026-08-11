@@ -251,7 +251,7 @@ describe('MemoryAdapter', () => {
 
     it('walks forward page by page via nextCursor', async () => {
       const adapter = new MemoryAdapter();
-      saveFive(adapter);
+      await saveFive(adapter);
 
       const page1 = await adapter.getInstancesByCursor('t1', {}, { limit: 2 });
       expect(page1.items.map((i) => i.id)).toEqual(['i1', 'i2']);
@@ -285,7 +285,7 @@ describe('MemoryAdapter', () => {
 
     it('walks backward from a page boundary via prevCursor', async () => {
       const adapter = new MemoryAdapter();
-      saveFive(adapter);
+      await saveFive(adapter);
 
       // Page starting at i3 has prevCursor pointing at i2.
       const page = await adapter.getInstancesByCursor('t1', {}, { limit: 2, cursor: undefined });
