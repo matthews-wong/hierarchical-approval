@@ -45,7 +45,9 @@ describe('ConditionEvaluator', () => {
         addLevels: [extraLevel],
       },
     ];
-    expect(evaluateConditions(rules, { amount: 6000, dept: 'engineering' }).addLevels).toHaveLength(1);
+    expect(evaluateConditions(rules, { amount: 6000, dept: 'engineering' }).addLevels).toHaveLength(
+      1,
+    );
     expect(evaluateConditions(rules, { amount: 6000, dept: 'finance' }).addLevels).toHaveLength(0);
   });
 
@@ -67,10 +69,56 @@ describe('ConditionEvaluator', () => {
 
   it('handles not_in operator', () => {
     const notInRule: ConditionRule[] = [
-      { when: { field: 'region', operator: 'not_in', value: ['EU', 'APAC'] }, addLevels: [extraLevel] },
+      {
+        when: { field: 'region', operator: 'not_in', value: ['EU', 'APAC'] },
+        addLevels: [extraLevel],
+      },
     ];
     expect(evaluateConditions(notInRule, { region: 'US' }).addLevels).toHaveLength(1);
     expect(evaluateConditions(notInRule, { region: 'EU' }).addLevels).toHaveLength(0);
+  });
+
+  it('missing dot-path segment resolves to undefined instead of throwing', () => {
+    const rules: ConditionRule[] = [
+      { when: { field: 'vendor.country', operator: '==', value: 'US' }, addLevels: [extraLevel] },
+    ];
+    expect(evaluateConditions(rules, {}).addLevels).toHaveLength(0);
+    expect(evaluateConditions(rules, { vendor: { region: 'EU' } }).addLevels).toHaveLength(0);
+  });
+
+  it('non-array in / not_in values never match', () => {
+    const inRule: ConditionRule[] = [
+      { when: { field: 'type', operator: 'in', value: 'A' }, addLevels: [extraLevel] },
+    ];
+    expect(evaluateConditions(inRule, { type: 'A' }).addLevels).toHaveLength(0);
+
+    const notInRule: ConditionRule[] = [
+      { when: { field: 'type', operator: 'not_in', value: 'A' }, addLevels: [extraLevel] },
+    ];
+    expect(evaluateConditions(notInRule, { type: 'B' }).addLevels).toHaveLength(0);
+  });
+
+  it('unknown operator throws an error naming the operator', () => {
+    const rules: ConditionRule[] = [
+      { when: { field: 'amount', operator: 'between', value: [1, 10] }, addLevels: [extraLevel] },
+    ];
+    expect(() => evaluateConditions(rules, { amount: 5 })).toThrow(
+      /Unknown condition operator "between"/,
+    );
+  });
+
+  it('a matching rule applies both addLevels and skipLevels mutations', () => {
+    const rules: ConditionRule[] = [
+      {
+        when: { field: 'fastTrack', operator: '==', value: true },
+        addLevels: [extraLevel],
+        skipLevels: [2, 4],
+      },
+    ];
+    const result = evaluateConditions(rules, { fastTrack: true });
+    expect(result.addLevels).toHaveLength(1);
+    expect(result.skipLevels.has(2)).toBe(true);
+    expect(result.skipLevels.has(4)).toBe(true);
   });
 
   it('handles <, >=, <=, != operators', () => {
