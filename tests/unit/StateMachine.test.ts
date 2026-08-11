@@ -38,29 +38,84 @@ describe('isLevelApproved', () => {
   });
 
   it('quorum — approved when minApprovals reached (2 of 4)', () => {
-    expect(isLevelApproved(makeLevel('quorum', ['a', 'b', 'c', 'd'], ['a', 'b'], [], { minApprovals: 2 }))).toBe(true);
-    expect(isLevelApproved(makeLevel('quorum', ['a', 'b', 'c', 'd'], ['a'], [], { minApprovals: 2 }))).toBe(false);
+    expect(
+      isLevelApproved(
+        makeLevel('quorum', ['a', 'b', 'c', 'd'], ['a', 'b'], [], { minApprovals: 2 }),
+      ),
+    ).toBe(true);
+    expect(
+      isLevelApproved(makeLevel('quorum', ['a', 'b', 'c', 'd'], ['a'], [], { minApprovals: 2 })),
+    ).toBe(false);
   });
 
   it('quorum — throws when minApprovals is invalid or exceeds approvers', () => {
-    expect(() => isLevelApproved(makeLevel('quorum', ['a', 'b'], [], []))).toThrow(/positive integer/);
-    expect(() => isLevelApproved(makeLevel('quorum', ['a', 'b'], [], [], { minApprovals: 3 }))).toThrow(/only 2 approver/);
+    expect(() => isLevelApproved(makeLevel('quorum', ['a', 'b'], [], []))).toThrow(
+      /positive integer/,
+    );
+    expect(() =>
+      isLevelApproved(makeLevel('quorum', ['a', 'b'], [], [], { minApprovals: 3 })),
+    ).toThrow(/only 2 approver/);
   });
 
   it('weighted — approved when cumulative approved weight meets threshold', () => {
     const weights = { cfo: 3, mgr: 1 };
-    expect(isLevelApproved(makeLevel('weighted', ['cfo', 'mgr'], ['cfo'], [], { threshold: 3, weights }))).toBe(true);
-    expect(isLevelApproved(makeLevel('weighted', ['cfo', 'mgr'], ['mgr'], [], { threshold: 3, weights }))).toBe(false);
+    expect(
+      isLevelApproved(
+        makeLevel('weighted', ['cfo', 'mgr'], ['cfo'], [], { threshold: 3, weights }),
+      ),
+    ).toBe(true);
+    expect(
+      isLevelApproved(
+        makeLevel('weighted', ['cfo', 'mgr'], ['mgr'], [], { threshold: 3, weights }),
+      ),
+    ).toBe(false);
   });
 
   it('weighted — defaults unlisted approvers to weight 1', () => {
-    expect(isLevelApproved(makeLevel('weighted', ['a', 'b', 'c'], ['a', 'b'], [], { threshold: 2 }))).toBe(true);
-    expect(isLevelApproved(makeLevel('weighted', ['a', 'b', 'c'], ['a'], [], { threshold: 2 }))).toBe(false);
+    expect(
+      isLevelApproved(makeLevel('weighted', ['a', 'b', 'c'], ['a', 'b'], [], { threshold: 2 })),
+    ).toBe(true);
+    expect(
+      isLevelApproved(makeLevel('weighted', ['a', 'b', 'c'], ['a'], [], { threshold: 2 })),
+    ).toBe(false);
   });
 
   it('weighted — throws when threshold is invalid or unreachable', () => {
     expect(() => isLevelApproved(makeLevel('weighted', ['a'], [], []))).toThrow(/positive number/);
-    expect(() => isLevelApproved(makeLevel('weighted', ['a', 'b'], [], [], { threshold: 99 }))).toThrow(/total only/);
+    expect(() =>
+      isLevelApproved(makeLevel('weighted', ['a', 'b'], [], [], { threshold: 99 })),
+    ).toThrow(/total only/);
+  });
+
+  it('weighted — a zero weight is honoured, not treated as free approval', () => {
+    // a has weight 0, b defaults to 1: total weight is 1.
+    expect(
+      isLevelApproved(
+        makeLevel('weighted', ['a', 'b'], ['a'], [], { threshold: 1, weights: { a: 0 } }),
+      ),
+    ).toBe(false);
+    expect(
+      isLevelApproved(
+        makeLevel('weighted', ['a', 'b'], ['a', 'b'], [], { threshold: 1, weights: { a: 0 } }),
+      ),
+    ).toBe(true);
+  });
+
+  it('weighted — negative weights fall back to weight 1', () => {
+    expect(
+      isLevelApproved(
+        makeLevel('weighted', ['a', 'b'], ['a'], [], { threshold: 1, weights: { a: -5 } }),
+      ),
+    ).toBe(true);
+    expect(
+      isLevelApproved(
+        makeLevel('weighted', ['a', 'b'], ['a'], [], { threshold: 2, weights: { a: -5 } }),
+      ),
+    ).toBe(false);
+  });
+
+  it('throws when the level has no approvers at all', () => {
+    expect(() => isLevelApproved(makeLevel('any', [], [], []))).toThrow(/has no approvers/);
   });
 });
 
@@ -82,16 +137,46 @@ describe('isLevelRejected', () => {
 
   it('quorum — rejected once quorum becomes unreachable (need 2 of 3)', () => {
     // 2 of 3: one rejection still leaves 2 possible approvals → not rejected.
-    expect(isLevelRejected(makeLevel('quorum', ['a', 'b', 'c'], [], ['a'], { minApprovals: 2 }))).toBe(false);
+    expect(
+      isLevelRejected(makeLevel('quorum', ['a', 'b', 'c'], [], ['a'], { minApprovals: 2 })),
+    ).toBe(false);
     // two rejections leave only 1 possible approval → quorum of 2 unreachable.
-    expect(isLevelRejected(makeLevel('quorum', ['a', 'b', 'c'], [], ['a', 'b'], { minApprovals: 2 }))).toBe(true);
+    expect(
+      isLevelRejected(makeLevel('quorum', ['a', 'b', 'c'], [], ['a', 'b'], { minApprovals: 2 })),
+    ).toBe(true);
   });
 
   it('weighted — rejected once achievable weight drops below threshold', () => {
     const weights = { cfo: 3, mgr: 1 };
     // total weight 4, threshold 3; rejecting mgr (1) leaves 3 → still reachable.
-    expect(isLevelRejected(makeLevel('weighted', ['cfo', 'mgr'], [], ['mgr'], { threshold: 3, weights }))).toBe(false);
+    expect(
+      isLevelRejected(
+        makeLevel('weighted', ['cfo', 'mgr'], [], ['mgr'], { threshold: 3, weights }),
+      ),
+    ).toBe(false);
     // rejecting cfo (3) leaves only 1 → threshold 3 unreachable.
-    expect(isLevelRejected(makeLevel('weighted', ['cfo', 'mgr'], [], ['cfo'], { threshold: 3, weights }))).toBe(true);
+    expect(
+      isLevelRejected(
+        makeLevel('weighted', ['cfo', 'mgr'], [], ['cfo'], { threshold: 3, weights }),
+      ),
+    ).toBe(true);
+  });
+
+  it('weighted — rejecting a zero-weight approver cannot make the level unreachable', () => {
+    // a has weight 0, b defaults to 1: total weight 1, threshold 1.
+    expect(
+      isLevelRejected(
+        makeLevel('weighted', ['a', 'b'], [], ['a'], { threshold: 1, weights: { a: 0 } }),
+      ),
+    ).toBe(false);
+    expect(
+      isLevelRejected(
+        makeLevel('weighted', ['a', 'b'], [], ['b'], { threshold: 1, weights: { a: 0 } }),
+      ),
+    ).toBe(true);
+  });
+
+  it('throws when the level has no approvers at all', () => {
+    expect(() => isLevelRejected(makeLevel('any', [], [], []))).toThrow(/has no approvers/);
   });
 });
