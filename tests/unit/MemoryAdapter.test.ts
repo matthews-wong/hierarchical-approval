@@ -144,4 +144,94 @@ describe('MemoryAdapter', () => {
     await expect(adapter.getIdempotentInstance('t1', 'k1')).resolves.toMatchObject({ id: 'i1' });
     await expect(adapter.getIdempotentInstance('t1', 'k2')).resolves.toBeNull();
   });
+
+  describe('getOverdueInstances', () => {
+    const asOf = new Date('2026-06-10T00:00:00.000Z');
+
+    it('includes escalation overdue, expired, SLA-breached, and delegation-expired instances', async () => {
+      const adapter = new MemoryAdapter();
+      await adapter.saveInstance(
+        makeInstance({
+          id: 'esc',
+          levels: [makeLevel({ escalationDueAt: new Date('2026-06-05T00:00:00.000Z') })],
+        }),
+      );
+      await adapter.saveInstance(
+        makeInstance({ id: 'exp', expiresAt: new Date('2026-06-05T00:00:00.000Z') }),
+      );
+      await adapter.saveInstance(
+        makeInstance({ id: 'sla', slaDeadlineAt: new Date('2026-06-05T00:00:00.000Z') }),
+      );
+      await adapter.saveInstance(
+        makeInstance({
+          id: 'del',
+          levels: [
+            makeLevel({
+              status: 'pending',
+              delegatedUntil: new Date('2026-06-05T00:00:00.000Z'),
+              delegatedFrom: 'bob',
+              delegatedTo: 'carol',
+            }),
+          ],
+        }),
+      );
+      const result = await adapter.getOverdueInstances('t1', asOf);
+      expect(result.map((i) => i.id).sort()).toEqual(['del', 'esc', 'exp', 'sla']);
+    });
+
+    it('excludes non-pending, future-dated, and already-breached instances', async () => {
+      const adapter = new MemoryAdapter();
+      await adapter.saveInstance(
+        makeInstance({ id: 'approved', status: 'approved', expiresAt: new Date('2026-06-05') }),
+      );
+      await adapter.saveInstance(
+        makeInstance({
+          id: 'future',
+          levels: [makeLevel({ escalationDueAt: new Date('2026-06-15T00:00:00.000Z') })],
+        }),
+      );
+      await adapter.saveInstance(
+        makeInstance({
+          id: 'breached',
+          slaDeadlineAt: new Date('2026-06-05T00:00:00.000Z'),
+          slaBreachedAt: new Date('2026-06-06T00:00:00.000Z'),
+        }),
+      );
+      await adapter.saveInstance(
+        makeInstance({
+          id: 'delegated-away',
+          levels: [
+            makeLevel({
+              status: 'approved',
+              delegatedUntil: new Date('2026-06-05T00:00:00.000Z'),
+              delegatedFrom: 'bob',
+              delegatedTo: 'carol',
+            }),
+          ],
+        }),
+      );
+      expect(await adapter.getOverdueInstances('t1', asOf)).toHaveLength(0);
+    });
+
+    it('matches an escalation due exactly at asOf and applies the extra filter', async () => {
+      const adapter = new MemoryAdapter();
+      await adapter.saveInstance(
+        makeInstance({
+          id: 'boundary',
+          levels: [makeLevel({ escalationDueAt: asOf })],
+        }),
+      );
+      await adapter.saveInstance(
+        makeInstance({
+          id: 'other-type',
+          documentType: 'invoice',
+          expiresAt: new Date('2026-06-05T00:00:00.000Z'),
+        }),
+      );
+      const all = await adapter.getOverdueInstances('t1', asOf);
+      expect(all.map((i) => i.id).sort()).toEqual(['boundary', 'other-type']);
+      const filtered = await adapter.getOverdueInstances('t1', asOf, { documentType: 'po' });
+      expect(filtered.map((i) => i.id)).toEqual(['boundary']);
+    });
+  });
 });
