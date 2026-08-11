@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { isLevelApproved, isLevelRejected } from '../../src/engine/StateMachine.js';
-import type { ApprovalLevelInstance } from '../../src/types/index.js';
+import {
+  assertStatus,
+  assertApproverOnLevel,
+  hasAlreadyActed,
+  isLevelApproved,
+  isLevelRejected,
+} from '../../src/engine/StateMachine.js';
+import { ApprovalError, ApprovalForbiddenError } from '../../src/errors.js';
+import type { ApprovalInstance, ApprovalLevelInstance } from '../../src/types/index.js';
 
 function makeLevel(
   mode: ApprovalLevelInstance['mode'],
@@ -178,5 +185,56 @@ describe('isLevelRejected', () => {
 
   it('throws when the level has no approvers at all', () => {
     expect(() => isLevelRejected(makeLevel('any', [], [], []))).toThrow(/has no approvers/);
+  });
+});
+
+describe('state guards', () => {
+  function makeInstance(overrides: Partial<ApprovalInstance> = {}): ApprovalInstance {
+    const now = new Date('2026-01-01T00:00:00.000Z');
+    return {
+      id: 'inst-1',
+      tenantId: 't1',
+      templateId: 'tpl-1',
+      templateName: 'purchase',
+      documentId: 'doc-1',
+      documentType: 'po',
+      submittedBy: 'alice',
+      status: 'pending',
+      currentLevel: 1,
+      version: 1,
+      levels: [makeLevel('any', ['alice', 'bob'], [], [])],
+      auditLog: [],
+      data: {},
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+  }
+
+  it('assertStatus passes on a matching status', () => {
+    expect(() => assertStatus(makeInstance(), 'pending')).not.toThrow();
+  });
+
+  it('assertStatus throws ApprovalError INVALID_STATUS naming both statuses', () => {
+    const error = (): void => assertStatus(makeInstance({ status: 'approved' }), 'pending');
+    expect(error).toThrow(ApprovalError);
+    expect(error).toThrow(/Expected instance status "pending" but got "approved"/);
+    expect(error).toThrow(expect.objectContaining({ code: 'INVALID_STATUS' }));
+  });
+
+  it('assertApproverOnLevel accepts a listed approver and rejects a stranger', () => {
+    const level = makeLevel('any', ['alice', 'bob'], [], []);
+    expect(() => assertApproverOnLevel(level, 'alice')).not.toThrow();
+    const error = (): void => assertApproverOnLevel(level, 'carol');
+    expect(error).toThrow(ApprovalForbiddenError);
+    expect(error).toThrow(/User "carol" is not an approver for level 1/);
+  });
+
+  it('hasAlreadyActed is true for approvers in approvedBy or rejectedBy', () => {
+    const level = makeLevel('any', ['alice', 'bob', 'carol'], ['alice'], ['bob']);
+    expect(hasAlreadyActed(level, 'alice')).toBe(true);
+    expect(hasAlreadyActed(level, 'bob')).toBe(true);
+    expect(hasAlreadyActed(level, 'carol')).toBe(false);
   });
 });
