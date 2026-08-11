@@ -8,6 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **`TemplatedNotificationAdapter`** — now logs fatal events (notification render/send failures) at the `fatal` level instead of `error`.
+- **`MemoryAdapter`** — `getInstancesByFilter` now honors `fromDate`/`toDate` (previously the JSON-cloned string dates made the comparison a no-op and both bounds silently matched nothing). `getTemplate`/`listTemplates` now return `createdAt` as a real `Date`, matching the `ApprovalTemplate` contract.
 
 ## [0.5.0] - 2026-07-23
 
