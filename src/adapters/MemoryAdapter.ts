@@ -36,8 +36,9 @@ function applyFilter(instance: ApprovalInstance, filter: InstanceFilter): boolea
   if (filter.documentType && instance.documentType !== filter.documentType) return false;
   if (filter.submittedBy && instance.submittedBy !== filter.submittedBy) return false;
   if (filter.templateName && instance.templateName !== filter.templateName) return false;
-  if (filter.fromDate && instance.createdAt < filter.fromDate) return false;
-  if (filter.toDate && instance.createdAt > filter.toDate) return false;
+  // Stored instances carry string dates (deepClone JSON round-trip), so wrap before comparing.
+  if (filter.fromDate && new Date(instance.createdAt) < filter.fromDate) return false;
+  if (filter.toDate && new Date(instance.createdAt) > filter.toDate) return false;
   return true;
 }
 
@@ -96,7 +97,10 @@ export class MemoryAdapter implements IStorageAdapter {
       const currentLevel = i.levels.find((l) => l.level === i.currentLevel);
       return currentLevel?.approverIds.includes(approverId) ?? false;
     });
-    return paginate(all.map((i) => reviveDates(deepClone(i))), opts);
+    return paginate(
+      all.map((i) => reviveDates(deepClone(i))),
+      opts,
+    );
   }
 
   async getInstancesByFilter(
@@ -107,10 +111,17 @@ export class MemoryAdapter implements IStorageAdapter {
     const all = [...this.instances.values()].filter(
       (i) => i.tenantId === tenantId && applyFilter(i, filter),
     );
-    return paginate(all.map((i) => reviveDates(deepClone(i))), opts);
+    return paginate(
+      all.map((i) => reviveDates(deepClone(i))),
+      opts,
+    );
   }
 
-  async getOverdueInstances(tenantId: string, asOf: Date, filter: InstanceFilter = {}): Promise<ApprovalInstance[]> {
+  async getOverdueInstances(
+    tenantId: string,
+    asOf: Date,
+    filter: InstanceFilter = {},
+  ): Promise<ApprovalInstance[]> {
     return [...this.instances.values()]
       .filter((i) => {
         if (i.tenantId !== tenantId || i.status !== 'pending') return false;
@@ -187,7 +198,11 @@ export class MemoryAdapter implements IStorageAdapter {
     return null;
   }
 
-  async appendAuditEntry(_tenantId: string, _instanceId: string, _entry: AuditEntry): Promise<void> {
+  async appendAuditEntry(
+    _tenantId: string,
+    _instanceId: string,
+    _entry: AuditEntry,
+  ): Promise<void> {
     // No-op by design. The engine already pushes each entry onto instance.auditLog
     // and persists the whole instance via saveInstance()/updateInstance(), so the
     // embedded log is the source of truth for this adapter. Pushing here too would
