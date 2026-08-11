@@ -234,4 +234,125 @@ describe('MemoryAdapter', () => {
       expect(filtered.map((i) => i.id)).toEqual(['boundary']);
     });
   });
+
+  describe('getInstancesByCursor', () => {
+    async function saveFive(adapter: MemoryAdapter): Promise<void> {
+      const dates = ['2026-06-01', '2026-06-02', '2026-06-03', '2026-06-04', '2026-06-05'];
+      for (const [i, day] of dates.entries()) {
+        await adapter.saveInstance(
+          makeInstance({
+            id: `i${i + 1}`,
+            createdAt: new Date(`${day}T00:00:00.000Z`),
+            updatedAt: new Date(`${day}T00:00:00.000Z`),
+          }),
+        );
+      }
+    }
+
+    it('walks forward page by page via nextCursor', async () => {
+      const adapter = new MemoryAdapter();
+      saveFive(adapter);
+
+      const page1 = await adapter.getInstancesByCursor('t1', {}, { limit: 2 });
+      expect(page1.items.map((i) => i.id)).toEqual(['i1', 'i2']);
+      expect(page1.hasMore).toBe(true);
+      expect(page1.nextCursor).toBeTruthy();
+      expect(page1.prevCursor).toBeUndefined();
+
+      const page2 = await adapter.getInstancesByCursor(
+        't1',
+        {},
+        {
+          limit: 2,
+          cursor: page1.nextCursor,
+        },
+      );
+      expect(page2.items.map((i) => i.id)).toEqual(['i3', 'i4']);
+      expect(page2.hasMore).toBe(true);
+
+      const page3 = await adapter.getInstancesByCursor(
+        't1',
+        {},
+        {
+          limit: 2,
+          cursor: page2.nextCursor,
+        },
+      );
+      expect(page3.items.map((i) => i.id)).toEqual(['i5']);
+      expect(page3.hasMore).toBe(false);
+      expect(page3.nextCursor).toBeUndefined();
+    });
+
+    it('walks backward from a page boundary via prevCursor', async () => {
+      const adapter = new MemoryAdapter();
+      saveFive(adapter);
+
+      // Page starting at i3 has prevCursor pointing at i2.
+      const page = await adapter.getInstancesByCursor('t1', {}, { limit: 2, cursor: undefined });
+      const second = await adapter.getInstancesByCursor(
+        't1',
+        {},
+        {
+          limit: 2,
+          cursor: page.nextCursor,
+        },
+      );
+      expect(second.items.map((i) => i.id)).toEqual(['i3', 'i4']);
+      expect(second.prevCursor).toBeTruthy();
+
+      const backward = await adapter.getInstancesByCursor(
+        't1',
+        {},
+        {
+          limit: 2,
+          cursor: second.prevCursor,
+          direction: 'backward',
+        },
+      );
+      expect(backward.items.map((i) => i.id)).toEqual(['i1', 'i2']);
+    });
+
+    it('sorts by updatedAt then id and applies the filter', async () => {
+      const adapter = new MemoryAdapter();
+      await adapter.saveInstance(
+        makeInstance({
+          id: 'b',
+          status: 'approved',
+          createdAt: new Date('2026-06-03T00:00:00.000Z'),
+          updatedAt: new Date('2026-06-03T00:00:00.000Z'),
+        }),
+      );
+      await adapter.saveInstance(
+        makeInstance({
+          id: 'a',
+          createdAt: new Date('2026-06-03T00:00:00.000Z'),
+          updatedAt: new Date('2026-06-03T00:00:00.000Z'),
+        }),
+      );
+      await adapter.saveInstance(
+        makeInstance({
+          id: 'older',
+          createdAt: new Date('2026-06-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-06-01T00:00:00.000Z'),
+        }),
+      );
+      const all = await adapter.getInstancesByCursor('t1', {}, { limit: 10 });
+      expect(all.items.map((i) => i.id)).toEqual(['older', 'a', 'b']);
+      const pending = await adapter.getInstancesByCursor(
+        't1',
+        { status: 'pending' },
+        { limit: 10 },
+      );
+      expect(pending.items.map((i) => i.id)).toEqual(['older', 'a']);
+    });
+
+    it('returns an empty page with no cursors when nothing matches', async () => {
+      const adapter = new MemoryAdapter();
+      const result = await adapter.getInstancesByCursor('t1', {}, { limit: 5 });
+      expect(result.items).toHaveLength(0);
+      expect(result.hasMore).toBe(false);
+      expect(result.nextCursor).toBeUndefined();
+      expect(result.prevCursor).toBeUndefined();
+    });
+  });
 });
