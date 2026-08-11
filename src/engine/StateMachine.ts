@@ -37,6 +37,11 @@ function assertHasApprovers(level: ApprovalLevelInstance): number {
   return total;
 }
 
+/** Fail compilation when a new mode is added without a matching case. */
+function assertNeverMode(mode: never): never {
+  throw new Error(`Unhandled approval mode: ${String(mode)}`);
+}
+
 /** Resolve the minimum-approvals threshold for a quorum level, validating configuration. */
 function quorumThreshold(level: ApprovalLevelInstance, total: number): number {
   const min = level.minApprovals;
@@ -96,6 +101,8 @@ export function isLevelApproved(level: ApprovalLevelInstance): boolean {
       const totalWeight = sumWeights(level, level.approverIds);
       return sumWeights(level, approvedBy) >= weightedThreshold(level, totalWeight);
     }
+    default:
+      return assertNeverMode(mode);
   }
 }
 
@@ -122,5 +129,7 @@ export function isLevelRejected(level: ApprovalLevelInstance): boolean {
       const threshold = weightedThreshold(level, totalWeight);
       return totalWeight - sumWeights(level, rejectedBy) < threshold;
     }
+    default:
+      return assertNeverMode(mode);
   }
 }
