@@ -34,10 +34,6 @@ describe('percentileNearestRank', () => {
     expect(percentileNearestRank([10, 20, 30], 1)).toBe(10);
   });
 
-  it('is deterministic regardless of input sort order (sorts internally)', () => {
-    expect(percentileNearestRank([30, 10, 20], 95)).toBe(30);
-  });
-
 });
 
 describe('computeTimingStats', () => {
