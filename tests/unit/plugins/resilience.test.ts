@@ -2,17 +2,24 @@ import { describe, it, expect } from 'vitest';
 import {
   RbacAuthorizationPolicy,
   CompositeAuthorizationPolicy,
+  RateLimitMiddleware,
 } from '../../../src/plugins/resilience/index.js';
 import type { AuthorizationContext, IAuthorizationPolicy } from '../../../src/engine/IAuthorizationPolicy.js';
+import type { OperationContext } from '../../../src/engine/IOperationMiddleware.js';
 import { ApprovalForbiddenError } from '../../../src/errors.js';
-import { makeInstance } from './_helpers.js';
+import { makeInstance, ManualClock } from './_helpers.js';
 
-function authCtx(over: Partial<AuthorizationContext> = {}): AuthorizationContext {
+/** Context valid for both authorization policies and operation middlewares. */
+function authCtx(
+  over: Partial<AuthorizationContext> & Partial<OperationContext> = {},
+): AuthorizationContext & OperationContext {
   return {
     operation: 'approve',
     actorId: 'user-1',
     instance: makeInstance(),
     opts: {},
+    tenantId: 'tenant-1',
+    input: {},
     ...over,
   };
 }
@@ -251,5 +258,122 @@ describe('CompositeAuthorizationPolicy — child normalization', () => {
       ],
     });
     await expect(policy.authorize(authCtx())).rejects.toBe(boom);
+  });
+});
+
+describe('RateLimitMiddleware — constructor validation', () => {
+  it('rejects a non-positive capacity', () => {
+    expect(() => new RateLimitMiddleware({ capacity: 0, refillTokensPerSecond: 1 })).toThrow(
+      /capacity must be a positive finite number/,
+    );
+  });
+
+  it('rejects a negative refill rate', () => {
+    expect(
+      () => new RateLimitMiddleware({ capacity: 5, refillTokensPerSecond: -1 }),
+    ).toThrow(/refillTokensPerSecond must be a non-negative finite number/);
+  });
+
+  it('rejects a non-positive costPerRequest', () => {
+    expect(
+      () => new RateLimitMiddleware({ capacity: 5, refillTokensPerSecond: 1, costPerRequest: 0 }),
+    ).toThrow(/costPerRequest must be a positive finite number/);
+  });
+
+  it('rejects a costPerRequest larger than capacity', () => {
+    expect(
+      () => new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 1, costPerRequest: 3 }),
+    ).toThrow(/costPerRequest cannot exceed capacity/);
+  });
+});
+
+describe('RateLimitMiddleware — token bucket', () => {
+  it('lets capacity-burst requests through and rejects the excess with FORBIDDEN', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx());
+    mw.before(authCtx());
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError);
+  });
+
+  it('rejects with a message naming the resolved bucket key', () => {
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1 });
+    mw.before(authCtx());
+    expect(() => mw.before(authCtx())).toThrow(
+      /Rate limit exceeded for "user-1:approve". Please retry later./,
+    );
+  });
+
+  it('succeeds when a request brings the bucket exactly to zero, then rejects the next', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx()); // 1 -> 0, succeeds
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError);
+  });
+
+  it('refills tokens from the injected clock between requests', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx()); // 1 -> 0, exhausted
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError);
+
+    clock.advance(1_000); // accrues exactly 1 token (1s * 1/s)
+    expect(() => mw.before(authCtx())).not.toThrow(); // refilled request succeeds
+  });
+
+  it('clamps refill to capacity (never overfills)', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx()); // 2 -> 1
+    clock.advance(10_000); // would accrue 10 tokens
+    expect(mw.peekTokens(authCtx())).toBe(2);
+  });
+
+  it('treats a backwards-moving clock as zero elapsed time (balance never goes negative)', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx()); // 1 -> 0, exhausted
+    clock.advance(-5_000); // clock goes backwards
+
+    expect(mw.peekTokens(authCtx())).toBe(0); // clamped, not negative
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError); // still exhausted
+  });
+
+  it('peekTokens returns full capacity for an untouched bucket without creating one', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+
+    expect(mw.peekTokens(authCtx())).toBe(1);
+    // Peeking must not consume: the first real request still sees the full bucket.
+    mw.before(authCtx()); // 1 -> 0
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError);
+  });
+
+  it('reset clears all buckets (tokens return to capacity)', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx());
+    mw.reset();
+    expect(() => mw.before(authCtx())).not.toThrow();
+  });
+
+  it('supports a custom messageFn and costPerRequest', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({
+      capacity: 3,
+      refillTokensPerSecond: 1,
+      costPerRequest: 3,
+      clock,
+      messageFn: (key) => `Busy for ${key}`,
+    });
+
+    mw.before(authCtx()); // 3 -> 0
+    expect(() => mw.before(authCtx())).toThrow(/^Busy for user-1:approve$/);
   });
 });
