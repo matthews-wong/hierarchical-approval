@@ -5,17 +5,46 @@ import type { Clock } from '../utils/Clock.js';
 import { systemClock } from '../utils/Clock.js';
 
 export interface EscalationSchedulerOpts {
+  /** Storage adapter holding the approval instances to inspect. */
   adapter: IStorageAdapter;
+  /** Tenant whose instances this scheduler is responsible for. */
   tenantId: string;
+  /** Called when the current level's escalationDueAt has passed. */
   onEscalate: (instanceId: string) => Promise<void>;
+  /** Called when an instance expires; receives the configured deadline action. */
   onExpire?: (instanceId: string, deadlineAction: 'cancel' | 'reject') => Promise<void>;
+  /** Called once per instance when its slaDeadlineAt passes (never blocks escalation). */
   onSlaBreach?: (instanceId: string) => Promise<void>;
+  /** Called when a delegated level outlives its delegatedUntil window. */
   onRevertDelegation?: (instanceId: string, levelNumber: number, fromApprover: string) => Promise<void>;
+  /** Poll cadence. Defaults to 60_000 ms. */
   pollIntervalMs?: number;
+  /** Injected logger. Defaults to {@link noopLogger}. */
   logger?: Logger;
+  /** Injected clock. Defaults to {@link systemClock}. */
   clock?: Clock;
 }
 
+/**
+ * Periodically inspects overdue approval instances and applies lifecycle
+ * actions in a fixed order: delegation revert, instance expiry, SLA breach
+ * (non-blocking), then escalation.
+ *
+ * Polling is driven by `setInterval`; a tick never runs concurrently with
+ * itself (a repeated interval skips while the previous tick is in flight).
+ * Per-instance failures are logged and contained, so one bad instance never
+ * stops the others from being processed.
+ *
+ * @example
+ * const scheduler = new EscalationScheduler({
+ *   adapter,
+ *   tenantId: 'tenant-1',
+ *   onEscalate: (id) => engine.escalate(id),
+ *   onExpire: (id, action) => engine.expire(id, action),
+ *   pollIntervalMs: 30_000,
+ * });
+ * scheduler.start();
+ */
 export class EscalationScheduler {
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private tickPromise: Promise<void> | null = null;
@@ -43,10 +72,14 @@ export class EscalationScheduler {
     this.clock = opts.clock ?? systemClock;
   }
 
+  /** True while the polling interval is active (after {@link start}). */
   get isRunning(): boolean {
     return this.intervalId !== null;
   }
 
+  /**
+   * Begin polling. Idempotent: calling twice has no effect.
+   */
   start(): void {
     if (this.intervalId !== null) return;
     this.intervalId = setInterval(() => {
@@ -56,6 +89,10 @@ export class EscalationScheduler {
     }, this.pollIntervalMs);
   }
 
+  /**
+   * Stop polling and await any in-progress tick. Idempotent; safe to call when
+   * never started. Does not run a final tick.
+   */
   async stop(): Promise<void> {
     if (this.intervalId !== null) {
       clearInterval(this.intervalId);
@@ -67,6 +104,12 @@ export class EscalationScheduler {
     }
   }
 
+  /**
+   * Run one inspection pass over the tenant's overdue instances. Lifecycle
+   * actions run in order: delegation revert, expiry (stops further processing
+   * for that instance), SLA breach, escalation. Never throws: read failures and
+   * per-instance errors are logged and skipped.
+   */
   async tick(): Promise<void> {
     this.lastTickAt = this.clock.now();
     const now = this.lastTickAt;
@@ -159,6 +202,11 @@ export class EscalationScheduler {
     }
   }
 
+  /**
+   * Compute the escalation due date as `fromDate` plus `escalationAfterDays`
+   * calendar days. Returns `undefined` for a non-positive day count so the
+   * engine can treat it as "never escalates".
+   */
   static computeEscalationDue(
     escalationAfterDays: number,
     fromDate: Date,
