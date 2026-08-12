@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { RbacAuthorizationPolicy } from '../../../src/plugins/resilience/index.js';
-import type { AuthorizationContext } from '../../../src/engine/IAuthorizationPolicy.js';
+import {
+  RbacAuthorizationPolicy,
+  CompositeAuthorizationPolicy,
+} from '../../../src/plugins/resilience/index.js';
+import type { AuthorizationContext, IAuthorizationPolicy } from '../../../src/engine/IAuthorizationPolicy.js';
+import { ApprovalForbiddenError } from '../../../src/errors.js';
 import { makeInstance } from './_helpers.js';
 
 function authCtx(over: Partial<AuthorizationContext> = {}): AuthorizationContext {
@@ -125,5 +129,127 @@ describe('RbacAuthorizationPolicy — fail-closed provider', () => {
       roleProvider: () => Promise.reject(new Error('down')),
     });
     expect(await policy.authorize(authCtx())).toMatch(/unable to resolve actor roles/);
+  });
+});
+
+describe('CompositeAuthorizationPolicy — AND mode', () => {
+  it('allows when every child allows', async () => {
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'and',
+      policies: [{ authorize: () => undefined }, { authorize: () => undefined }],
+    });
+    expect(await policy.authorize(authCtx())).toBeUndefined();
+  });
+
+  it('short-circuits on the first denial and returns its message', async () => {
+    const called: string[] = [];
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'and',
+      policies: [
+        {
+          authorize: async () => {
+            called.push('first');
+            return 'first denies';
+          },
+        },
+        {
+          authorize: async () => {
+            called.push('second');
+            return 'second denies';
+          },
+        },
+      ],
+    });
+
+    expect(await policy.authorize(authCtx())).toBe('first denies');
+    expect(called).toEqual(['first']);
+  });
+
+  it('allows an empty policy set (vacuous truth)', async () => {
+    const policy = new CompositeAuthorizationPolicy({ mode: 'and', policies: [] });
+    expect(await policy.authorize(authCtx())).toBeUndefined();
+  });
+});
+
+describe('CompositeAuthorizationPolicy — OR mode', () => {
+  it('allows as soon as one child allows, skipping the rest', async () => {
+    const called: string[] = [];
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'or',
+      policies: [
+        {
+          authorize: async () => {
+            called.push('first');
+            return undefined;
+          },
+        },
+        {
+          authorize: async () => {
+            called.push('second');
+            return 'never reached';
+          },
+        },
+      ],
+    });
+
+    expect(await policy.authorize(authCtx())).toBeUndefined();
+    expect(called).toEqual(['first']);
+  });
+
+  it('denies with the LAST denial message when every child denies', async () => {
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'or',
+      policies: [
+        { authorize: () => 'denial one' },
+        { authorize: () => 'denial two' },
+      ],
+    });
+    expect(await policy.authorize(authCtx())).toBe('denial two');
+  });
+
+  it('denies an empty policy set (vacuous falsity) with a clear message', async () => {
+    const policy = new CompositeAuthorizationPolicy({ mode: 'or', policies: [] });
+    expect(await policy.authorize(authCtx())).toMatch(
+      /no authorization policies are configured \(OR composite is vacuously closed\)/,
+    );
+  });
+});
+
+describe('CompositeAuthorizationPolicy — child normalization', () => {
+  it('treats an empty-string denial from a child as allow', async () => {
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'and',
+      policies: [{ authorize: () => '' }],
+    });
+    expect(await policy.authorize(authCtx())).toBeUndefined();
+  });
+
+  it('normalizes a thrown ApprovalForbiddenError to its message', async () => {
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'and',
+      policies: [
+        {
+          authorize: () => {
+            throw new ApprovalForbiddenError('role check failed');
+          },
+        },
+      ],
+    });
+    expect(await policy.authorize(authCtx())).toBe('role check failed');
+  });
+
+  it('propagates non-authorization errors instead of treating them as denials', async () => {
+    const boom = new Error('database down');
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'and',
+      policies: [
+        {
+          authorize: () => {
+            throw boom;
+          },
+        },
+      ],
+    });
+    await expect(policy.authorize(authCtx())).rejects.toBe(boom);
   });
 });
