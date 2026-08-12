@@ -327,6 +327,20 @@ describe('RateLimitMiddleware — token bucket', () => {
     expect(() => mw.before(authCtx())).not.toThrow(); // refilled request succeeds
   });
 
+  it('tracks fractional accrual and only admits a request once a full token exists', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx()); // 1 -> 0, exhausted
+    clock.advance(500); // accrues 0.5 tokens
+
+    expect(mw.peekTokens(authCtx())).toBe(0.5); // fractional balance is observable
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError); // 0.5 < cost 1
+
+    clock.advance(500); // accrues the remaining 0.5 -> exactly 1.0
+    expect(() => mw.before(authCtx())).not.toThrow(); // full token admits the request
+  });
+
   it('clamps refill to capacity (never overfills)', () => {
     const clock = new ManualClock(0);
     const mw = new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 1, clock });
