@@ -393,6 +393,35 @@ describe('RateLimitMiddleware — token bucket', () => {
     mw.before(authCtx()); // 3 -> 0
     expect(() => mw.before(authCtx())).toThrow(/^Busy for user-1:approve$/);
   });
+
+  it('isolates buckets per actor/operation via the default key fn', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx()); // user-1:approve exhausted
+    // A different actor and a different operation each have their own full bucket.
+    expect(() => mw.before(authCtx({ actorId: 'user-2' }))).not.toThrow();
+    expect(() => mw.before(authCtx({ operation: 'cancel' }))).not.toThrow();
+    // The original pair is still exhausted.
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError);
+  });
+
+  it('collapses distinct actors into one shared bucket via a custom keyFn', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({
+      capacity: 1,
+      refillTokensPerSecond: 1,
+      clock,
+      keyFn: () => 'shared-bucket',
+    });
+
+    mw.before(authCtx()); // consumes the shared bucket
+    // A different actor maps to the same key, so it shares the exhaustion.
+    expect(() => mw.before(authCtx({ actorId: 'user-2' }))).toThrow(ApprovalForbiddenError);
+    expect(() => mw.before(authCtx({ actorId: 'user-3' }))).toThrow(
+      /Rate limit exceeded for "shared-bucket"/,
+    );
+  });
 });
 
 describe('LoggingMiddleware — correlation key', () => {
