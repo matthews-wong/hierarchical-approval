@@ -59,6 +59,13 @@ describe('canonicalize', () => {
     expect(canonicalize({ a: Infinity, b: NaN, c: -Infinity })).toBe('{"a":null,"b":null,"c":null}');
   });
 
+  it('normalizes signed zero and renders empty containers deterministically', () => {
+    expect(canonicalize(-0)).toBe('0');
+    expect(canonicalize({})).toBe('{}');
+    expect(canonicalize([])).toBe('[]');
+    expect(canonicalize({ a: -0, b: [] })).toBe('{"a":0,"b":[]}');
+  });
+
   it('throws CircularReferenceError on a cyclic object', () => {
     const o: Record<string, unknown> = { a: 1 };
     o.self = o;
