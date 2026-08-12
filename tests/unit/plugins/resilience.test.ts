@@ -3,11 +3,13 @@ import {
   RbacAuthorizationPolicy,
   CompositeAuthorizationPolicy,
   RateLimitMiddleware,
+  LoggingMiddleware,
+  defaultLoggingCorrelationKeyFn,
 } from '../../../src/plugins/resilience/index.js';
 import type { AuthorizationContext, IAuthorizationPolicy } from '../../../src/engine/IAuthorizationPolicy.js';
 import type { OperationContext } from '../../../src/engine/IOperationMiddleware.js';
-import { ApprovalForbiddenError } from '../../../src/errors.js';
-import { makeInstance, ManualClock } from './_helpers.js';
+import { ApprovalError, ApprovalForbiddenError } from '../../../src/errors.js';
+import { makeInstance, ManualClock, spyLogger } from './_helpers.js';
 
 /** Context valid for both authorization policies and operation middlewares. */
 function authCtx(
@@ -20,6 +22,7 @@ function authCtx(
     opts: {},
     tenantId: 'tenant-1',
     input: {},
+    instanceId: 'inst-1',
     ...over,
   };
 }
@@ -375,5 +378,133 @@ describe('RateLimitMiddleware — token bucket', () => {
 
     mw.before(authCtx()); // 3 -> 0
     expect(() => mw.before(authCtx())).toThrow(/^Busy for user-1:approve$/);
+  });
+});
+
+describe('LoggingMiddleware — correlation key', () => {
+  it('defaults to instanceId ?? operation', () => {
+    expect(defaultLoggingCorrelationKeyFn(authCtx())).toBe('inst-1');
+    expect(
+      defaultLoggingCorrelationKeyFn(authCtx({ operation: 'submit', instanceId: undefined })),
+    ).toBe('submit');
+  });
+
+  it('honors a custom correlationKeyFn', () => {
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({ logger, correlationKeyFn: (ctx) => `tenant:${ctx.tenantId}` });
+    mw.before(authCtx({ instanceId: 'inst-1' }));
+    mw.after(authCtx({ instanceId: 'inst-1' }), makeInstance());
+
+    // Both calls resolved to the same key, so a duration was measured.
+    expect(logger.info.mock.calls[1][1]).toMatchObject({ durationMs: expect.any(Number) });
+  });
+});
+
+describe('LoggingMiddleware — lifecycle logging', () => {
+  it('logs start fields on before and success fields with durationMs on after', () => {
+    const clock = new ManualClock(1_000);
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({ logger, clock });
+
+    mw.before(authCtx());
+    clock.advance(250);
+    mw.after(authCtx(), makeInstance());
+
+    expect(logger.info.mock.calls[0]).toEqual([
+      'operation.start',
+      {
+        operation: 'approve',
+        actorId: 'user-1',
+        tenantId: 'tenant-1',
+        instanceId: 'inst-1',
+      },
+    ]);
+    expect(logger.info.mock.calls[1]).toEqual([
+      'operation.success',
+      {
+        operation: 'approve',
+        actorId: 'user-1',
+        tenantId: 'tenant-1',
+        instanceId: 'inst-1',
+        durationMs: 250,
+      },
+    ]);
+  });
+
+  it('logs the error code and name on onError without suppressing the error', () => {
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({ logger });
+    const err = new ApprovalError('denied', 'FORBIDDEN');
+    const ctx = authCtx();
+
+    expect(() => mw.onError(ctx, err)).not.toThrow();
+    expect(logger.error.mock.calls[0][0]).toBe('operation.error');
+    expect(logger.error.mock.calls[0][2]).toMatchObject({
+      errorCode: 'FORBIDDEN',
+      errorName: 'ApprovalError',
+      durationMs: null, // before never ran
+    });
+  });
+
+  it('reports null rather than NaN when before never ran for the key', () => {
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({ logger });
+
+    mw.after(authCtx(), makeInstance());
+
+    expect(logger.info.mock.calls[0][1]).toMatchObject({ durationMs: null });
+  });
+
+  it('honors custom start/success/error messages', () => {
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({
+      logger,
+      startMessage: 'wf.start',
+      successMessage: 'wf.ok',
+      errorMessage: 'wf.ko',
+    });
+
+    mw.before(authCtx());
+    mw.after(authCtx(), makeInstance());
+    mw.onError(authCtx(), new ApprovalError('x', 'VALIDATION'));
+
+    expect(logger.info.mock.calls[0][0]).toBe('wf.start');
+    expect(logger.info.mock.calls[1][0]).toBe('wf.ok');
+    expect(logger.error.mock.calls[0][0]).toBe('wf.ko');
+  });
+});
+
+describe('LoggingMiddleware — overlapping operations (LIFO pairing)', () => {
+  it('pairs after with the most recent start under the same key', () => {
+    const clock = new ManualClock(0);
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({ logger, clock });
+    // Two concurrent submits share the key 'submit' (no instanceId).
+    const ctx = authCtx({ operation: 'submit', instanceId: undefined });
+
+    mw.before(ctx);
+    clock.advance(100);
+    mw.before(ctx);
+    clock.advance(100);
+    mw.after(ctx, makeInstance()); // pairs with the SECOND start -> 100ms
+
+    expect(logger.info.mock.calls[2][1]).toMatchObject({ durationMs: 100 });
+
+    clock.advance(100);
+    mw.after(ctx, makeInstance()); // pairs with the FIRST start -> 300ms
+    expect(logger.info.mock.calls[3][1]).toMatchObject({ durationMs: 300 });
+  });
+
+  it('cleans up the key after the last in-flight start is consumed', () => {
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({ logger });
+    const ctx = authCtx({ instanceId: undefined });
+
+    mw.before(ctx);
+    mw.after(ctx, makeInstance());
+    // A subsequent onError with no pending start must not throw or pair.
+    mw.onError(ctx, new ApprovalError('x', 'VALIDATION'));
+
+    expect(logger.error.mock.calls[0][2]).toMatchObject({ durationMs: null });
   });
 });
