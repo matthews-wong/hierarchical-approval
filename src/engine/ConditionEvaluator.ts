@@ -15,8 +15,16 @@ const operatorRegistry = new Map<string, ConditionOperatorFn>([
   ['not_in', (a, e) => Array.isArray(e) && !e.includes(a)],
 ]);
 
+// Names reserved at module load so built-ins can never be shadowed by a custom operator.
+const builtinOperatorNames = new Set(operatorRegistry.keys());
+
 /** Register a custom condition operator globally. Throws if the name is already taken by a built-in. */
 export function registerConditionOperator(name: string, fn: ConditionOperatorFn): void {
+  if (builtinOperatorNames.has(name)) {
+    throw new ApprovalValidationError(
+      `Condition operator "${name}" is a built-in and cannot be overridden. Choose a different name.`,
+    );
+  }
   operatorRegistry.set(name, fn);
 }
 

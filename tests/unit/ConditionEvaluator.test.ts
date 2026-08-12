@@ -175,4 +175,10 @@ describe('ConditionEvaluator', () => {
     expect(evaluateConditions(rules, { dept: 'engineering' }).addLevels).toHaveLength(1);
     expect(evaluateConditions(rules, { dept: 'sales' }).addLevels).toHaveLength(0);
   });
+
+  it('registerConditionOperator refuses to shadow a built-in operator', () => {
+    expect(() => registerConditionOperator('>', () => true)).toThrow(
+      /is a built-in and cannot be overridden/,
+    );
+  });
 });
