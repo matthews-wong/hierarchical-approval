@@ -53,6 +53,19 @@ describe('TemplateRegistry', () => {
     expect(updated.createdAt).toBeInstanceOf(Date);
   });
 
+  it('update preserves the original createdAt rather than stamping a new one', async () => {
+    const registry = new TemplateRegistry(new MemoryAdapter(), 't1');
+    await registry.define(config);
+    const original = await registry.get('purchase');
+    const originalCreatedAt = original.createdAt.getTime();
+
+    await registry.update(config);
+    const updated = await registry.get('purchase');
+
+    // Version churn must not rewrite the audit trail: createdAt stays put.
+    expect(updated.createdAt.getTime()).toBe(originalCreatedAt);
+  });
+
   it('update throws ApprovalTemplateNotFoundError for an unknown template', async () => {
     const registry = new TemplateRegistry(new MemoryAdapter(), 't1');
     await expect(registry.update(config)).rejects.toThrow(ApprovalTemplateNotFoundError);
