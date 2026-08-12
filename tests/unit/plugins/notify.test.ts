@@ -353,6 +353,44 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect(transport).not.toHaveBeenCalled();
   });
 
+  it('counts a delivery as delivered even when store.remove fails (at-least-once)', async () => {
+    const clock = new ManualClock(0);
+    const logger = spyLogger();
+    const transport = vi.fn(async () => {});
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [
+        {
+          id: 'r1',
+          partitionKey: 'tenant-1:inst-1',
+          tenantId: 'tenant-1',
+          event: makeEvent(),
+          status: 'pending',
+          attempts: 0,
+          nextAttemptAt: 0,
+          enqueuedAt: 0,
+        },
+      ],
+      update: async () => {},
+      remove: async () => {
+        throw new Error('remove fail');
+      },
+      pending: async () => [],
+      deadLettered: async () => [],
+    };
+    const adapter = new OutboxNotificationAdapter({ transport, store, clock, logger });
+
+    // Delivery reached the transport, so the record counts as delivered even
+    // though cleanup failed — a later drain may redeliver (documented trade-off).
+    expect(await adapter.drain()).toBe(1);
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      'OutboxNotificationAdapter: delivered but failed to remove record',
+      expect.any(Error),
+      expect.objectContaining({ id: 'r1', tenantId: 'tenant-1' }),
+    );
+  });
+
   it('pending() read error is logged and returns []', async () => {
     const logger = spyLogger();
     const store: IOutboxStore = {
