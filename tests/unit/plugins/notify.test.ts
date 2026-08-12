@@ -340,6 +340,26 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect(await adapter.pending()).toEqual([]);
     expect(logger.error).toHaveBeenCalled();
   });
+
+  it('deadLettered() read error is logged and returns [] (never throws)', async () => {
+    const logger = spyLogger();
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [],
+      update: async () => {},
+      remove: async () => {},
+      pending: async () => [],
+      deadLettered: async () => {
+        throw new Error('dead-letter read fail');
+      },
+    };
+    const adapter = new OutboxNotificationAdapter({ transport: () => {}, store, logger });
+    expect(await adapter.deadLettered()).toEqual([]);
+    expect(logger.error).toHaveBeenCalledWith(
+      'OutboxNotificationAdapter: failed to read dead-lettered records',
+      expect.any(Error),
+    );
+  });
 });
 
 describe('CompositeNotificationAdapter', () => {
