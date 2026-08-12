@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateConditions } from '../../src/engine/ConditionEvaluator.js';
+import {
+  evaluateConditions,
+  registerConditionOperator,
+} from '../../src/engine/ConditionEvaluator.js';
 import type { ConditionRule } from '../../src/types/index.js';
 
 describe('ConditionEvaluator', () => {
@@ -145,5 +148,31 @@ describe('ConditionEvaluator', () => {
     ];
     expect(evaluateConditions(neqRule, { dept: 'engineering' }).addLevels).toHaveLength(1);
     expect(evaluateConditions(neqRule, { dept: 'finance' }).addLevels).toHaveLength(0);
+  });
+
+  it('== matches identical primitive values', () => {
+    const rules: ConditionRule[] = [
+      { when: { field: 'code', operator: '==', value: 100 }, addLevels: [extraLevel] },
+    ];
+    expect(evaluateConditions(rules, { code: 100 }).addLevels).toHaveLength(1);
+  });
+
+  it('== does not coerce between string and number', () => {
+    const rules: ConditionRule[] = [
+      { when: { field: 'code', operator: '==', value: 100 }, addLevels: [extraLevel] },
+    ];
+    expect(evaluateConditions(rules, { code: '100' }).addLevels).toHaveLength(0);
+  });
+
+  it('a custom operator registered with registerConditionOperator is applied', () => {
+    registerConditionOperator(
+      'starts_with',
+      (actual, expected) => typeof actual === 'string' && actual.startsWith(String(expected)),
+    );
+    const rules: ConditionRule[] = [
+      { when: { field: 'dept', operator: 'starts_with', value: 'eng' }, addLevels: [extraLevel] },
+    ];
+    expect(evaluateConditions(rules, { dept: 'engineering' }).addLevels).toHaveLength(1);
+    expect(evaluateConditions(rules, { dept: 'sales' }).addLevels).toHaveLength(0);
   });
 });
