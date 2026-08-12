@@ -324,6 +324,35 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect(logger.error).toHaveBeenCalled();
   });
 
+  it('skips stale non-pending records handed back by the store (defensive guard)', async () => {
+    const clock = new ManualClock(0);
+    const transport = vi.fn(async () => {});
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [
+        {
+          id: 'stale',
+          partitionKey: 'tenant-1:inst-1',
+          tenantId: 'tenant-1',
+          event: makeEvent(),
+          status: 'dead',
+          attempts: 3,
+          nextAttemptAt: 0,
+          enqueuedAt: 0,
+        },
+      ],
+      update: async () => {},
+      remove: async () => {},
+      pending: async () => [],
+      deadLettered: async () => [],
+    };
+    const adapter = new OutboxNotificationAdapter({ transport, store, clock });
+    // The record is due (nextAttemptAt 0 <= now) but no longer pending: the
+    // adapter must not attempt delivery nor touch the transport.
+    expect(await adapter.drain()).toBe(0);
+    expect(transport).not.toHaveBeenCalled();
+  });
+
   it('pending() read error is logged and returns []', async () => {
     const logger = spyLogger();
     const store: IOutboxStore = {
