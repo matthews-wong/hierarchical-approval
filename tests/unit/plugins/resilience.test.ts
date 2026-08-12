@@ -550,4 +550,16 @@ describe('LoggingMiddleware — overlapping operations (LIFO pairing)', () => {
 
     expect(logger.error.mock.calls[0][2]).toMatchObject({ durationMs: null });
   });
+
+  it('clamps a backwards-moving clock to a zero duration instead of a negative one', () => {
+    const clock = new ManualClock(1_000);
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({ logger, clock });
+
+    mw.before(authCtx());
+    clock.advance(-500); // operation finishes before it started (clock skew)
+    mw.after(authCtx(), makeInstance());
+
+    expect(logger.info.mock.calls[1][1]).toMatchObject({ durationMs: 0 });
+  });
 });
