@@ -75,6 +75,30 @@ describe('canonicalize', () => {
     const shared = { x: 1 };
     expect(() => canonicalize({ a: shared, b: shared })).not.toThrow();
   });
+
+  it('correctly canonicalizes primitives and empty structures', () => {
+    expect(canonicalize(true)).toBe('true');
+    expect(canonicalize(false)).toBe('false');
+    expect(canonicalize(0)).toBe('0');
+    expect(canonicalize('hello "world"')).toBe('"hello \\"world\\""');
+    expect(canonicalize({})).toBe('{}');
+    expect(canonicalize([])).toBe('[]');
+    expect(canonicalize({ a: [], b: {} })).toBe('{"a":[],"b":{}}');
+  });
+
+  it('includes path and sets name on CircularReferenceError', () => {
+    const obj: Record<string, unknown> = { nested: {} };
+    (obj.nested as Record<string, unknown>).self = obj;
+    try {
+      canonicalize(obj);
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(CircularReferenceError);
+      const e = err as CircularReferenceError;
+      expect(e.name).toBe('CircularReferenceError');
+      expect(e.message).toContain('$.nested.self');
+    }
+  });
 });
 
 describe('HashChainAuditAdapter — basic chaining', () => {
