@@ -55,13 +55,31 @@ describe('isLevelApproved', () => {
     ).toBe(false);
   });
 
-  it('quorum — throws when minApprovals is invalid or exceeds approvers', () => {
+  it('quorum — throws when minApprovals is not an integer or negative or NaN', () => {
     expect(() => isLevelApproved(makeLevel('quorum', ['a', 'b'], [], []))).toThrow(
       /positive integer/,
     );
     expect(() =>
+      isLevelApproved(makeLevel('quorum', ['a', 'b'], [], [], { minApprovals: 1.5 })),
+    ).toThrow(/positive integer/);
+    expect(() =>
+      isLevelApproved(makeLevel('quorum', ['a', 'b'], [], [], { minApprovals: -1 })),
+    ).toThrow(/positive integer/);
+    expect(() =>
+      isLevelApproved(makeLevel('quorum', ['a', 'b'], [], [], { minApprovals: 0 })),
+    ).toThrow(/positive integer/);
+    expect(() =>
       isLevelApproved(makeLevel('quorum', ['a', 'b'], [], [], { minApprovals: 3 })),
     ).toThrow(/only 2 approver/);
+  });
+
+  it('weighted — throws when threshold is negative or 0 or exceeds total weight', () => {
+    expect(() =>
+      isLevelApproved(makeLevel('weighted', ['a', 'b'], [], [], { threshold: 0 })),
+    ).toThrow(/positive number/);
+    expect(() =>
+      isLevelApproved(makeLevel('weighted', ['a', 'b'], [], [], { threshold: -2 })),
+    ).toThrow(/positive number/);
   });
 
   it('weighted — approved when cumulative approved weight meets threshold', () => {
