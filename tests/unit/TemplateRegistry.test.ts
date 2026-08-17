@@ -69,4 +69,20 @@ describe('TemplateRegistry', () => {
     await new TemplateRegistry(adapter, 't2').define({ ...config, name: 'travel' });
     await expect(new TemplateRegistry(adapter, 't1').list()).resolves.toHaveLength(1);
   });
+
+  it('update defaults version to 2 when existing.version is undefined', async () => {
+    const adapter = new MemoryAdapter();
+    const registry = new TemplateRegistry(adapter, 't1');
+    const firstId = await registry.define(config);
+    // Manually corrupt version in storage to undefined
+    const existing = await adapter.getTemplate('t1', 'purchase');
+    if (existing) {
+      delete (existing as any).version;
+      await adapter.saveTemplate(existing);
+    }
+    const secondId = await registry.update(config);
+    const updated = await registry.get('purchase');
+    expect(updated.version).toBe(2);
+    expect(updated.previousVersionId).toBe(firstId);
+  });
 });
