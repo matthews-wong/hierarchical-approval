@@ -27,6 +27,20 @@ describe('weekendCalendar', () => {
     const result = cal.addBusinessDays(monday, 1);
     expect(result.getDate()).toBe(24);
   });
+        
+  it('skips consecutive holidays', () => {
+    const cal = weekendCalendar({
+      weekendDays: [5, 6],
+      holidays: [
+        new Date('2026-06-23T00:00:00'), // Tue
+        new Date('2026-06-24T00:00:00') // Wed
+      ]
+    });
+    // Monday 2026-06-22 + 1 business day: Tue is weekend AND holiday -> skip to Thu 06-25
+    const monday = new Date('2026-06-22T09:00:00');
+    const result = cal.addBusinessDays(monday, 1);
+    expect(result.getDate()).toBe(25);
+  });
 
   it('supports custom weekend days (Fri/Sat)', () => {
     const cal = weekendCalendar({ weekendDays: [5, 6] });
@@ -74,5 +88,13 @@ describe('weekendCalendar', () => {
     const cal = weekendCalendar();
     const d = new Date('2026-06-22T09:00:00');
     expect(cal.addBusinessDays(d, Number.NaN).getTime()).toBe(d.getTime());
+  });
+
+  it('returns a fresh Date instance rather than mutating or referencing the input', () => {
+    const cal = weekendCalendar();
+    const d = new Date('2026-06-22T09:00:00');
+    const result = cal.addBusinessDays(d, 0);
+    expect(result).not.toBe(d);
+    expect(result.getTime()).toBe(d.getTime());
   });
 });
