@@ -29,6 +29,23 @@ describe('ConditionEvaluator', () => {
     const result = evaluateConditions(rules, { amount: 5000 });
     expect(result.addLevels).toHaveLength(0);
   });
+        
+  it('ignores conditions with non-existent fields in context', () => {
+    const rules: ConditionRule[] = [
+      { when: { field: 'nonExistentField', operator: '==', value: 'someValue' }, addLevels: [extraLevel] },
+    ];
+    const result = evaluateConditions(rules, {});
+    expect(result.addLevels).toHaveLength(0);
+  });
+        
+  it('handles undefined values in context safely', () => {
+    const rules: ConditionRule[] = [
+      { when: { field: 'amount', operator: '>', value: 5000 }, addLevels: [extraLevel] },
+    ];
+    // Test when 'amount' is explicitly undefined
+    const result = evaluateConditions(rules, { amount: undefined });
+    expect(result.addLevels).toHaveLength(0);
+  });
 
   it('skips levels by number', () => {
     const rules: ConditionRule[] = [
