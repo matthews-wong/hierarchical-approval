@@ -99,4 +99,17 @@ describe('LevelResolver', () => {
       resolver.resolveApprovers(approvers, 'submitter', {}, orgProvider),
     ).rejects.toThrow(/No approvers resolved for this level/);
   });
+
+  it('custom type passes orgProvider to context', async () => {
+    const resolver = new LevelResolver();
+    const mockOrg = makeOrgProvider();
+    let passedOrg: OrgProvider | undefined;
+    resolver.registerApproverType('custom', (config, ctx) => {
+      passedOrg = ctx.orgProvider;
+      return ['u1'];
+    });
+    const approvers: ApproverConfig[] = [{ type: 'custom' }];
+    await resolver.resolveApprovers(approvers, 'submitter', {}, mockOrg);
+    expect(passedOrg).toBe(mockOrg);
+  });
 });
