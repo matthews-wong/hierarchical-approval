@@ -1,3 +1,3 @@
-# DevOps CI Workflow
+## DevOps CI Workflow
 
-A minimal CI workflow implementation using GitHub Actions for automated testing and deployment.
+A basic GitHub Actions workflow for continuous integration, currently echoing the event ref to demonstrate functionality.
