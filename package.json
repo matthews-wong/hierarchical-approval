@@ -1,0 +1,149 @@
+{
+  "name": "hierarchical-approval",
+  "version": "0.5.0",
+  "description": "TypeScript-first hierarchical approval engine for ERP developers",
+  "keywords": [
+    "approval",
+    "approval-workflow",
+    "approval-chain",
+    "multi-level-approval",
+    "workflow",
+    "workflow-engine",
+    "maker-checker",
+    "four-eyes",
+    "segregation-of-duties",
+    "delegation",
+    "escalation",
+    "audit-trail",
+    "state-machine",
+    "erp",
+    "hierarchical",
+    "approvals",
+    "nestjs",
+    "postgres",
+    "typescript"
+  ],
+  "author": "Matthews Wong <matthews.wong@commsult.id>",
+  "license": "MIT",
+  "homepage": "https://hierarchical-approval.matthewswong.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/matthews-wong/hierarchical-approval.git"
+  },
+  "bugs": {
+    "url": "https://github.com/matthews-wong/hierarchical-approval/issues"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "provenance": true,
+    "access": "public"
+  },
+  "main": "./dist/index.cjs",
+  "type": "module",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./adapters/memory": {
+      "types": "./dist/adapters/MemoryAdapter.d.ts",
+      "import": "./dist/adapters/MemoryAdapter.js",
+      "require": "./dist/adapters/MemoryAdapter.cjs"
+    },
+    "./adapters/postgres": {
+      "types": "./dist/adapters/PostgresAdapter.d.ts",
+      "import": "./dist/adapters/PostgresAdapter.js",
+      "require": "./dist/adapters/PostgresAdapter.cjs"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "require": "./dist/testing.cjs"
+    },
+    "./nestjs": {
+      "types": "./dist/nestjs.d.ts",
+      "import": "./dist/nestjs.js",
+      "require": "./dist/nestjs.cjs"
+    },
+    "./plugins/audit": {
+      "types": "./dist/plugins/audit.d.ts",
+      "import": "./dist/plugins/audit.js",
+      "require": "./dist/plugins/audit.cjs"
+    },
+    "./plugins/metrics": {
+      "types": "./dist/plugins/metrics.d.ts",
+      "import": "./dist/plugins/metrics.js",
+      "require": "./dist/plugins/metrics.cjs"
+    },
+    "./plugins/notify": {
+      "types": "./dist/plugins/notify.d.ts",
+      "import": "./dist/plugins/notify.js",
+      "require": "./dist/plugins/notify.cjs"
+    },
+    "./plugins/resilience": {
+      "types": "./dist/plugins/resilience.d.ts",
+      "import": "./dist/plugins/resilience.js",
+      "require": "./dist/plugins/resilience.cjs"
+    },
+    "./plugins/tracing": {
+      "types": "./dist/plugins/tracing.d.ts",
+      "import": "./dist/plugins/tracing.js",
+      "require": "./dist/plugins/tracing.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src tests",
+    "format": "prettier --write src tests",
+    "typecheck": "tsc --noEmit",
+    "docs": "typedoc",
+    "docs:watch": "typedoc --watch"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/testing": "^11.1.28",
+    "@types/pg": "^8.20.0",
+    "@typescript-eslint/eslint-plugin": "^8.61.1",
+    "@typescript-eslint/parser": "^8.61.1",
+    "@vitest/coverage-v8": "^4.1.9",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.4",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "tsup": "^8.5.1",
+    "typedoc": "^0.28.20",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "eventemitter3": "^5.0.4",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "pg": ">=8",
+    "@nestjs/common": ">=10"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": true
+    },
+    "@nestjs/common": {
+      "optional": true
+    }
+  }
+}

@@ -1,0 +1,58 @@
+name: Feature request
+description: Suggest a capability or improvement
+title: '[Feature]: '
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! This library aims to stay a focused approval engine
+        (no BPMN, no external infrastructure). The clearest requests describe the
+        **ERP workflow** you're modeling, not just the API you'd like.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the approval scenario and why the current API doesn't cover it.
+      placeholder: We need approvers to be skipped automatically when they are the document's submitter.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would the API or behavior look like? A code sketch helps.
+      render: typescript
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing workarounds (custom adapter, middleware, condition operator) you've tried or ruled out.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area does this touch?
+      options:
+        - Engine / state machine
+        - Storage adapter
+        - Audit
+        - Metrics
+        - Notifications
+        - Resilience (rate limit / RBAC / logging)
+        - Tracing
+        - Docs / examples
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This can be achieved without editing the engine core (via an adapter/middleware) — or I've explained why it can't.
+          required: false

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "hierarchical-approval",
+  "entryPoints": [
+    "src/index.ts",
+    "src/adapters/MemoryAdapter.ts",
+    "src/adapters/PostgresAdapter.ts",
+    "src/testing/ApprovalTestKit.ts",
+    "src/nestjs/index.ts",
+    "src/plugins/audit/index.ts",
+    "src/plugins/metrics/index.ts",
+    "src/plugins/notify/index.ts",
+    "src/plugins/resilience/index.ts",
+    "src/plugins/tracing/index.ts"
+  ],
+  "out": "docs",
+  "tsconfig": "tsconfig.json",
+  "readme": "README.md",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "includeVersion": true,
+  "categorizeByGroup": true,
+  "navigationLinks": {
+    "GitHub": "https://github.com/matthews-wong/hierarchical-approval",
+    "npm": "https://www.npmjs.com/package/hierarchical-approval"
+  },
+  "intentionallyNotExported": [
+    "SubmitOptionsSchema",
+    "ApproveOptionsSchema",
+    "RejectOptionsSchema",
+    "DelegateOptionsSchema",
+    "ReassignOptionsSchema",
+    "CancelOptionsSchema",
+    "EscalateOptionsSchema",
+    "ResubmitOptionsSchema",
+    "AddCommentOptionsSchema",
+    "OverrideOptionsSchema"
+  ],
+  "externalSymbolLinkMappings": {
+    "typescript": {
+      "PromiseConstructor.allSettled": "https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise/allSettled"
+    }
+  },
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "rewrittenLink": true,
+    "notDocumented": false,
+    "unusedMergeModuleWith": true
+  },
+  "treatWarningsAsErrors": false
+}
