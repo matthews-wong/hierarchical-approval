@@ -112,4 +112,12 @@ describe('LevelResolver', () => {
     await resolver.resolveApprovers(approvers, 'submitter', {}, mockOrg);
     expect(passedOrg).toBe(mockOrg);
   });
+
+  it('supports synchronous approver resolvers and returns deduped list', async () => {
+    const resolver = new LevelResolver();
+    resolver.registerApproverType('sync_type', (_config, _ctx) => ['u1', 'u2', 'u1']);
+    const approvers: ApproverConfig[] = [{ type: 'sync_type' }];
+    const result = await resolver.resolveApprovers(approvers, 'user-1', {});
+    expect(result).toEqual(['u1', 'u2']);
+  });
 });
