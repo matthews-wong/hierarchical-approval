@@ -98,3 +98,9 @@ describe('weekendCalendar', () => {
     expect(result.getTime()).toBe(d.getTime());
   });
 });
+
+    it('handles Thanksgiving as a non-working day in November', () => {
+      const calendar = new BusinessCalendar();
+      const thanksgiving = new Date('2026-11-27T00:00:00.000Z');
+      expect(calendar.isWorkingDay(thanksgiving)).toBe(false);
+    });
