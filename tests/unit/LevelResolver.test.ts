@@ -121,3 +121,6 @@ describe('LevelResolver', () => {
     expect(result).toEqual(['u1', 'u2']);
   });
 });
+
+
+    it(throws
