@@ -124,3 +124,10 @@ describe('LevelResolver', () => {
 
 
     it(throws
+    it('throws when resolver returns a non-array value', async () => {
+      const resolver = new LevelResolver();
+      const mockResolver = vi.fn().mockResolvedValue('invalid');
+      resolver.register('invalid-type', mockResolver);
+      const approvers: ApproverConfig[] = [{ type: 'dynamic', resolver: 'invalid-type' }];
+      await expect(resolver.resolveApprovers(approvers, 'submitter', {})).rejects.toThrow(/array/);
+    });
