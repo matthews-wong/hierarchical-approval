@@ -256,3 +256,8 @@ describe('state guards', () => {
     expect(hasAlreadyActed(level, 'carol')).toBe(false);
   });
 });
+
+    it('majority — rejected when more than half reject', () => {
+      expect(isLevelRejected(makeLevel('majority', ['a', 'b', 'c'], [], ['a', 'b']))).toBe(true);
+      expect(isLevelRejected(makeLevel('majority', ['a', 'b', 'c'], [], ['a']))).toBe(false);
+    });
