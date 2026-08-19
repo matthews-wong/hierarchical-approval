@@ -99,4 +99,35 @@ describe('LevelResolver', () => {
       resolver.resolveApprovers(approvers, 'submitter', {}, orgProvider),
     ).rejects.toThrow(/No approvers resolved for this level/);
   });
+
+  it('custom type passes orgProvider to context', async () => {
+    const resolver = new LevelResolver();
+    const mockOrg = makeOrgProvider();
+    let passedOrg: OrgProvider | undefined;
+    resolver.registerApproverType('custom', (config, ctx) => {
+      passedOrg = ctx.orgProvider;
+      return ['u1'];
+    });
+    const approvers: ApproverConfig[] = [{ type: 'custom' }];
+    await resolver.resolveApprovers(approvers, 'submitter', {}, mockOrg);
+    expect(passedOrg).toBe(mockOrg);
+  });
+
+  it('supports synchronous approver resolvers and returns deduped list', async () => {
+    const resolver = new LevelResolver();
+    resolver.registerApproverType('sync_type', (_config, _ctx) => ['u1', 'u2', 'u1']);
+    const approvers: ApproverConfig[] = [{ type: 'sync_type' }];
+    const result = await resolver.resolveApprovers(approvers, 'user-1', {});
+    expect(result).toEqual(['u1', 'u2']);
+  });
 });
+
+
+    it(throws
+    it('throws when resolver returns a non-array value', async () => {
+      const resolver = new LevelResolver();
+      const mockResolver = vi.fn().mockResolvedValue('invalid');
+      resolver.register('invalid-type', mockResolver);
+      const approvers: ApproverConfig[] = [{ type: 'dynamic', resolver: 'invalid-type' }];
+      await expect(resolver.resolveApprovers(approvers, 'submitter', {})).rejects.toThrow(/array/);
+    });

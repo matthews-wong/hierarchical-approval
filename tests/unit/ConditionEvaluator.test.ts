@@ -199,3 +199,11 @@ describe('ConditionEvaluator', () => {
     );
   });
 });
+
+    it('ignores conditions with deeply nested missing segments', () => {
+      const rules: ConditionRule[] = [
+        { when: { field: 'vendor.distributor.country', operator: '==', value: 'US' }, addLevels: [extraLevel] },
+      ];
+      expect(evaluateConditions(rules, { vendor: {} }).addLevels).toHaveLength(0);
+      expect(() => evaluateConditions(rules, { vendor: { distributor: { city: 'NYC' } } })).not.toThrow();
+    });

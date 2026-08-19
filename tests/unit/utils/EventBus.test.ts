@@ -101,4 +101,20 @@ describe('EventBus', () => {
 
     expect(() => bus.emit('approval:submitted', submittedEvent())).not.toThrow();
   });
+
+  it('emit delivers arbitrary extra properties on strongly typed event payloads', () => {
+    const bus = new EventBus();
+    const listener = vi.fn();
+    bus.on('approval:submitted', listener);
+
+    const payload = submittedEvent({ submittedBy: 'custom-user' });
+    bus.emit('approval:submitted', payload);
+
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        instanceId: 'inst-1',
+        submittedBy: 'custom-user',
+      }),
+    );
+  });
 });
