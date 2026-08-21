@@ -34,7 +34,10 @@ jobs:
         run: npm test
 
       - name: Audit (block on high/critical CVEs)
-        run: npm audit --audit-level=high || true
+        # Was `|| true`, which made this gate decorative. Scoping to runtime
+        # deps removes the false positives that motivated that instead, so a real
+        # advisory in a shipped dependency now fails the build.
+        run: npm audit --audit-level=high --omit=dev
 
       - name: Build
         run: npm run build

@@ -47,8 +47,13 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Audit (block on high/critical CVEs)
-        run: npm audit --audit-level=high
+      - name: Audit production dependencies (block on high/critical CVEs)
+        # Scoped with --omit=dev deliberately. This package ships only `dist` and
+        # has just two runtime deps, so an advisory in the vitest/tsup/esbuild dev
+        # chain cannot reach a consumer and must not block a release — that has
+        # already happened twice. A high/critical advisory in a RUNTIME dependency
+        # still fails this step.
+        run: npm audit --audit-level=high --omit=dev
 
       - name: Build
         run: npm run build
