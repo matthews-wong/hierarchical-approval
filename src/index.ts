@@ -7,6 +7,7 @@ export type {
   PreviewResult,
   BulkResult,
   ApprovalStatistics,
+  CycleTimeStats,
   HealthResult,
   RetryPolicy,
   IdempotencyKeyFn,
