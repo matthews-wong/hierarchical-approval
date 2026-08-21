@@ -5,6 +5,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.6.0] - 2026-08-21
+
 ### Fixed — event delivery, template reads, and the CI lint gate
 
 - **A throwing `engine.on()` listener no longer breaks the operation that emitted
