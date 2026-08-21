@@ -51,6 +51,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     satisfied by the global `fetch` (Node.js 18+); pass a custom `httpClient`
     to use a different implementation.
 
+### Added — `plugins/scheduler`, and the `schedulerAdapter` option now works
+
+- **`hierarchical-approval/plugins/scheduler`** — ships `InMemorySchedulerAdapter`,
+  the first reference implementation of the `ISchedulerAdapter` port, which until
+  now was exported from the package root with no implementation anywhere to copy.
+- **`ApprovalEngineOptions.schedulerAdapter` was a no-op.** It was declared and
+  documented as "Replaces built-in setInterval polling", but `scheduleAt` and
+  `cancel` were never called — an injected BullMQ/Temporal/cron scheduler was
+  silently ignored while the built-in poller kept running. When supplied it now
+  drives the periodic scan via self-rescheduling one-shot calls. Default
+  behaviour with no option supplied is unchanged.
+
 ### Fixed — `PostgresAdapter`
 
 Three defects affecting users on published `0.5.0`. If you use `PostgresAdapter`,
@@ -79,6 +91,11 @@ upgrading is recommended.
   `/^[a-z][a-z0-9_]*$/` pattern as `tablePrefix`, throwing
   `ApprovalValidationError` on an invalid value. No migration needed; only
   affects adapter construction with an attacker-controlled `schema` value.
+
+### Fixed — `MemoryAdapter` and notifications
+
+- **`TemplatedNotificationAdapter`** — now logs fatal events (notification render/send failures) at the `fatal` level instead of `error`.
+- **`MemoryAdapter`** — `getInstancesByFilter` now honors `fromDate`/`toDate` (previously the JSON-cloned string dates made the comparison a no-op and both bounds silently matched nothing). `getTemplate`/`listTemplates` now return `createdAt` as a real `Date`, matching the `ApprovalTemplate` contract.
 
 ## [0.5.0] - 2026-07-23
 

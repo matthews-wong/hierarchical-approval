@@ -60,7 +60,7 @@ export interface IStorageAdapter {
     filter: InstanceFilter,
     opts: CursorPaginationOpts,
   ): Promise<CursorPaginatedResult<ApprovalInstance>>;
-  getOverdueInstances(tenantId: string, asOf: Date): Promise<ApprovalInstance[]>;
+  getOverdueInstances(tenantId: string, asOf: Date, filter?: InstanceFilter): Promise<ApprovalInstance[]>;
   getIdempotentInstance(
     tenantId: string,
     idempotencyKey: string,

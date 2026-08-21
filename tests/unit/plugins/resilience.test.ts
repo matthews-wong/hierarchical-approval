@@ -1,479 +1,510 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
-  RateLimitMiddleware,
-  defaultRateLimitKeyFn,
-  LoggingMiddleware,
-  defaultLoggingCorrelationKeyFn,
   RbacAuthorizationPolicy,
   CompositeAuthorizationPolicy,
+  RateLimitMiddleware,
+  LoggingMiddleware,
+  defaultLoggingCorrelationKeyFn,
 } from '../../../src/plugins/resilience/index.js';
-import { ApprovalForbiddenError, ApprovalError } from '../../../src/errors.js';
-import type { OperationContext } from '../../../src/engine/IOperationMiddleware.js';
 import type { AuthorizationContext } from '../../../src/engine/IAuthorizationPolicy.js';
-import type { IAuthorizationPolicy } from '../../../src/engine/IAuthorizationPolicy.js';
-import { ManualClock, spyLogger, makeInstance } from './_helpers.js';
+import type { OperationContext } from '../../../src/engine/IOperationMiddleware.js';
+import { ApprovalError, ApprovalForbiddenError } from '../../../src/errors.js';
+import { makeInstance, ManualClock, spyLogger } from './_helpers.js';
 
-function opCtx(over: Partial<OperationContext> = {}): OperationContext {
-  return {
-    operation: 'approve',
-    tenantId: 'tenant-1',
-    actorId: 'user-1',
-    instanceId: 'inst-1',
-    input: {},
-    ...over,
-  };
-}
-
-function authCtx(over: Partial<AuthorizationContext> = {}): AuthorizationContext {
+/** Context valid for both authorization policies and operation middlewares. */
+function authCtx(
+  over: Partial<AuthorizationContext> & Partial<OperationContext> = {},
+): AuthorizationContext & OperationContext {
   return {
     operation: 'approve',
     actorId: 'user-1',
     instance: makeInstance(),
     opts: {},
+    tenantId: 'tenant-1',
+    input: {},
+    instanceId: 'inst-1',
     ...over,
   };
 }
 
-describe('RateLimitMiddleware — construction', () => {
-  it('rejects non-positive capacity', () => {
-    expect(() => new RateLimitMiddleware({ capacity: 0, refillTokensPerSecond: 1 })).toThrow(/capacity/);
+describe('RbacAuthorizationPolicy — default modes', () => {
+  it('denies an operation with no configured rule under default-deny', async () => {
+    const policy = new RbacAuthorizationPolicy({
+      rules: {},
+      roleProvider: () => ['approver'],
+    });
+    const denial = await policy.authorize(authCtx({ operation: 'escalate' }));
+
+    expect(denial).toMatch(/no authorization rule is configured \(default-deny\)/);
   });
-  it('rejects negative refill rate', () => {
-    expect(() => new RateLimitMiddleware({ capacity: 5, refillTokensPerSecond: -1 })).toThrow(/refill/);
+
+  it('allows an operation with no configured rule under default-allow', async () => {
+    const policy = new RbacAuthorizationPolicy({
+      rules: {},
+      defaultMode: 'allow',
+      roleProvider: () => [],
+    });
+    expect(await policy.authorize(authCtx({ operation: 'escalate' }))).toBeUndefined();
   });
-  it('rejects costPerRequest > capacity', () => {
+});
+
+describe('RbacAuthorizationPolicy — requirements', () => {
+  it("'allow-all' bypasses the role check entirely", async () => {
+    const policy = new RbacAuthorizationPolicy({
+      rules: { cancel: 'allow-all' },
+      roleProvider: () => [],
+    });
+    expect(await policy.authorize(authCtx({ operation: 'cancel' }))).toBeUndefined();
+  });
+
+  it('denies an empty roles list under match any (nothing can satisfy it)', async () => {
+    const policy = new RbacAuthorizationPolicy({
+      rules: { approve: { roles: [] } },
+      roleProvider: () => ['approver'],
+    });
+    const denial = await policy.authorize(authCtx());
+
+    expect(denial).toMatch(/no role can satisfy an empty 'any' requirement/);
+  });
+
+  it('allows an empty roles list under match all (vacuously true)', async () => {
+    const policy = new RbacAuthorizationPolicy({
+      rules: { approve: { roles: [], match: 'all' } },
+      roleProvider: () => [],
+    });
+    expect(await policy.authorize(authCtx())).toBeUndefined();
+  });
+});
+
+describe('RbacAuthorizationPolicy — role matching', () => {
+  it('allows when the actor holds one of the required roles (match any)', async () => {
+    const policy = new RbacAuthorizationPolicy({
+      rules: { approve: { roles: ['manager', 'director'] } },
+      roleProvider: () => ['director'],
+    });
+    expect(await policy.authorize(authCtx())).toBeUndefined();
+  });
+
+  it('denies with a message naming the missing roles when none match', async () => {
+    const policy = new RbacAuthorizationPolicy({
+      rules: { approve: { roles: ['manager', 'director'] } },
+      roleProvider: () => ['clerk'],
+    });
+    const denial = await policy.authorize(authCtx());
+
+    expect(denial).toBe(
+      'Operation "approve" denied: actor "user-1" must have one of role(s): manager, director.',
+    );
+  });
+
+  it('requires every role under match all and denies when one is missing', async () => {
+    const policy = new RbacAuthorizationPolicy({
+      rules: { approve: { roles: ['manager', 'director'], match: 'all' } },
+      roleProvider: () => ['manager'],
+    });
+    const denial = await policy.authorize(authCtx());
+
+    expect(denial).toMatch(/must have all of role\(s\): manager, director/);
+  });
+});
+
+describe('RbacAuthorizationPolicy — fail-closed provider', () => {
+  it('denies and logs when the roleProvider throws', async () => {
+    const logged: Array<[string, unknown]> = [];
+    const policy = new RbacAuthorizationPolicy({
+      rules: { approve: { roles: ['manager'] } },
+      roleProvider: () => {
+        throw new Error('roles service down');
+      },
+      logger: {
+        info: () => {},
+        warn: () => {},
+        error: (msg, err) => logged.push([msg, err]),
+        fatal: () => {},
+        debug: () => {},
+      },
+    });
+
+    const denial = await policy.authorize(authCtx());
+
+    expect(denial).toMatch(/unable to resolve actor roles/);
+    expect(logged[0][0]).toContain('roleProvider failed');
+    expect(logged[0][1]).toBeInstanceOf(Error);
+  });
+
+  it('denies fail-closed even when defaultMode is allow', async () => {
+    const policy = new RbacAuthorizationPolicy({
+      rules: { approve: { roles: ['manager'] } },
+      defaultMode: 'allow',
+      roleProvider: () => Promise.reject(new Error('down')),
+    });
+    expect(await policy.authorize(authCtx())).toMatch(/unable to resolve actor roles/);
+  });
+});
+
+describe('CompositeAuthorizationPolicy — AND mode', () => {
+  it('allows when every child allows', async () => {
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'and',
+      policies: [{ authorize: () => undefined }, { authorize: () => undefined }],
+    });
+    expect(await policy.authorize(authCtx())).toBeUndefined();
+  });
+
+  it('short-circuits on the first denial and returns its message', async () => {
+    const called: string[] = [];
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'and',
+      policies: [
+        {
+          authorize: async () => {
+            called.push('first');
+            return 'first denies';
+          },
+        },
+        {
+          authorize: async () => {
+            called.push('second');
+            return 'second denies';
+          },
+        },
+      ],
+    });
+
+    expect(await policy.authorize(authCtx())).toBe('first denies');
+    expect(called).toEqual(['first']);
+  });
+
+  it('allows an empty policy set (vacuous truth)', async () => {
+    const policy = new CompositeAuthorizationPolicy({ mode: 'and', policies: [] });
+    expect(await policy.authorize(authCtx())).toBeUndefined();
+  });
+});
+
+describe('CompositeAuthorizationPolicy — OR mode', () => {
+  it('allows as soon as one child allows, skipping the rest', async () => {
+    const called: string[] = [];
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'or',
+      policies: [
+        {
+          authorize: async () => {
+            called.push('first');
+            return undefined;
+          },
+        },
+        {
+          authorize: async () => {
+            called.push('second');
+            return 'never reached';
+          },
+        },
+      ],
+    });
+
+    expect(await policy.authorize(authCtx())).toBeUndefined();
+    expect(called).toEqual(['first']);
+  });
+
+  it('denies with the LAST denial message when every child denies', async () => {
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'or',
+      policies: [{ authorize: () => 'denial one' }, { authorize: () => 'denial two' }],
+    });
+    expect(await policy.authorize(authCtx())).toBe('denial two');
+  });
+
+  it('denies an empty policy set (vacuous falsity) with a clear message', async () => {
+    const policy = new CompositeAuthorizationPolicy({ mode: 'or', policies: [] });
+    expect(await policy.authorize(authCtx())).toMatch(
+      /no authorization policies are configured \(OR composite is vacuously closed\)/,
+    );
+  });
+});
+
+describe('CompositeAuthorizationPolicy — child normalization', () => {
+  it('treats an empty-string denial from a child as allow', async () => {
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'and',
+      policies: [{ authorize: () => '' }],
+    });
+    expect(await policy.authorize(authCtx())).toBeUndefined();
+  });
+
+  it('normalizes a thrown ApprovalForbiddenError to its message', async () => {
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'and',
+      policies: [
+        {
+          authorize: () => {
+            throw new ApprovalForbiddenError('role check failed');
+          },
+        },
+      ],
+    });
+    expect(await policy.authorize(authCtx())).toBe('role check failed');
+  });
+
+  it('propagates non-authorization errors instead of treating them as denials', async () => {
+    const boom = new Error('database down');
+    const policy = new CompositeAuthorizationPolicy({
+      mode: 'and',
+      policies: [
+        {
+          authorize: () => {
+            throw boom;
+          },
+        },
+      ],
+    });
+    await expect(policy.authorize(authCtx())).rejects.toBe(boom);
+  });
+});
+
+describe('RateLimitMiddleware — constructor validation', () => {
+  it('rejects a non-positive capacity', () => {
+    expect(() => new RateLimitMiddleware({ capacity: 0, refillTokensPerSecond: 1 })).toThrow(
+      /capacity must be a positive finite number/,
+    );
+  });
+
+  it('rejects a negative refill rate', () => {
+    expect(() => new RateLimitMiddleware({ capacity: 5, refillTokensPerSecond: -1 })).toThrow(
+      /refillTokensPerSecond must be a non-negative finite number/,
+    );
+  });
+
+  it('rejects a non-positive costPerRequest', () => {
+    expect(
+      () => new RateLimitMiddleware({ capacity: 5, refillTokensPerSecond: 1, costPerRequest: 0 }),
+    ).toThrow(/costPerRequest must be a positive finite number/);
+  });
+
+  it('rejects a costPerRequest larger than capacity', () => {
     expect(
       () => new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 1, costPerRequest: 3 }),
-    ).toThrow(/capacity/);
+    ).toThrow(/costPerRequest cannot exceed capacity/);
   });
 });
 
 describe('RateLimitMiddleware — token bucket', () => {
-  it('allows up to capacity, then rejects with ApprovalForbiddenError (403/FORBIDDEN)', () => {
+  it('lets capacity-burst requests through and rejects the excess with FORBIDDEN', () => {
     const clock = new ManualClock(0);
-    const rl = new RateLimitMiddleware({ capacity: 3, refillTokensPerSecond: 0, clock });
-    const ctx = opCtx();
-    rl.before(ctx);
-    rl.before(ctx);
-    rl.before(ctx);
-    let err: unknown;
-    try {
-      rl.before(ctx);
-    } catch (e) {
-      err = e;
-    }
-    expect(err).toBeInstanceOf(ApprovalForbiddenError);
-    expect((err as ApprovalForbiddenError).code).toBe('FORBIDDEN');
-    expect((err as ApprovalForbiddenError).toHttpStatus()).toBe(403);
+    const mw = new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx());
+    mw.before(authCtx());
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError);
   });
 
-  it('consume-to-zero edge: request hitting zero succeeds, next is rejected', () => {
-    const clock = new ManualClock(0);
-    const rl = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 0, clock });
-    const ctx = opCtx();
-    expect(() => rl.before(ctx)).not.toThrow(); // brings to 0
-    expect(() => rl.before(ctx)).toThrow(ApprovalForbiddenError);
+  it('rejects with a message naming the resolved bucket key', () => {
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1 });
+    mw.before(authCtx());
+    expect(() => mw.before(authCtx())).toThrow(
+      /Rate limit exceeded for "user-1:approve". Please retry later./,
+    );
   });
 
-  it('refill is driven solely by the injected clock', () => {
+  it('succeeds when a request brings the bucket exactly to zero, then rejects the next', () => {
     const clock = new ManualClock(0);
-    const rl = new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 1, clock });
-    const ctx = opCtx();
-    rl.before(ctx);
-    rl.before(ctx); // bucket now 0
-    expect(() => rl.before(ctx)).toThrow();
-    clock.advance(1000); // +1 token
-    expect(() => rl.before(ctx)).not.toThrow();
-    expect(() => rl.before(ctx)).toThrow();
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx()); // 1 -> 0, succeeds
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError);
   });
 
-  it('fractional refill is floored at consume time', () => {
+  it('refills tokens from the injected clock between requests', () => {
     const clock = new ManualClock(0);
-    const rl = new RateLimitMiddleware({ capacity: 5, refillTokensPerSecond: 1, clock });
-    const ctx = opCtx();
-    for (let i = 0; i < 5; i++) rl.before(ctx); // drain
-    clock.advance(500); // +0.5 token, not enough for cost 1
-    expect(rl.peekTokens(ctx)).toBeCloseTo(0.5, 5);
-    expect(() => rl.before(ctx)).toThrow();
-    clock.advance(500); // now 1.0 token
-    expect(() => rl.before(ctx)).not.toThrow();
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx()); // 1 -> 0, exhausted
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError);
+
+    clock.advance(1_000); // accrues exactly 1 token (1s * 1/s)
+    expect(() => mw.before(authCtx())).not.toThrow(); // refilled request succeeds
   });
 
-  it('never exceeds capacity after a long idle (no overflow)', () => {
+  it('clamps refill to capacity (never overfills)', () => {
     const clock = new ManualClock(0);
-    const rl = new RateLimitMiddleware({ capacity: 3, refillTokensPerSecond: 10, clock });
-    const ctx = opCtx();
-    rl.before(ctx); // drain a bit
-    clock.advance(1_000_000); // huge idle
-    expect(rl.peekTokens(ctx)).toBe(3);
+    const mw = new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx()); // 2 -> 1
+    clock.advance(10_000); // would accrue 10 tokens
+    expect(mw.peekTokens(authCtx())).toBe(2);
   });
 
-  it('clock moving backwards is clamped to zero elapsed (no negative refill)', () => {
-    const clock = new ManualClock(10_000);
-    const rl = new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 1, clock });
-    const ctx = opCtx();
-    rl.before(ctx);
-    rl.before(ctx); // bucket 0
-    clock.set(0); // jump backwards
-    expect(rl.peekTokens(ctx)).toBe(0);
-    expect(() => rl.before(ctx)).toThrow();
+  it('treats a backwards-moving clock as zero elapsed time (balance never goes negative)', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx()); // 1 -> 0, exhausted
+    clock.advance(-5_000); // clock goes backwards
+
+    expect(mw.peekTokens(authCtx())).toBe(0); // clamped, not negative
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError); // still exhausted
   });
 
-  it('default key isolates actorId+operation; one actor cannot starve another', () => {
+  it('peekTokens returns full capacity for an untouched bucket without creating one', () => {
     const clock = new ManualClock(0);
-    const rl = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 0, clock });
-    rl.before(opCtx({ actorId: 'a' }));
-    expect(() => rl.before(opCtx({ actorId: 'a' }))).toThrow();
-    // Different actor has its own full bucket.
-    expect(() => rl.before(opCtx({ actorId: 'b' }))).not.toThrow();
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+
+    expect(mw.peekTokens(authCtx())).toBe(1);
+    // Peeking must not consume: the first real request still sees the full bucket.
+    mw.before(authCtx()); // 1 -> 0
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError);
   });
 
-  it('different operations for the same actor are isolated', () => {
+  it('reset clears all buckets (tokens return to capacity)', () => {
     const clock = new ManualClock(0);
-    const rl = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 0, clock });
-    rl.before(opCtx({ operation: 'approve' }));
-    expect(() => rl.before(opCtx({ operation: 'reject' }))).not.toThrow();
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx());
+    mw.reset();
+    expect(() => mw.before(authCtx())).not.toThrow();
   });
 
-  it('a custom keyFn collapsing actors shares one bucket', () => {
+  it('supports a custom messageFn and costPerRequest', () => {
     const clock = new ManualClock(0);
-    const rl = new RateLimitMiddleware({
-      capacity: 1,
-      refillTokensPerSecond: 0,
+    const mw = new RateLimitMiddleware({
+      capacity: 3,
+      refillTokensPerSecond: 1,
+      costPerRequest: 3,
       clock,
-      keyFn: (c) => c.operation,
+      messageFn: (key) => `Busy for ${key}`,
     });
-    rl.before(opCtx({ actorId: 'a' }));
-    expect(() => rl.before(opCtx({ actorId: 'b' }))).toThrow(); // shared bucket exhausted
-  });
 
-  it('operations without instanceId (submit) are still rate-limited via operation-based default key', () => {
-    const clock = new ManualClock(0);
-    const rl = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 0, clock });
-    const ctx = opCtx({ operation: 'submit', instanceId: undefined });
-    rl.before(ctx);
-    expect(() => rl.before(ctx)).toThrow();
-  });
-
-  it('does not refund tokens in absence of after/onError (no refund implemented)', () => {
-    const clock = new ManualClock(0);
-    const rl = new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 0, clock });
-    const ctx = opCtx();
-    rl.before(ctx);
-    expect(rl.peekTokens(ctx)).toBe(1);
-    // no after()/onError() exist to call; tokens stay consumed
-    expect(rl).not.toHaveProperty('after');
-  });
-
-  it('reset() clears buckets', () => {
-    const clock = new ManualClock(0);
-    const rl = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 0, clock });
-    const ctx = opCtx();
-    rl.before(ctx);
-    rl.reset();
-    expect(() => rl.before(ctx)).not.toThrow();
-  });
-
-  it('custom messageFn is used in the thrown error', () => {
-    const clock = new ManualClock(0);
-    const rl = new RateLimitMiddleware({
-      capacity: 1,
-      refillTokensPerSecond: 0,
-      clock,
-      messageFn: (key) => `nope:${key}`,
-    });
-    const ctx = opCtx({ actorId: 'u', operation: 'approve' });
-    rl.before(ctx);
-    expect(() => rl.before(ctx)).toThrow('nope:u:approve');
-  });
-
-  it('defaultRateLimitKeyFn uses <anonymous> when actorId is absent', () => {
-    expect(defaultRateLimitKeyFn(opCtx({ actorId: undefined, operation: 'submit' }))).toBe('<anonymous>:submit');
+    mw.before(authCtx()); // 3 -> 0
+    expect(() => mw.before(authCtx())).toThrow(/^Busy for user-1:approve$/);
   });
 });
 
-describe('LoggingMiddleware', () => {
-  it('logs before/after with base fields and a clock-measured duration', () => {
-    const clock = new ManualClock(1000);
+describe('LoggingMiddleware — correlation key', () => {
+  it('defaults to instanceId ?? operation', () => {
+    expect(defaultLoggingCorrelationKeyFn(authCtx())).toBe('inst-1');
+    expect(
+      defaultLoggingCorrelationKeyFn(authCtx({ operation: 'submit', instanceId: undefined })),
+    ).toBe('submit');
+  });
+
+  it('honors a custom correlationKeyFn', () => {
     const logger = spyLogger();
-    const mw = new LoggingMiddleware({ clock, logger });
-    const ctx = opCtx();
-    mw.before(ctx);
-    clock.advance(42);
-    mw.after(ctx, undefined);
-    expect(logger.info).toHaveBeenCalledTimes(2);
-    const startCall = logger.info.mock.calls[0]!;
-    expect(startCall[0]).toBe('operation.start');
-    expect(startCall[1]).toMatchObject({ operation: 'approve', actorId: 'user-1', tenantId: 'tenant-1', instanceId: 'inst-1' });
-    const afterCall = logger.info.mock.calls[1]!;
-    expect(afterCall[1]).toMatchObject({ durationMs: 42 });
-  });
-
-  it('onError logs error code+name, a duration, and does NOT suppress (returns normally)', () => {
-    const clock = new ManualClock(0);
-    const logger = spyLogger();
-    const mw = new LoggingMiddleware({ clock, logger });
-    const ctx = opCtx();
-    mw.before(ctx);
-    clock.advance(5);
-    const err = new ApprovalForbiddenError('denied');
-    expect(mw.onError(ctx, err)).toBeUndefined(); // returns normally => engine rethrows
-    expect(logger.error).toHaveBeenCalledOnce();
-    const call = logger.error.mock.calls[0]!;
-    expect(call[0]).toBe('operation.error');
-    expect(call[1]).toBe(err);
-    expect(call[2]).toMatchObject({ durationMs: 5, errorCode: 'FORBIDDEN', errorName: 'ApprovalForbiddenError' });
-  });
-
-  it('missing start yields durationMs null (never NaN)', () => {
-    const clock = new ManualClock(0);
-    const logger = spyLogger();
-    const mw = new LoggingMiddleware({ clock, logger });
-    const ctx = opCtx();
-    // onError without a preceding before()
-    mw.onError(ctx, new ApprovalForbiddenError('x'));
-    expect(logger.error.mock.calls[0]![2]).toMatchObject({ durationMs: null });
-  });
-
-  it('overlapping concurrent ops under the same key pair LIFO without cross-attribution', () => {
-    const clock = new ManualClock(0);
-    const logger = spyLogger();
-    const mw = new LoggingMiddleware({ clock, logger });
-    // No instanceId so both correlate by operation 'submit'.
-    const ctx = opCtx({ operation: 'submit', instanceId: undefined });
-    mw.before(ctx); // start @ 0
-    clock.advance(10);
-    mw.before(ctx); // start @ 10
-    clock.advance(5); // now 15
-    mw.after(ctx, undefined); // pops the @15-10=5 start (LIFO)
-    clock.advance(100); // now 115
-    mw.after(ctx, undefined); // pops the @0 -> 115
-    const durations = logger.info.mock.calls.filter((c) => c[0] === 'operation.success').map((c) => c[1]!.durationMs);
-    expect(durations).toEqual([5, 115]);
-  });
-
-  it('correlation key defaults to instanceId ?? operation', () => {
-    expect(defaultLoggingCorrelationKeyFn(opCtx({ instanceId: 'abc' }))).toBe('abc');
-    expect(defaultLoggingCorrelationKeyFn(opCtx({ instanceId: undefined, operation: 'submit' }))).toBe('submit');
-  });
-
-  it('negative measured elapsed is clamped to 0 (backwards clock)', () => {
-    const clock = new ManualClock(1000);
-    const logger = spyLogger();
-    const mw = new LoggingMiddleware({ clock, logger });
-    const ctx = opCtx();
-    mw.before(ctx);
-    clock.set(0);
-    mw.after(ctx, undefined);
-    expect(logger.info.mock.calls[1]![1]!.durationMs).toBe(0);
-  });
-});
-
-describe('RbacAuthorizationPolicy', () => {
-  it('allows when actor has a required role (match any)', async () => {
-    const policy = new RbacAuthorizationPolicy({
-      rules: { approve: { roles: ['approver'] } },
-      roleProvider: () => ['approver'],
-    });
-    expect(await policy.authorize(authCtx())).toBeUndefined();
-  });
-
-  it('denies with a non-empty message when actor lacks the role', async () => {
-    const policy = new RbacAuthorizationPolicy({
-      rules: { approve: { roles: ['approver'] } },
-      roleProvider: () => ['viewer'],
-    });
-    const msg = await policy.authorize(authCtx());
-    expect(typeof msg).toBe('string');
-    expect((msg as string).length).toBeGreaterThan(0);
-  });
-
-  it('match:all requires every role', async () => {
-    const policy = new RbacAuthorizationPolicy({
-      rules: { approve: { roles: ['a', 'b'], match: 'all' } },
-      roleProvider: () => ['a'],
-    });
-    expect(await policy.authorize(authCtx())).toBeDefined();
-    const policy2 = new RbacAuthorizationPolicy({
-      rules: { approve: { roles: ['a', 'b'], match: 'all' } },
-      roleProvider: () => ['a', 'b', 'c'],
-    });
-    expect(await policy2.authorize(authCtx())).toBeUndefined();
-  });
-
-  it('allow-all bypasses the role check', async () => {
-    const provider = vi.fn(() => [] as string[]);
-    const policy = new RbacAuthorizationPolicy({ rules: { approve: 'allow-all' }, roleProvider: provider });
-    expect(await policy.authorize(authCtx())).toBeUndefined();
-    expect(provider).not.toHaveBeenCalled();
-  });
-
-  it('empty roles: match:all allows vacuously, match:any denies', async () => {
-    const all = new RbacAuthorizationPolicy({
-      rules: { approve: { roles: [], match: 'all' } },
-      roleProvider: () => [],
-    });
-    expect(await all.authorize(authCtx())).toBeUndefined();
-    const any = new RbacAuthorizationPolicy({
-      rules: { approve: { roles: [], match: 'any' } },
-      roleProvider: () => [],
-    });
-    expect(await any.authorize(authCtx())).toBeDefined();
-  });
-
-  it('default-deny: unconfigured operation is denied with a clear message', async () => {
-    const policy = new RbacAuthorizationPolicy({ rules: {}, roleProvider: () => [] });
-    const msg = await policy.authorize(authCtx({ operation: 'reassign' }));
-    expect(msg).toContain('reassign');
-    expect(msg).toContain('default-deny');
-  });
-
-  it('default-allow: unconfigured operation is permitted', async () => {
-    const policy = new RbacAuthorizationPolicy({ rules: {}, defaultMode: 'allow', roleProvider: () => [] });
-    expect(await policy.authorize(authCtx({ operation: 'submit' }))).toBeUndefined();
-  });
-
-  it('async roleProvider is supported', async () => {
-    const policy = new RbacAuthorizationPolicy({
-      rules: { approve: { roles: ['approver'] } },
-      roleProvider: async () => ['approver'],
-    });
-    expect(await policy.authorize(authCtx())).toBeUndefined();
-  });
-
-  it('fail-closed: roleProvider that throws denies and logs (no uncaught rejection)', async () => {
-    const logger = spyLogger();
-    const policy = new RbacAuthorizationPolicy({
-      rules: { approve: { roles: ['approver'] } },
-      roleProvider: () => {
-        throw new Error('provider down');
-      },
+    const mw = new LoggingMiddleware({
       logger,
+      correlationKeyFn: (ctx) => `tenant:${ctx.tenantId}`,
     });
-    const msg = await policy.authorize(authCtx());
-    expect(msg).toContain('unable to resolve actor roles');
-    expect(logger.error).toHaveBeenCalledOnce();
-  });
+    mw.before(authCtx({ instanceId: 'inst-1' }));
+    mw.after(authCtx({ instanceId: 'inst-1' }), makeInstance());
 
-  it('fail-closed: roleProvider that rejects denies and logs', async () => {
-    const logger = spyLogger();
-    const policy = new RbacAuthorizationPolicy({
-      rules: { approve: { roles: ['approver'] } },
-      roleProvider: async () => {
-        throw new Error('async down');
-      },
-      logger,
-    });
-    await expect(policy.authorize(authCtx())).resolves.toContain('unable to resolve actor roles');
-    expect(logger.error).toHaveBeenCalledOnce();
-  });
-
-  it('resolves tenantId from ctx.instance.tenantId by default', async () => {
-    const provider = vi.fn(() => ['approver'] as string[]);
-    const policy = new RbacAuthorizationPolicy({ rules: { approve: { roles: ['approver'] } }, roleProvider: provider });
-    await policy.authorize(authCtx({ actorId: 'bob', instance: makeInstance({ tenantId: 'T9' }) }));
-    expect(provider).toHaveBeenCalledWith('bob', 'T9');
-  });
-
-  it('custom tenantIdFn is honored', async () => {
-    const provider = vi.fn(() => ['approver'] as string[]);
-    const policy = new RbacAuthorizationPolicy({
-      rules: { approve: { roles: ['approver'] } },
-      tenantIdFn: () => 'CUSTOM',
-      roleProvider: provider,
-    });
-    await policy.authorize(authCtx());
-    expect(provider).toHaveBeenCalledWith('user-1', 'CUSTOM');
-  });
-
-  it('handles all operation discriminants including submit/reassign', async () => {
-    const ops: AuthorizationContext['operation'][] = [
-      'submit', 'approve', 'reject', 'delegate', 'reassign', 'cancel', 'escalate', 'override', 'resubmit', 'addComment',
-    ];
-    const policy = new RbacAuthorizationPolicy({ rules: {}, defaultMode: 'allow', roleProvider: () => [] });
-    for (const operation of ops) {
-      await expect(policy.authorize(authCtx({ operation }))).resolves.toBeUndefined();
-    }
-  });
-
-  it('duplicate roles from the provider do not break matching', async () => {
-    const policy = new RbacAuthorizationPolicy({
-      rules: { approve: { roles: ['approver'] } },
-      roleProvider: () => ['approver', 'approver', 'approver'],
-    });
-    expect(await policy.authorize(authCtx())).toBeUndefined();
+    // Both calls resolved to the same key, so a duration was measured.
+    expect(logger.info.mock.calls[1][1]).toMatchObject({ durationMs: expect.any(Number) });
   });
 });
 
-describe('CompositeAuthorizationPolicy', () => {
-  const allow: IAuthorizationPolicy = { authorize: () => undefined };
-  const deny = (m: string): IAuthorizationPolicy => ({ authorize: () => m });
-  const throwForbidden = (m: string): IAuthorizationPolicy => ({
-    authorize: () => {
-      throw new ApprovalForbiddenError(m);
-    },
-  });
+describe('LoggingMiddleware — lifecycle logging', () => {
+  it('logs start fields on before and success fields with durationMs on after', () => {
+    const clock = new ManualClock(1_000);
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({ logger, clock });
 
-  it('AND: all allow -> allow', async () => {
-    const c = new CompositeAuthorizationPolicy({ mode: 'and', policies: [allow, allow] });
-    expect(await c.authorize(authCtx())).toBeUndefined();
-  });
+    mw.before(authCtx());
+    clock.advance(250);
+    mw.after(authCtx(), makeInstance());
 
-  it('AND: first denial wins and short-circuits', async () => {
-    const second = { authorize: vi.fn(() => undefined) };
-    const c = new CompositeAuthorizationPolicy({ mode: 'and', policies: [deny('first'), second] });
-    expect(await c.authorize(authCtx())).toBe('first');
-    expect(second.authorize).not.toHaveBeenCalled();
-  });
-
-  it('AND with empty set allows (vacuous)', async () => {
-    const c = new CompositeAuthorizationPolicy({ mode: 'and', policies: [] });
-    expect(await c.authorize(authCtx())).toBeUndefined();
-  });
-
-  it('OR: allow if any allows', async () => {
-    const c = new CompositeAuthorizationPolicy({ mode: 'or', policies: [deny('no'), allow] });
-    expect(await c.authorize(authCtx())).toBeUndefined();
-  });
-
-  it('OR: all deny -> returns last denial', async () => {
-    const c = new CompositeAuthorizationPolicy({ mode: 'or', policies: [deny('a'), deny('b')] });
-    expect(await c.authorize(authCtx())).toBe('b');
-  });
-
-  it('OR with empty set denies (vacuous)', async () => {
-    const c = new CompositeAuthorizationPolicy({ mode: 'or', policies: [] });
-    expect(await c.authorize(authCtx())).toContain('vacuously closed');
-  });
-
-  it('a child throwing ApprovalForbiddenError is treated as a denial (OR continues to find an allow)', async () => {
-    const c = new CompositeAuthorizationPolicy({ mode: 'or', policies: [throwForbidden('blocked'), allow] });
-    expect(await c.authorize(authCtx())).toBeUndefined();
-  });
-
-  it('a child throwing ApprovalForbiddenError under AND short-circuits with its message', async () => {
-    const c = new CompositeAuthorizationPolicy({ mode: 'and', policies: [throwForbidden('blocked'), allow] });
-    expect(await c.authorize(authCtx())).toBe('blocked');
-  });
-
-  it('empty-string return is treated as allow', async () => {
-    const emptyDeny: IAuthorizationPolicy = { authorize: () => '' };
-    const c = new CompositeAuthorizationPolicy({ mode: 'and', policies: [emptyDeny] });
-    expect(await c.authorize(authCtx())).toBeUndefined();
-  });
-
-  it('non-Forbidden errors propagate', async () => {
-    const boom: IAuthorizationPolicy = {
-      authorize: () => {
-        throw new ApprovalError('weird', 'VALIDATION');
+    expect(logger.info.mock.calls[0]).toEqual([
+      'operation.start',
+      {
+        operation: 'approve',
+        actorId: 'user-1',
+        tenantId: 'tenant-1',
+        instanceId: 'inst-1',
       },
-    };
-    const c = new CompositeAuthorizationPolicy({ mode: 'and', policies: [boom] });
-    await expect(c.authorize(authCtx())).rejects.toBeInstanceOf(ApprovalError);
+    ]);
+    expect(logger.info.mock.calls[1]).toEqual([
+      'operation.success',
+      {
+        operation: 'approve',
+        actorId: 'user-1',
+        tenantId: 'tenant-1',
+        instanceId: 'inst-1',
+        durationMs: 250,
+      },
+    ]);
   });
 
-  it('evaluates in deterministic array order (OR returns last denial in order)', async () => {
-    const c = new CompositeAuthorizationPolicy({ mode: 'or', policies: [deny('1'), deny('2'), deny('3')] });
-    expect(await c.authorize(authCtx())).toBe('3');
+  it('logs the error code and name on onError without suppressing the error', () => {
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({ logger });
+    const err = new ApprovalError('denied', 'FORBIDDEN');
+    const ctx = authCtx();
+
+    expect(() => mw.onError(ctx, err)).not.toThrow();
+    expect(logger.error.mock.calls[0][0]).toBe('operation.error');
+    expect(logger.error.mock.calls[0][2]).toMatchObject({
+      errorCode: 'FORBIDDEN',
+      errorName: 'ApprovalError',
+      durationMs: null, // before never ran
+    });
+  });
+
+  it('reports null rather than NaN when before never ran for the key', () => {
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({ logger });
+
+    mw.after(authCtx(), makeInstance());
+
+    expect(logger.info.mock.calls[0][1]).toMatchObject({ durationMs: null });
+  });
+
+  it('honors custom start/success/error messages', () => {
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({
+      logger,
+      startMessage: 'wf.start',
+      successMessage: 'wf.ok',
+      errorMessage: 'wf.ko',
+    });
+
+    mw.before(authCtx());
+    mw.after(authCtx(), makeInstance());
+    mw.onError(authCtx(), new ApprovalError('x', 'VALIDATION'));
+
+    expect(logger.info.mock.calls[0][0]).toBe('wf.start');
+    expect(logger.info.mock.calls[1][0]).toBe('wf.ok');
+    expect(logger.error.mock.calls[0][0]).toBe('wf.ko');
+  });
+});
+
+describe('LoggingMiddleware — overlapping operations (LIFO pairing)', () => {
+  it('pairs after with the most recent start under the same key', () => {
+    const clock = new ManualClock(0);
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({ logger, clock });
+    // Two concurrent submits share the key 'submit' (no instanceId).
+    const ctx = authCtx({ operation: 'submit', instanceId: undefined });
+
+    mw.before(ctx);
+    clock.advance(100);
+    mw.before(ctx);
+    clock.advance(100);
+    mw.after(ctx, makeInstance()); // pairs with the SECOND start -> 100ms
+
+    expect(logger.info.mock.calls[2][1]).toMatchObject({ durationMs: 100 });
+
+    clock.advance(100);
+    mw.after(ctx, makeInstance()); // pairs with the FIRST start -> 300ms
+    expect(logger.info.mock.calls[3][1]).toMatchObject({ durationMs: 300 });
+  });
+
+  it('cleans up the key after the last in-flight start is consumed', () => {
+    const logger = spyLogger();
+    const mw = new LoggingMiddleware({ logger });
+    const ctx = authCtx({ instanceId: undefined });
+
+    mw.before(ctx);
+    mw.after(ctx, makeInstance());
+    // A subsequent onError with no pending start must not throw or pair.
+    mw.onError(ctx, new ApprovalError('x', 'VALIDATION'));
+
+    expect(logger.error.mock.calls[0][2]).toMatchObject({ durationMs: null });
   });
 });

@@ -375,30 +375,39 @@ export class PostgresAdapter implements IStorageAdapter {
     };
   }
 
-  async getOverdueInstances(tenantId: string, asOf: Date): Promise<ApprovalInstance[]> {
+  async getOverdueInstances(tenantId: string, asOf: Date, filter: InstanceFilter = {}): Promise<ApprovalInstance[]> {
     const pool = await this.getPool();
-    const result = await pool.query(
-      `SELECT * FROM ${this.p}_instances
+    const values: unknown[] = [tenantId, asOf.toISOString()];
+    let query = `SELECT * FROM ${this.p}_instances
        WHERE tenant_id = $1
-         AND status = 'pending'
-         AND (
-           EXISTS (
-             SELECT 1 FROM jsonb_array_elements(levels) AS lvl
-             WHERE (lvl->>'escalationDueAt') IS NOT NULL
-               AND (lvl->>'escalationDueAt')::timestamptz <= $2
-           )
-           OR (expires_at IS NOT NULL AND expires_at <= $2)
-           OR (sla_deadline_at IS NOT NULL AND sla_deadline_at <= $2 AND sla_breached_at IS NULL)
-           OR EXISTS (
-             SELECT 1 FROM jsonb_array_elements(levels) AS lvl
-             WHERE lvl->>'status' = 'pending'
-               AND (lvl->>'delegatedUntil') IS NOT NULL
-               AND (lvl->>'delegatedUntil')::timestamptz <= $2
-               AND (lvl->>'delegatedFrom') IS NOT NULL
-           )
-         )`,
-      [tenantId, asOf.toISOString()],
-    );
+         AND status = 'pending'`;
+
+    if (filter.documentType) {
+      values.push(filter.documentType);
+      query += ` AND document_type = $${values.length}`;
+    }
+    if (filter.submittedBy) {
+      values.push(filter.submittedBy);
+      query += ` AND submitted_by = $${values.length}`;
+    }
+
+    query += ` AND (
+          EXISTS (
+            SELECT 1 FROM jsonb_array_elements(levels) AS lvl
+            WHERE (lvl->>'escalationDueAt') IS NOT NULL
+              AND (lvl->>'escalationDueAt')::timestamptz <= $2
+          )
+          OR (expires_at IS NOT NULL AND expires_at <= $2)
+          OR (sla_deadline_at IS NOT NULL AND sla_deadline_at <= $2 AND sla_breached_at IS NULL)
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(levels) AS lvl
+            WHERE lvl->>'status' = 'pending'
+              AND (lvl->>'delegatedUntil') IS NOT NULL
+              AND (lvl->>'delegatedUntil')::timestamptz <= $2
+              AND (lvl->>'delegatedFrom') IS NOT NULL
+          )
+        )`;
+    const result = await pool.query(query, values);
     return result.rows.map((r) => this.rowToInstance(r as Record<string, unknown>));
   }
 

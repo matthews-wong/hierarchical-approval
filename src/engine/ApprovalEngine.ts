@@ -47,7 +47,7 @@ import { noopLogger } from '../utils/Logger.js';
 import type { Clock } from '../utils/Clock.js';
 import { systemClock } from '../utils/Clock.js';
 import type { BusinessCalendar } from '../utils/BusinessCalendar.js';
-import type { IdGeneratorFn } from '../utils/IdGenerator.js';
+import type { IdGeneratorPrefix } from '../utils/IdGenerator.js';
 import { defaultIdGenerator } from '../utils/IdGenerator.js';
 import { TemplateRegistry } from './TemplateRegistry.js';
 import { LevelResolver, type OrgProvider, type ApproverResolverFn } from './LevelResolver.js';
@@ -245,7 +245,7 @@ export interface ApprovalEngineOptions {
    */
   calendar?: BusinessCalendar;
   /** Custom ID generator for instances and templates. Defaults to timestamp+random. */
-  generateId?: IdGeneratorFn;
+  generateId?: (prefix: IdGeneratorPrefix) => string;
   /** Custom optimistic locking retry policy. */
   retryPolicy?: RetryPolicy;
   /** Custom idempotency key derivation function. Default: SHA-256 of tenant+documentType+documentId+templateName. */
@@ -289,7 +289,7 @@ export class ApprovalEngine {
   private readonly logger: Logger;
   private readonly clock: Clock;
   private readonly calendar?: BusinessCalendar;
-  private readonly generateId: IdGeneratorFn;
+  private readonly generateId: (prefix: IdGeneratorPrefix) => string;
   private readonly maxBulkItems: number;
   private readonly retryPolicy: Required<RetryPolicy>;
   private readonly idempotencyKeyFn: IdempotencyKeyFn;
@@ -1797,6 +1797,7 @@ export class ApprovalEngine {
     const overdueList = await this.opts.adapter.getOverdueInstances(
       this.tenantId,
       this.clock.now(),
+      filter,
     );
     const resolved = byStatus.approved + byStatus.rejected;
     const approvalRate = resolved === 0 ? 0 : byStatus.approved / resolved;
