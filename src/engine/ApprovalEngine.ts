@@ -301,6 +301,11 @@ export class ApprovalEngine {
   constructor(private readonly opts: ApprovalEngineOptions) {
     this.tenantId = opts.tenantId ?? 'default';
     this.logger = opts.logger ?? noopLogger;
+    // A subscriber's listener must never abort the operation that emitted the
+    // event; report and carry on, as the notification/audit paths do.
+    this.bus.setListenerErrorHandler((err, event) => {
+      this.logger.error('event listener threw', err, { tenantId: this.tenantId, event });
+    });
     this.clock = opts.clock ?? systemClock;
     this.calendar = opts.calendar;
     this.generateId = opts.generateId ?? defaultIdGenerator;
@@ -755,6 +760,7 @@ export class ApprovalEngine {
           this.bus.emit('approval:approved', p);
           this.bus.emit('approval:completed', instance);
           await this.notifyAdapters('approval:approved', instance, p);
+          await this.notifyAdapters('approval:completed', instance, instance);
           await this.runMiddlewareAfter(
             {
               operation: 'approve',
@@ -1616,6 +1622,7 @@ export class ApprovalEngine {
       this.bus.emit('approval:overridden', p);
       this.bus.emit('approval:completed', instance);
       await this.notifyAdapters('approval:overridden', instance, p);
+      await this.notifyAdapters('approval:completed', instance, instance);
       await this.runMiddlewareAfter(
         {
           operation: 'override',

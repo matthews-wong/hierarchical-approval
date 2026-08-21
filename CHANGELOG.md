@@ -5,6 +5,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed — event delivery, template reads, and the CI lint gate
+
+- **A throwing `engine.on()` listener no longer breaks the operation that emitted
+  the event.** `EventBus` delivered events straight through `eventemitter3`, which
+  invokes listeners synchronously and does not swallow exceptions — and the engine
+  emits *after* persisting but *before* dispatching notifications and running
+  after-middleware. So one buggy subscriber would reject `approve()` with its own
+  error (while the instance stayed persisted as approved), skip notification
+  dispatch entirely, leave a tracing span opened and never ended, and suppress the
+  `approval:completed` emit on the following line. Listener failures are now
+  isolated per listener and reported via the engine's logger; a rejecting `async`
+  listener is caught too, instead of surfacing as a process-level
+  `unhandledRejection`. **Behaviour change:** a listener error no longer propagates
+  to the caller. Register an `onListenerError` sink by passing a `logger`, or use
+  `EventBus.setListenerErrorHandler` directly.
+- **`approval:completed` is now delivered to notification adapters.** It was
+  emitted on the in-process bus only, so a webhook/email integrator never learned
+  a document had been fully approved and had to infer it from `approval:approved`
+  plus `isFinal`. Dispatched on both the normal-completion and `override` paths.
+- **`PostgresAdapter.getTemplate`/`listTemplates` now return `createdAt` as a real
+  `Date`.** They returned the JSONB payload raw, so `createdAt` was an ISO string
+  despite `ApprovalTemplate` typing it as a `Date`. `TemplateRegistry.update()`
+  threaded that string into the next `saveTemplate()`, which called
+  `createdAt.toISOString()` on it — meaning **`engine.updateTemplate()` failed 100%
+  of the time against real PostgreSQL** while passing against `MemoryAdapter`,
+  which tolerates the string silently. No migration needed.
+- **CI enforces lint again.** The workflow ran `npm run lint || true`, so lint could
+  never fail a build; an unused import had already accumulated on `main` as a
+  result. The `|| true` is gone.
+
 ### Added — cycle-time analytics
 
 - **`getStatistics()` now reports time-to-decision.** The returned

@@ -616,3 +616,68 @@ describe('PostgresAdapter — end()', () => {
     expect(pool.endCalls).toBe(0);
   });
 });
+
+describe('PostgresAdapter — template date revival', () => {
+  // Templates are persisted with JSON.stringify, so `createdAt` comes back from
+  // JSONB as an ISO string even though ApprovalTemplate types it as a Date.
+  // Returning it unrevived made TemplateRegistry.update() thread the string into
+  // the next saveTemplate(), which crashed on `createdAt.toISOString()` — so
+  // engine.updateTemplate() failed 100% of the time against real Postgres while
+  // passing against MemoryAdapter.
+  it('getTemplate returns createdAt as a real Date, not the raw JSONB string', async () => {
+    const { pool, adapter } = freshAdapter();
+    const stored = {
+      ...makeTemplate(),
+      createdAt: '2026-06-26T09:00:00.000Z' as unknown as Date,
+    };
+    pool.queueResult({ rows: [{ data: stored }] });
+
+    const template = await adapter.getTemplate('tenant-1', 'tpl');
+
+    expect(template).not.toBeNull();
+    expect(template?.createdAt).toBeInstanceOf(Date);
+    expect(template?.createdAt.toISOString()).toBe('2026-06-26T09:00:00.000Z');
+  });
+
+  it('listTemplates revives createdAt on every row', async () => {
+    const { pool, adapter } = freshAdapter();
+    pool.queueResult({
+      rows: [
+        { data: { ...makeTemplate(), createdAt: '2026-06-26T09:00:00.000Z' as unknown as Date } },
+        {
+          data: {
+            ...makeTemplate({ name: 'other' }),
+            createdAt: '2026-06-27T10:00:00.000Z' as unknown as Date,
+          },
+        },
+      ],
+    });
+
+    const templates = await adapter.listTemplates('tenant-1');
+
+    expect(templates).toHaveLength(2);
+    for (const template of templates) {
+      expect(template.createdAt).toBeInstanceOf(Date);
+    }
+  });
+
+  it('a template round-tripped through getTemplate can be saved again', async () => {
+    const { pool, adapter } = freshAdapter();
+    pool.queueResult({
+      rows: [
+        { data: { ...makeTemplate(), createdAt: '2026-06-26T09:00:00.000Z' as unknown as Date } },
+      ],
+    });
+
+    const template = await adapter.getTemplate('tenant-1', 'tpl');
+    // This is the exact call shape TemplateRegistry.update() performs.
+    await expect(
+      adapter.saveTemplate({ ...template!, id: 'tpl-2', version: 2 }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('getTemplate still returns null when no row matches', async () => {
+    const { adapter } = freshAdapter();
+    await expect(adapter.getTemplate('tenant-1', 'missing')).resolves.toBeNull();
+  });
+});

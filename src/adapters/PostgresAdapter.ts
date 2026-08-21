@@ -38,6 +38,19 @@ export interface PostgresAdapterOptions {
 // to safe SQL identifiers to avoid injection via adapter construction options.
 const TABLE_PREFIX_RE = /^[a-z][a-z0-9_]*$/;
 
+/**
+ * Restores `createdAt` to a real `Date` on a template read back from JSONB.
+ *
+ * Templates are persisted with `JSON.stringify`, so `createdAt` comes back as an
+ * ISO string even though {@link ApprovalTemplate} types it as a `Date`. Without
+ * this, `TemplateRegistry.update()` threads the string into the next
+ * `saveTemplate()` call, which throws `TypeError: createdAt.toISOString is not a
+ * function`. Mirrors the same helper in `MemoryAdapter`.
+ */
+function reviveTemplateDates(template: ApprovalTemplate): ApprovalTemplate {
+  return { ...template, createdAt: new Date(template.createdAt) };
+}
+
 export class PostgresAdapter implements IStorageAdapter {
   private _pool: import('pg').Pool | null = null;
   private readonly prefix: string;
@@ -196,7 +209,8 @@ export class PostgresAdapter implements IStorageAdapter {
       `SELECT data FROM ${this.p}_templates WHERE tenant_id = $1 AND name = $2`,
       [tenantId, name],
     );
-    return result.rows[0]?.data ?? null;
+    const row = result.rows[0];
+    return row ? reviveTemplateDates(row.data) : null;
   }
 
   async listTemplates(tenantId: string): Promise<ApprovalTemplate[]> {
@@ -205,7 +219,7 @@ export class PostgresAdapter implements IStorageAdapter {
       `SELECT data FROM ${this.p}_templates WHERE tenant_id = $1 ORDER BY created_at ASC`,
       [tenantId],
     );
-    return result.rows.map((r) => r.data);
+    return result.rows.map((r) => reviveTemplateDates(r.data));
   }
 
   // ─── Instances ────────────────────────────────────────────────────────────
@@ -375,7 +389,11 @@ export class PostgresAdapter implements IStorageAdapter {
     };
   }
 
-  async getOverdueInstances(tenantId: string, asOf: Date, filter: InstanceFilter = {}): Promise<ApprovalInstance[]> {
+  async getOverdueInstances(
+    tenantId: string,
+    asOf: Date,
+    filter: InstanceFilter = {},
+  ): Promise<ApprovalInstance[]> {
     const pool = await this.getPool();
     const values: unknown[] = [tenantId, asOf.toISOString()];
     let query = `SELECT * FROM ${this.p}_instances
