@@ -33,6 +33,9 @@ export interface PostgresAdapterOptions {
   ssl?: import('tls').ConnectionOptions;
 }
 
+// Also used to validate `schema` — both are interpolated directly into SQL text
+// (there is no parameterized way to name a table/schema), so both must be restricted
+// to safe SQL identifiers to avoid injection via adapter construction options.
 const TABLE_PREFIX_RE = /^[a-z][a-z0-9_]*$/;
 
 export class PostgresAdapter implements IStorageAdapter {
@@ -49,8 +52,14 @@ export class PostgresAdapter implements IStorageAdapter {
         `PostgresAdapter: tablePrefix "${prefix}" is invalid. Must match /^[a-z][a-z0-9_]*$/. Only lowercase letters, digits, and underscores are allowed.`,
       );
     }
+    const schema = opts.schema ?? 'public';
+    if (!TABLE_PREFIX_RE.test(schema)) {
+      throw new ApprovalValidationError(
+        `PostgresAdapter: schema "${schema}" is invalid. Must match /^[a-z][a-z0-9_]*$/. Only lowercase letters, digits, and underscores are allowed.`,
+      );
+    }
     this.prefix = prefix;
-    this.schema = opts.schema ?? 'public';
+    this.schema = schema;
     this.statementTimeoutMs = opts.statementTimeoutMs;
     this.externalPool = opts.pool;
   }
@@ -84,6 +93,7 @@ export class PostgresAdapter implements IStorageAdapter {
       CREATE TABLE IF NOT EXISTS ${this.p}_instances (
         id                  TEXT NOT NULL,
         tenant_id           TEXT NOT NULL,
+        template_id         TEXT NOT NULL DEFAULT '',
         template_name       TEXT NOT NULL,
         document_id         TEXT NOT NULL,
         document_type       TEXT NOT NULL,
@@ -136,6 +146,7 @@ export class PostgresAdapter implements IStorageAdapter {
         ON ${this.p}_audit_log (tenant_id, instance_id);
 
       -- Add new columns to existing tables (idempotent for upgrades)
+      ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS template_id TEXT NOT NULL DEFAULT '';
       ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS parent_instance_id TEXT;
       ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
       ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS deadline_action TEXT;
@@ -170,7 +181,12 @@ export class PostgresAdapter implements IStorageAdapter {
       `INSERT INTO ${this.p}_templates (tenant_id, name, data, created_at)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (tenant_id, name) DO UPDATE SET data = EXCLUDED.data`,
-      [template.tenantId, template.name, JSON.stringify(template), template.createdAt.toISOString()],
+      [
+        template.tenantId,
+        template.name,
+        JSON.stringify(template),
+        template.createdAt.toISOString(),
+      ],
     );
   }
 
@@ -198,17 +214,18 @@ export class PostgresAdapter implements IStorageAdapter {
     const pool = await this.getPool();
     await pool.query(
       `INSERT INTO ${this.p}_instances
-         (id, tenant_id, template_name, document_id, document_type, submitted_by,
+         (id, tenant_id, template_id, template_name, document_id, document_type, submitted_by,
           status, current_level, version, idempotency_key,
           data, metadata, levels,
           parent_instance_id, expires_at, deadline_action,
           sla_deadline_at, sla_breached_at, template_snapshot,
           created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
        ON CONFLICT (tenant_id, id) DO NOTHING`,
       [
         instance.id,
         instance.tenantId,
+        instance.templateId,
         instance.templateName,
         instance.documentId,
         instance.documentType,
@@ -294,7 +311,9 @@ export class PostgresAdapter implements IStorageAdapter {
       [tenantId, JSON.stringify([approverId]), limit, offset],
     );
 
-    const total = result.rows[0] ? Number((result.rows[0] as Record<string, unknown>)['total_count']) : 0;
+    const total = result.rows[0]
+      ? Number((result.rows[0] as Record<string, unknown>)['total_count'])
+      : 0;
     return {
       items: result.rows.map((r) => this.rowToInstance(r as Record<string, unknown>)),
       total,
@@ -311,12 +330,30 @@ export class PostgresAdapter implements IStorageAdapter {
     const params: unknown[] = [tenantId];
     let idx = 2;
 
-    if (filter.status) { conditions.push(`status = $${idx++}`); params.push(filter.status); }
-    if (filter.documentType) { conditions.push(`document_type = $${idx++}`); params.push(filter.documentType); }
-    if (filter.submittedBy) { conditions.push(`submitted_by = $${idx++}`); params.push(filter.submittedBy); }
-    if (filter.templateName) { conditions.push(`template_name = $${idx++}`); params.push(filter.templateName); }
-    if (filter.fromDate) { conditions.push(`created_at >= $${idx++}`); params.push(filter.fromDate.toISOString()); }
-    if (filter.toDate) { conditions.push(`created_at <= $${idx++}`); params.push(filter.toDate.toISOString()); }
+    if (filter.status) {
+      conditions.push(`status = $${idx++}`);
+      params.push(filter.status);
+    }
+    if (filter.documentType) {
+      conditions.push(`document_type = $${idx++}`);
+      params.push(filter.documentType);
+    }
+    if (filter.submittedBy) {
+      conditions.push(`submitted_by = $${idx++}`);
+      params.push(filter.submittedBy);
+    }
+    if (filter.templateName) {
+      conditions.push(`template_name = $${idx++}`);
+      params.push(filter.templateName);
+    }
+    if (filter.fromDate) {
+      conditions.push(`created_at >= $${idx++}`);
+      params.push(filter.fromDate.toISOString());
+    }
+    if (filter.toDate) {
+      conditions.push(`created_at <= $${idx++}`);
+      params.push(filter.toDate.toISOString());
+    }
 
     const offset = opts?.offset ?? 0;
     const limit = opts?.limit ?? 50;
@@ -329,7 +366,9 @@ export class PostgresAdapter implements IStorageAdapter {
                  LIMIT $${idx++} OFFSET $${idx}`;
 
     const result = await pool.query(sql, params);
-    const total = result.rows[0] ? Number((result.rows[0] as Record<string, unknown>)['total_count']) : 0;
+    const total = result.rows[0]
+      ? Number((result.rows[0] as Record<string, unknown>)['total_count'])
+      : 0;
     return {
       items: result.rows.map((r) => this.rowToInstance(r as Record<string, unknown>)),
       total,
@@ -417,16 +456,32 @@ export class PostgresAdapter implements IStorageAdapter {
     const params: unknown[] = [tenantId];
     let idx = 2;
 
-    if (filter.status) { conditions.push(`status = $${idx++}`); params.push(filter.status); }
-    if (filter.documentType) { conditions.push(`document_type = $${idx++}`); params.push(filter.documentType); }
-    if (filter.submittedBy) { conditions.push(`submitted_by = $${idx++}`); params.push(filter.submittedBy); }
-    if (filter.templateName) { conditions.push(`template_name = $${idx++}`); params.push(filter.templateName); }
+    if (filter.status) {
+      conditions.push(`status = $${idx++}`);
+      params.push(filter.status);
+    }
+    if (filter.documentType) {
+      conditions.push(`document_type = $${idx++}`);
+      params.push(filter.documentType);
+    }
+    if (filter.submittedBy) {
+      conditions.push(`submitted_by = $${idx++}`);
+      params.push(filter.submittedBy);
+    }
+    if (filter.templateName) {
+      conditions.push(`template_name = $${idx++}`);
+      params.push(filter.templateName);
+    }
 
     const { cursor, limit, direction = 'forward' } = opts;
 
     if (cursor) {
       const decoded = Buffer.from(cursor, 'base64').toString('utf8');
-      const colonIdx = decoded.indexOf(':');
+      // The timestamp segment is an ISO-8601 string, which itself contains colons
+      // (e.g. "2026-06-26T09:00:00.000Z") — the LAST colon is the id separator,
+      // not the first. Using indexOf() here previously truncated the timestamp
+      // and corrupted the id on every cursor decode.
+      const colonIdx = decoded.lastIndexOf(':');
       const ts = decoded.slice(0, colonIdx);
       const id = decoded.slice(colonIdx + 1);
       if (direction === 'forward') {
@@ -451,7 +506,7 @@ export class PostgresAdapter implements IStorageAdapter {
     const items = rows.map((r) => this.rowToInstance(r as Record<string, unknown>));
 
     const nextCursor = hasMore
-      ? Buffer.from(`${rows[rows.length - 1]!['updated_at']}:${rows[rows.length - 1]!['id']}`).toString('base64')
+      ? encodeInstanceCursor(rows[rows.length - 1] as Record<string, unknown>)
       : undefined;
 
     return { items, nextCursor, hasMore };
@@ -466,7 +521,7 @@ export class PostgresAdapter implements IStorageAdapter {
     return {
       id: row['id'] as string,
       tenantId: row['tenant_id'] as string,
-      templateId: '',
+      templateId: (row['template_id'] as string | null) ?? '',
       templateName: row['template_name'] as string,
       documentId: row['document_id'] as string,
       documentType: row['document_type'] as string,
@@ -482,11 +537,30 @@ export class PostgresAdapter implements IStorageAdapter {
       parentInstanceId: (row['parent_instance_id'] as string | null) ?? undefined,
       expiresAt: row['expires_at'] ? new Date(row['expires_at'] as string) : undefined,
       deadlineAction: (row['deadline_action'] as 'cancel' | 'reject' | null) ?? undefined,
-      slaDeadlineAt: row['sla_deadline_at'] ? new Date(row['sla_deadline_at'] as string) : undefined,
-      slaBreachedAt: row['sla_breached_at'] ? new Date(row['sla_breached_at'] as string) : undefined,
-      templateSnapshot: (row['template_snapshot'] as ApprovalInstance['templateSnapshot'] | null) ?? undefined,
+      slaDeadlineAt: row['sla_deadline_at']
+        ? new Date(row['sla_deadline_at'] as string)
+        : undefined,
+      slaBreachedAt: row['sla_breached_at']
+        ? new Date(row['sla_breached_at'] as string)
+        : undefined,
+      templateSnapshot:
+        (row['template_snapshot'] as ApprovalInstance['templateSnapshot'] | null) ?? undefined,
       createdAt: new Date(row['created_at'] as string),
       updatedAt: new Date(row['updated_at'] as string),
     };
   }
+}
+
+/**
+ * Encode a cursor as base64(updatedAt_iso:id) per the IStorageAdapter contract.
+ *
+ * `row['updated_at']` normalizes through `new Date(...)` before `.toISOString()`
+ * because node-postgres returns TIMESTAMPTZ columns as `Date` instances by default —
+ * stringifying a `Date` directly (e.g. via template-literal interpolation) uses
+ * `Date.prototype.toString()`, not ISO-8601, and is not guaranteed to round-trip
+ * through Postgres's `::timestamptz` cast on decode.
+ */
+function encodeInstanceCursor(row: Record<string, unknown>): string {
+  const updatedAtIso = new Date(row['updated_at'] as string | Date).toISOString();
+  return Buffer.from(`${updatedAtIso}:${row['id']}`).toString('base64');
 }
