@@ -721,8 +721,26 @@ const stats = await engine.getStatistics({ documentType: 'purchase_order' });
 //   byStatus: { pending, approved, rejected, cancelled, expired },
 //   overdue: number,        // pending past an escalation/expiry deadline
 //   approvalRate: number,   // approved / (approved + rejected); 0 when none resolved
+//   byTemplate: Record<string, { total, approved, rejected, pending }>,
+//   cycleTime: CycleTimeStats,
+//   cycleTimeByTemplate: Record<string, CycleTimeStats>,
 // }
 ```
+
+`byTemplate` breaks the same counts down per template name (only populated for templates with at least one matching instance).
+
+**Cycle-time analytics.** `cycleTime` (and its per-template mirror `cycleTimeByTemplate`) reports time-to-decision, in milliseconds, as `{ count, averageMs, p50Ms, p95Ms, minMs, maxMs }`:
+
+```ts
+console.log(`Median time-to-decision: ${(stats.cycleTime.p50Ms / 60_000).toFixed(1)} min`);
+console.log(`p95 over ${stats.cycleTime.count} completed instances: ${stats.cycleTime.p95Ms}ms`);
+
+for (const [templateName, timing] of Object.entries(stats.cycleTimeByTemplate)) {
+  console.log(templateName, timing.averageMs);
+}
+```
+
+Only instances in status `approved`, `rejected`, or `cancelled` count as "completed" for this calculation — **`expired` is deliberately excluded**: its terminal timestamp reflects a scheduler deadline firing, not a decision being made, so including it would skew the distribution rather than describe it. Elapsed time per instance is `updatedAt - createdAt`. When `count` is `0` every other field is `0`, never `NaN`.
 
 ### Health check
 
@@ -1071,6 +1089,54 @@ const engine = new ApprovalEngine({
 ```
 
 Every operation is wrapped in a span named `approval.<operation>` (e.g. `approval.approve`) carrying `approval.tenant_id`, `approval.actor_id` and `approval.instance_id` attributes. On success the span records the resulting `approval.result_status`/`approval.result_level` and status `OK`; on failure it calls `recordException`, tags `approval.error_code`, and sets status `ERROR` — then re-throws (tracing never swallows an error). There is **no hard dependency** on `@opentelemetry/api`: the middleware defaults to a no-op tracer, so you install and wire OpenTelemetry only if you want traces.
+
+### `plugins/webhook` — signed HTTP delivery with retries
+
+```ts
+import { WebhookNotificationAdapter } from 'hierarchical-approval/plugins/webhook';
+
+const webhook = new WebhookNotificationAdapter({
+  url: 'https://example.com/hooks/approvals',
+  secret: process.env.WEBHOOK_SECRET, // opt-in signing; omit to send unsigned requests
+});
+
+const engine = new ApprovalEngine({ adapter, notificationAdapter: webhook });
+```
+
+Every event is POSTed to `url` as JSON. When `secret` is configured, each request also carries an `X-Approval-Signature: t=<unix-seconds>,v1=<hex-hmac>` header (Stripe-style), where `v1` is the HMAC-SHA256 digest of the signing string `` `${timestamp}.${body}` ``. Folding the timestamp into the signed payload lets a receiver reject stale/replayed requests. A receiver verifies it like this:
+
+```ts
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+function verifyApprovalSignature(rawBody: string, header: string, secret: string): boolean {
+  const [tPart, vPart] = header.split(',');
+  const timestamp = tPart!.slice(2); // strip "t="
+  const signature = vPart!.slice(3); // strip "v1="
+  const expected = createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');
+  const sigBuf = Buffer.from(signature, 'hex');
+  const expBuf = Buffer.from(expected, 'hex');
+  return sigBuf.length === expBuf.length && timingSafeEqual(sigBuf, expBuf);
+}
+```
+
+`5xx` responses, `408`, and `429`, plus network/timeout errors, are retried with exponential backoff and full jitter up to `maxAttempts` (default `3`); a `429` honors a `Retry-After` header (seconds or an HTTP date) in place of the computed backoff. Any other `4xx` (e.g. `400`, `401`, `404`) is treated as permanent and fails on the first attempt. `notify()` — the method the engine calls — never throws, per the `INotificationAdapter` contract: on exhausting `maxAttempts` it logs and drops the notification, which makes the adapter used alone _at-most-once_.
+
+For at-least-once delivery that survives a process restart, compose the adapter's throwing `deliver()` method as the `transport` of `OutboxNotificationAdapter` instead of wiring `notify()` directly:
+
+```ts
+import { OutboxNotificationAdapter } from 'hierarchical-approval/plugins/notify';
+import { WebhookNotificationAdapter } from 'hierarchical-approval/plugins/webhook';
+
+const webhook = new WebhookNotificationAdapter({
+  url: 'https://example.com/hooks/approvals',
+  secret,
+});
+const durable = new OutboxNotificationAdapter({ transport: webhook.deliver.bind(webhook) });
+
+const engine = new ApprovalEngine({ adapter, notificationAdapter: durable });
+```
+
+`deliver` and `OutboxNotificationAdapter`'s `NotificationTransport` type are structurally compatible, so this composition needs no adapter shim. This adapter takes **no new dependency**: its `HttpClient` port is a plain `fetch`-shaped function, and the global `fetch` (Node.js 18+) satisfies it directly — pass a custom `httpClient` in the options only if you need different behavior (a proxy, request mocking, a different runtime's fetch).
 
 ---
 

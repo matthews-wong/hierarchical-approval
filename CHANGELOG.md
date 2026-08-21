@@ -3,6 +3,83 @@
 All notable changes to `hierarchical-approval` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — cycle-time analytics
+
+- **`getStatistics()` now reports time-to-decision.** The returned
+  `ApprovalStatistics` gains `cycleTime: CycleTimeStats` and
+  `cycleTimeByTemplate: Record<string, CycleTimeStats>`, each shaped as
+  `{ count, averageMs, p50Ms, p95Ms, minMs, maxMs }` (all durations in
+  milliseconds; new `CycleTimeStats` interface, exported from the package root).
+  - Counts instances in status `approved`, `rejected`, or `cancelled`.
+    **`expired` is deliberately excluded** — its terminal timestamp reflects a
+    scheduler deadline firing, not a decision, so including it would skew the
+    distribution rather than describe it.
+  - Elapsed time per instance is `updatedAt - createdAt`; no new fields were
+    added to `ApprovalInstance` or either storage adapter.
+  - Every field is `0` (never `NaN`) when `count` is `0`. `cycleTimeByTemplate`
+    mirrors `byTemplate`'s population rule: a template only appears once it has
+    at least one completed instance.
+  - Adapter-agnostic — computed from existing `getInstancesByFilter` pages, so
+    `MemoryAdapter` and `PostgresAdapter` both support it with no changes.
+
+### Added — `plugins/webhook`
+
+- **`hierarchical-approval/plugins/webhook`** — a sixth built-in plug-in
+  subpath: an HTTP `INotificationAdapter` with signing and retry, on its own
+  tree-shakeable import path with **zero new dependencies**.
+  - `WebhookNotificationAdapter` POSTs each event as JSON to a configured URL.
+    `notify()` never throws (per the `INotificationAdapter` contract) — it logs
+    and drops the notification once retries are exhausted.
+  - **Signing (opt-in via `secret`).** Each request carries an
+    `X-Approval-Signature: t=<unix-seconds>,v1=<hex-hmac>` header (Stripe-style),
+    the HMAC-SHA256 digest of the signing string `` `<unix-seconds>.<json-body>` ``.
+    Unsigned when `secret` is omitted. `DEFAULT_SIGNATURE_HEADER` names the
+    default header (`'X-Approval-Signature'`); override via `signatureHeader`.
+  - **Retry.** `5xx`, `408`, `429`, and network/timeout errors are retried with
+    exponential backoff and full jitter, up to `maxAttempts` (default `3`); a
+    `429` honors `Retry-After` (seconds or an HTTP date) in place of the
+    computed backoff. Any other `4xx` fails on the first attempt.
+  - **Durability.** The public `deliver()` method throws
+    `WebhookDeliveryError` (`status?`, `attempts`, `cause?`) on final failure
+    instead of swallowing it, so it can be bound as the `transport` of
+    `plugins/notify`'s `OutboxNotificationAdapter` for at-least-once delivery
+    across process restarts — no adapter shim needed.
+  - Ships a new `HttpClient` port (a plain `fetch`-shaped function type) and
+    `getDefaultHttpClient()`. **No new dependency** — the port is structurally
+    satisfied by the global `fetch` (Node.js 18+); pass a custom `httpClient`
+    to use a different implementation.
+
+### Fixed — `PostgresAdapter`
+
+Three defects affecting users on published `0.5.0`. If you use `PostgresAdapter`,
+upgrading is recommended.
+
+- **Cursor pagination silently corrupted every page after the first.**
+  `getInstancesByCursor`'s cursor decoder split the `updatedAt_iso:id` string on
+  the _first_ colon, but an ISO-8601 timestamp (e.g.
+  `2026-06-26T09:00:00.000Z`) itself contains colons — so every decoded cursor
+  had a truncated timestamp and a corrupted id, breaking every subsequent page
+  fetch via `getInstancesByCursor`. Also hardened cursor encoding to normalize
+  through `Date.prototype.toISOString()` regardless of the row value's shape.
+  No migration needed.
+- **`templateId` was silently dropped on every write and always read back as
+  `''`.** `PostgresAdapter` had no `template_id` column, so
+  `ApprovalInstance.templateId` was permanently lost for any instance persisted
+  through this adapter. Fixed by adding a `template_id` column and including it
+  in both the insert and read paths.
+  **Action required on upgrade:** run the adapter's migration (its
+  `CREATE TABLE`/`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements, executed
+  automatically the next time the adapter initializes) to add the new column —
+  existing rows backfill to `''` until rewritten.
+- **The `schema` option was interpolated into SQL without the safe-identifier
+  validation `tablePrefix` already had**, an inconsistent injection surface at
+  construction time. `schema` is now validated against the same
+  `/^[a-z][a-z0-9_]*$/` pattern as `tablePrefix`, throwing
+  `ApprovalValidationError` on an invalid value. No migration needed; only
+  affects adapter construction with an attacker-controlled `schema` value.
+
 ## [0.5.0] - 2026-07-23
 
 ### Added — NestJS integration

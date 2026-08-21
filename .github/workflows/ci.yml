@@ -39,5 +39,8 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Examples (smoke test)
+        run: node scripts/examples-smoke.mjs
+
       - name: Docs (validate API reference generates)
         run: npm run docs
