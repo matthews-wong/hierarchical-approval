@@ -94,10 +94,20 @@
       "import": "./dist/plugins/resilience.js",
       "require": "./dist/plugins/resilience.cjs"
     },
+    "./plugins/scheduler": {
+      "types": "./dist/plugins/scheduler.d.ts",
+      "import": "./dist/plugins/scheduler.js",
+      "require": "./dist/plugins/scheduler.cjs"
+    },
     "./plugins/tracing": {
       "types": "./dist/plugins/tracing.d.ts",
       "import": "./dist/plugins/tracing.js",
       "require": "./dist/plugins/tracing.cjs"
+    },
+    "./plugins/webhook": {
+      "types": "./dist/plugins/webhook.d.ts",
+      "import": "./dist/plugins/webhook.js",
+      "require": "./dist/plugins/webhook.cjs"
     }
   },
   "scripts": {

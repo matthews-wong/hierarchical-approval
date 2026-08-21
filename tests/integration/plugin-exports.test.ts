@@ -62,6 +62,13 @@ describe('plugin public exports', () => {
     }
   });
 
+  it('scheduler barrel exposes its documented surface', async () => {
+    const m = await import('../../src/plugins/scheduler/index.js');
+    for (const name of ['InMemorySchedulerAdapter']) {
+      expect(m, `scheduler should export ${name}`).toHaveProperty(name);
+    }
+  });
+
   it('tracing barrel exposes its documented surface', async () => {
     const m = await import('../../src/plugins/tracing/index.js');
     for (const name of [
@@ -71,6 +78,18 @@ describe('plugin public exports', () => {
       'SpanStatusCode',
     ]) {
       expect(m, `tracing should export ${name}`).toHaveProperty(name);
+    }
+  });
+
+  it('webhook barrel exposes its documented surface', async () => {
+    const m = await import('../../src/plugins/webhook/index.js');
+    for (const name of [
+      'WebhookNotificationAdapter',
+      'WebhookDeliveryError',
+      'DEFAULT_SIGNATURE_HEADER',
+      'getDefaultHttpClient',
+    ]) {
+      expect(m, `webhook should export ${name}`).toHaveProperty(name);
     }
   });
 
