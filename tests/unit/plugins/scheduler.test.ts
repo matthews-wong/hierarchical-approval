@@ -116,4 +116,25 @@ describe('InMemorySchedulerAdapter', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(fired).toBe(true);
   });
+
+  it('generates distinct handles when scheduling with the same job id and allows selective cancellation', async () => {
+    const adapter = new InMemorySchedulerAdapter();
+    let fired1 = false;
+    let fired2 = false;
+
+    const handle1 = await adapter.scheduleAt('job-repeat', new Date(Date.now() + 2000), async () => {
+      fired1 = true;
+    });
+    const handle2 = await adapter.scheduleAt('job-repeat', new Date(Date.now() + 2000), async () => {
+      fired2 = true;
+    });
+
+    expect(handle1).not.toBe(handle2);
+
+    await adapter.cancel(handle1);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(fired1).toBe(false);
+    expect(fired2).toBe(true);
+  });
 });
