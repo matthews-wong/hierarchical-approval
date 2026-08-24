@@ -61,6 +61,12 @@ describe('InMemorySchedulerAdapter', () => {
     expect(fired).toBe(false);
   });
 
+  it('shutdown() is idempotent when called multiple times', async () => {
+    const adapter = new InMemorySchedulerAdapter();
+    await adapter.shutdown();
+    await expect(adapter.shutdown()).resolves.toBeUndefined();
+  });
+
   it('rejects scheduleAt() once shutdown() has run', async () => {
     const adapter = new InMemorySchedulerAdapter();
     await adapter.shutdown();
