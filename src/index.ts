@@ -8,6 +8,7 @@ export type {
   BulkResult,
   TransferResult,
   ApprovalStatistics,
+  ApproverWorkload,
   CycleTimeStats,
   HealthResult,
   RetryPolicy,

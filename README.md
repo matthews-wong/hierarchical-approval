@@ -399,6 +399,30 @@ engine.registerConditionOperator('between', (actual, expected) => {
 });
 ```
 
+### Who is holding things up
+
+`getStatistics()` answers how the tenant is doing; `getWorkload()` answers who
+is holding it up — the question behind rebalancing a queue or deciding whom to
+hand a departing colleague's work to:
+
+```ts
+const workload = await engine.getWorkload({ documentType: 'purchase_order' });
+// [
+//   { approverId: 'alice', pending: 12, instances: 11, overdue: 3, onHold: 1,
+//     oldestPendingAt: 2026-01-02T…, oldestAgeMs: 604800000 },
+//   ...
+// ]
+```
+
+Busiest queue first. `pending` counts open **levels**, `instances` counts
+distinct documents — they differ when one person holds several branches of a
+parallel group. An approver who has already voted on a level that is still
+collecting other votes owes nothing more and is not counted.
+
+Computed from pending instances rather than a dedicated index, so it works on
+any adapter with no new adapter methods — but it reads every pending instance in
+the tenant. It is a reporting call, not something for a hot path.
+
 ### Transferring a person's queue
 
 Someone leaves, changes team, or goes on long-term leave, and their open

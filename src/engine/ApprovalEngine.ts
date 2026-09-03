@@ -170,6 +170,28 @@ export interface TransferResult {
   dryRun: boolean;
 }
 
+/**
+ * What one approver currently owes a decision on.
+ *
+ * Durations are milliseconds. An approver appears only while they hold at least
+ * one open level.
+ */
+export interface ApproverWorkload {
+  approverId: string;
+  /** Open levels assigned to them. One instance can contribute several across parallel branches. */
+  pending: number;
+  /** Distinct documents involved — usually, but not always, equal to {@link pending}. */
+  instances: number;
+  /** Open levels already past their escalation deadline. */
+  overdue: number;
+  /** Open levels currently paused by a clarification request. */
+  onHold: number;
+  /** When the oldest of their open items was submitted. */
+  oldestPendingAt?: Date;
+  /** Age of that oldest item. `0` when they hold nothing. */
+  oldestAgeMs: number;
+}
+
 export interface ApprovalStatistics {
   /** Total instances matching the filter (across all statuses). */
   total: number;
@@ -2667,6 +2689,82 @@ export class ApprovalEngine {
    * submittedBy, date range) — `status` is ignored since every status is counted.
    * Adapter-agnostic: issues one cheap count query per status plus an overdue scan.
    */
+  /**
+   * Who currently owes a decision, and how overdue they are.
+   *
+   * `getStatistics()` answers how the tenant is doing; this answers who is
+   * holding it up — the question behind rebalancing a queue, spotting the
+   * approver who has been on leave for a week, or deciding whom to
+   * {@link transferApprovals} a departing colleague's work to.
+   *
+   * Computed from pending instances rather than a dedicated index, so it works
+   * on any storage adapter with no new adapter methods. That means it reads
+   * every pending instance in the tenant: fine for the operational volumes an
+   * approval queue reaches, but it is a reporting call, not something to put on
+   * a hot path.
+   *
+   * Rows are sorted by {@link ApproverWorkload.pending} descending, so the
+   * busiest queue is first.
+   *
+   * @param filter - Optional scoping; `status` is ignored, since only pending work counts.
+   * @returns One row per approver holding at least one open level.
+   */
+  async getWorkload(filter: Omit<InstanceFilter, 'status'> = {}): Promise<ApproverWorkload[]> {
+    const pending = await this.fetchAllByFilter({ ...filter, status: 'pending' });
+    const now = this.clock.now();
+
+    const byApprover = new Map<
+      string,
+      { pending: number; instances: Set<string>; overdue: number; onHold: number; oldest: number }
+    >();
+
+    for (const instance of pending) {
+      const submittedAt = new Date(instance.createdAt).getTime();
+      const held = Boolean(instance.infoRequest);
+
+      for (const level of instance.levels) {
+        if (level.status !== 'pending') continue;
+
+        const isOverdue =
+          level.escalationDueAt !== undefined && new Date(level.escalationDueAt) <= now;
+
+        for (const approverId of level.approverIds) {
+          // An approver who has already voted on this level owes nothing more,
+          // even though the level itself is still open waiting on others.
+          if (level.approvedBy.includes(approverId) || level.rejectedBy.includes(approverId)) {
+            continue;
+          }
+
+          const row = byApprover.get(approverId) ?? {
+            pending: 0,
+            instances: new Set<string>(),
+            overdue: 0,
+            onHold: 0,
+            oldest: Number.POSITIVE_INFINITY,
+          };
+          row.pending++;
+          row.instances.add(instance.id);
+          if (isOverdue) row.overdue++;
+          if (held) row.onHold++;
+          row.oldest = Math.min(row.oldest, submittedAt);
+          byApprover.set(approverId, row);
+        }
+      }
+    }
+
+    return [...byApprover.entries()]
+      .map(([approverId, row]) => ({
+        approverId,
+        pending: row.pending,
+        instances: row.instances.size,
+        overdue: row.overdue,
+        onHold: row.onHold,
+        oldestPendingAt: Number.isFinite(row.oldest) ? new Date(row.oldest) : undefined,
+        oldestAgeMs: Number.isFinite(row.oldest) ? now.getTime() - row.oldest : 0,
+      }))
+      .sort((a, b) => b.pending - a.pending || a.approverId.localeCompare(b.approverId));
+  }
+
   async getStatistics(filter: Omit<InstanceFilter, 'status'> = {}): Promise<ApprovalStatistics> {
     const statuses: ApprovalInstance['status'][] = [
       'pending',

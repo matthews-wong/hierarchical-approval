@@ -7,6 +7,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [1.9.0] - 2026-09-04
+
+### Added — `getWorkload()`
+
+- **Reports who currently owes a decision, and how overdue they are.**
+  `getStatistics()` answers how the tenant is doing; nothing answered who is
+  holding it up — the question behind rebalancing a queue, spotting the approver
+  who has been on leave for a week, or deciding whom to `transferApprovals()` a
+  departing colleague's work to.
+
+  ```ts
+  await engine.getWorkload({ documentType: 'purchase_order' });
+  // [{ approverId: 'alice', pending: 12, instances: 11, overdue: 3, onHold: 1,
+  //    oldestPendingAt: …, oldestAgeMs: 604800000 }, …]
+  ```
+
+  Sorted busiest first. `pending` counts open **levels** while `instances`
+  counts distinct documents — they differ when one person holds several branches
+  of a parallel group. `overdue` measures against each level's escalation
+  deadline, and `onHold` counts work paused by a clarification request.
+
+- **An approver who has already voted is not counted**, even while the level
+  stays open collecting other votes: they owe nothing more, and counting them
+  would overstate the queue of every quorum and weighted level.
+
+- Computed from pending instances rather than a dedicated index, so it works on
+  any storage adapter with no new adapter methods. That means it reads every
+  pending instance in the tenant — fine for the volumes an approval queue
+  reaches, but it is a reporting call, not something for a hot path.
+
+  New export: `ApproverWorkload`.
+
 ## [1.8.0] - 2026-09-04
 
 ### Added — `transferApprovals()`
