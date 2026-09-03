@@ -1,6 +1,9 @@
 import type { Logger } from '../../utils/Logger.js';
 import { noopLogger } from '../../utils/Logger.js';
-import type { INotificationAdapter, NotificationEvent } from '../../adapters/INotificationAdapter.js';
+import type {
+  INotificationAdapter,
+  NotificationEvent,
+} from '../../adapters/INotificationAdapter.js';
 
 /** A child adapter paired with a stable name for diagnostics/logging. */
 export interface NamedNotificationChild {
@@ -65,9 +68,7 @@ export class CompositeNotificationAdapter implements INotificationAdapter {
     const results = await Promise.allSettled(
       // Wrap each call so a synchronous throw inside a child's notify is also
       // captured as a rejection rather than escaping the fan-out.
-      this.children.map((child) =>
-        Promise.resolve().then(() => child.adapter.notify(event)),
-      ),
+      this.children.map((child) => Promise.resolve().then(() => child.adapter.notify(event))),
     );
 
     results.forEach((result, i) => {

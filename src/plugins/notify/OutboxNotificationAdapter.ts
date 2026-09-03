@@ -2,7 +2,10 @@ import type { Clock } from '../../utils/Clock.js';
 import { systemClock } from '../../utils/Clock.js';
 import type { Logger } from '../../utils/Logger.js';
 import { noopLogger } from '../../utils/Logger.js';
-import type { INotificationAdapter, NotificationEvent } from '../../adapters/INotificationAdapter.js';
+import type {
+  INotificationAdapter,
+  NotificationEvent,
+} from '../../adapters/INotificationAdapter.js';
 import type { IOutboxStore, OutboxRecord } from './IOutboxStore.js';
 import { InMemoryOutboxStore } from './InMemoryOutboxStore.js';
 
@@ -185,12 +188,16 @@ export class OutboxNotificationAdapter implements INotificationAdapter {
       record.lastError = message;
       if (record.attempts >= this.maxAttempts) {
         record.status = 'dead';
-        this.logger.error('OutboxNotificationAdapter: dead-lettered after exhausting retries', err, {
-          id: record.id,
-          tenantId: record.tenantId,
-          attempts: record.attempts,
-          maxAttempts: this.maxAttempts,
-        });
+        this.logger.error(
+          'OutboxNotificationAdapter: dead-lettered after exhausting retries',
+          err,
+          {
+            id: record.id,
+            tenantId: record.tenantId,
+            attempts: record.attempts,
+            maxAttempts: this.maxAttempts,
+          },
+        );
       } else {
         record.nextAttemptAt = this.clock.now().getTime() + this.computeBackoff(record.attempts);
         this.logger.warn('OutboxNotificationAdapter: delivery failed, scheduling retry', {

@@ -23,3 +23,10 @@ export type {
   RenderedNotification,
   SendFn,
 } from './TemplatedNotificationAdapter.js';
+
+export { DigestNotificationAdapter } from './DigestNotificationAdapter.js';
+export type {
+  DigestNotificationAdapterOptions,
+  Digest,
+  DigestSendFn,
+} from './DigestNotificationAdapter.js';

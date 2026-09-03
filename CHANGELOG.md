@@ -7,6 +7,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [2.4.0] - 2026-09-04
+
+### Added — `DigestNotificationAdapter`
+
+- **Batches notifications per recipient instead of sending one per event.** An
+  approver on twenty documents received twenty separate messages a day, which is
+  how approval email ends up filtered into a folder nobody reads — the
+  notifications defeat themselves.
+
+  ```ts
+  import { DigestNotificationAdapter } from 'hierarchical-approval/plugins/notify';
+
+  const digest = new DigestNotificationAdapter({
+    intervalMs: 15 * 60_000,
+    send: async ({ recipient, events }) => mailer.send(recipient, summarise(events)),
+  });
+  ```
+
+- **Urgent events still go straight through.** Batching a rejection or a
+  completed approval behind a digest window would make the library's own
+  notifications the reason a decision was late, so `approval:rejected`,
+  `approval:completed`, `approval:sla_breached` and `approval:expired` bypass
+  the buffer by default — configurable via `passthrough`.
+
+- **`maxBatchSize`** (default 50) flushes a recipient early under a burst so the
+  buffer stays bounded, and flushes only *that* recipient: a burst aimed at one
+  person must not force everybody else's digest out early. Omit `intervalMs` to
+  disable the timer and drive `flush()` from a cron job or queue worker instead.
+
+- A failed `send` is logged and swallowed, as the notification-adapter contract
+  requires, and the buffer is cleared before sending so a failure cannot replay
+  the same events into every subsequent digest.
+
+- Buffers are in memory: a restart drops what has not been flushed. That is the
+  right trade for a convenience digest but not for delivery guarantees — put
+  `OutboxNotificationAdapter` underneath when an event must not be lost.
+
+  New exports from `hierarchical-approval/plugins/notify`:
+  `DigestNotificationAdapter`, `DigestNotificationAdapterOptions`, `Digest`,
+  `DigestSendFn`.
+
 ## [2.3.0] - 2026-09-04
 
 ### Added — retention

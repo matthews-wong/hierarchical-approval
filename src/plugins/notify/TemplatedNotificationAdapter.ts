@@ -1,7 +1,10 @@
 import type { Logger } from '../../utils/Logger.js';
 import { noopLogger } from '../../utils/Logger.js';
 import type { ApprovalEventName } from '../../types/events.js';
-import type { INotificationAdapter, NotificationEvent } from '../../adapters/INotificationAdapter.js';
+import type {
+  INotificationAdapter,
+  NotificationEvent,
+} from '../../adapters/INotificationAdapter.js';
 
 /** The fully rendered, channel-ready message handed to the send fn. */
 export interface RenderedNotification {
