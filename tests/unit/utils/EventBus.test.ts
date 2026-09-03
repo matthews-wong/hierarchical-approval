@@ -58,6 +58,14 @@ describe('EventBus', () => {
     expect(kept).toHaveBeenCalledTimes(1);
   });
 
+  it('off is a no-op for a listener that was never registered', () => {
+    const bus = new EventBus();
+    const never = vi.fn();
+
+    expect(() => bus.off('approval:submitted', never)).not.toThrow();
+    expect(bus.off('approval:submitted', never)).toBe(bus);
+  });
+
   it('once fires exactly once across repeated emits', () => {
     const bus = new EventBus();
     const listener = vi.fn();
