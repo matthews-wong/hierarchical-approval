@@ -34,6 +34,11 @@ export const DelegateOptionsSchema = z.object({
   toApprover: z.string().min(1),
   reason: z.string().min(1),
   until: z.coerce.date().optional(),
+  /**
+   * Which open level to act on. Only needed inside a parallel group, where the
+   * approver may hold more than one open branch.
+   */
+  level: z.number().int().optional(),
 });
 
 export const ReassignOptionsSchema = z.object({
@@ -41,6 +46,8 @@ export const ReassignOptionsSchema = z.object({
   fromApprover: z.string().min(1),
   toApprover: z.string().min(1),
   reason: z.string().min(1),
+  /** Which open level to act on; see {@link DelegateOptionsSchema}. */
+  level: z.number().int().optional(),
 });
 
 export const CancelOptionsSchema = z.object({
@@ -95,6 +102,19 @@ export const RemoveAttachmentOptionsSchema = z.object({
   reason: z.string().optional(),
 });
 
+export const TransferApprovalsOptionsSchema = z.object({
+  fromApprover: z.string().min(1),
+  toApprover: z.string().min(1),
+  transferredBy: z.string().min(1),
+  reason: z.string().min(1),
+  /** Restrict the sweep to one document type. */
+  documentType: z.string().optional(),
+  /** Report what would move without changing anything. */
+  dryRun: z.boolean().default(false),
+  /** Safety cap on how many instances one sweep will touch. */
+  limit: z.number().int().positive().default(500),
+});
+
 export const UpdateDataOptionsSchema = z.object({
   updatedBy: z.string().min(1),
   data: z.record(z.string(), z.unknown()),
@@ -120,3 +140,4 @@ export type RequestInfoOptions = z.infer<typeof RequestInfoOptionsSchema>;
 export type ProvideInfoOptions = z.infer<typeof ProvideInfoOptionsSchema>;
 export type AddAttachmentOptions = z.infer<typeof AddAttachmentOptionsSchema>;
 export type RemoveAttachmentOptions = z.infer<typeof RemoveAttachmentOptionsSchema>;
+export type TransferApprovalsOptions = z.infer<typeof TransferApprovalsOptionsSchema>;

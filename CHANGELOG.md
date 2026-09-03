@@ -7,6 +7,49 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [1.8.0] - 2026-09-04
+
+### Added — `transferApprovals()`
+
+- **Move every pending approval assigned to one person over to another.**
+  Someone leaves, changes team, or goes on long-term leave, and their queue has
+  to go somewhere. Doing it by hand meant finding every open instance first —
+  across parallel branches, where one person can hold several open levels on the
+  same document — and missing one left an approval that could never complete.
+
+  ```ts
+  await engine.transferApprovals({
+    fromApprover: 'alice',
+    toApprover: 'bob',
+    transferredBy: 'workflow-admin',
+    reason: 'Alice left the company',
+    documentType: 'purchase_order',   // optional
+    dryRun: true,                     // see what would move first
+  });
+  ```
+
+  Each move goes through `reassign()`, so every guard, audit entry, event and
+  authorization check that applies to a single reassignment applies here too.
+  The sweep is deliberately **not atomic**: it reports per-instance failures
+  rather than rolling back, because a partial transfer is the useful outcome —
+  what can move should move, and what cannot is named for a human to look at.
+
+  New exports: `TransferResult`, `TransferApprovalsOptions`.
+
+### Fixed — `delegate()` and `reassign()` could not reach an upper parallel branch
+
+- **Both resolved the level via `currentLevelInstance`**, which names only the
+  lowest-numbered open level. Inside a parallel group they therefore always
+  acted on the lowest branch: an approver could not hand off their own
+  upper-branch work, and an administrator reassigning a departing user silently
+  moved the wrong branch — or failed, because that person was not an approver on
+  the branch being targeted. Introduced with parallel groups in 1.0.0; sequential
+  templates were never affected.
+
+  Both now resolve against the approver actually being moved, and take an
+  optional `level` to disambiguate when one person holds more than one open
+  branch — matching what `approve()` and `reject()` already did.
+
 ## [1.7.0] - 2026-09-04
 
 ### Added — attachment references

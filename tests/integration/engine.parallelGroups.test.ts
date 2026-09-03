@@ -284,3 +284,85 @@ describe('escalation reaches every open branch', () => {
     expect(overdue.map((o) => o.id)).toContain(i.id);
   });
 });
+
+describe('delegate and reassign reach the right branch', () => {
+  // Regression guard: both resolved via currentLevelInstance, so inside a
+  // parallel group they always acted on the lowest open branch — an approver
+  // could not hand off their own upper-branch work at all.
+  const forkedShared = async (engine: ApprovalEngine) =>
+    engine.defineTemplate({
+      name: 'PAR',
+      documentType: 'contract',
+      levels: [lvl(1, 'Finance', 'fin', 'review'), lvl(2, 'Legal', 'legal', 'review')],
+    });
+
+  const submitPar = (engine: ApprovalEngine) =>
+    engine.submit({
+      templateName: 'PAR',
+      documentId: `c-${Math.random()}`,
+      documentType: 'contract',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+  it('reassigns the upper branch, not the lowest one', async () => {
+    const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+    await forkedShared(engine);
+    const i = await submitPar(engine);
+
+    await engine.reassign(i.id, {
+      reassignedBy: 'admin',
+      fromApprover: 'legal',
+      toApprover: 'legal-2',
+      reason: 'on leave',
+    });
+
+    const after = await engine.getInstance(i.id);
+    expect(after.levels[0]?.approverIds).toEqual(['fin']);
+    expect(after.levels[1]?.approverIds).toEqual(['legal-2']);
+  });
+
+  it('delegates the upper branch, not the lowest one', async () => {
+    const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+    await forkedShared(engine);
+    const i = await submitPar(engine);
+
+    await engine.delegate(i.id, {
+      fromApprover: 'legal',
+      toApprover: 'legal-2',
+      reason: 'holiday',
+    });
+
+    const after = await engine.getInstance(i.id);
+    expect(after.levels[0]?.approverIds).toEqual(['fin']);
+    expect(after.levels[1]?.approverIds).toContain('legal-2');
+  });
+
+  it('an explicit level disambiguates when one person holds both branches', async () => {
+    const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+    await engine.defineTemplate({
+      name: 'PAR2',
+      documentType: 'contract',
+      levels: [lvl(1, 'Finance', 'cfo', 'review'), lvl(2, 'Legal', 'cfo', 'review')],
+    });
+    const i = await engine.submit({
+      templateName: 'PAR2',
+      documentId: 'c-both',
+      documentType: 'contract',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+    await engine.reassign(i.id, {
+      reassignedBy: 'admin',
+      fromApprover: 'cfo',
+      toApprover: 'deputy',
+      reason: 'split the load',
+      level: 2,
+    });
+
+    const after = await engine.getInstance(i.id);
+    expect(after.levels[0]?.approverIds).toEqual(['cfo']);
+    expect(after.levels[1]?.approverIds).toEqual(['deputy']);
+  });
+});

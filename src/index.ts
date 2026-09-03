@@ -6,6 +6,7 @@ export type {
   PreviewChainLevel,
   PreviewResult,
   BulkResult,
+  TransferResult,
   ApprovalStatistics,
   CycleTimeStats,
   HealthResult,
@@ -17,10 +18,7 @@ export type {
   ApproverResolverFn,
   OutOfOfficeProvider,
 } from './engine/LevelResolver.js';
-export {
-  toComparableNumber,
-  validateConditionExpression,
-} from './engine/ConditionEvaluator.js';
+export { toComparableNumber, validateConditionExpression } from './engine/ConditionEvaluator.js';
 export type { ConditionOperatorFn } from './engine/ConditionEvaluator.js';
 export { EscalationScheduler } from './engine/EscalationScheduler.js';
 export type { EscalationSchedulerOpts } from './engine/EscalationScheduler.js';

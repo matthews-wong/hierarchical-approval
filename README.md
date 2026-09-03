@@ -399,6 +399,33 @@ engine.registerConditionOperator('between', (actual, expected) => {
 });
 ```
 
+### Transferring a person's queue
+
+Someone leaves, changes team, or goes on long-term leave, and their open
+approvals have to go somewhere:
+
+```ts
+const result = await engine.transferApprovals({
+  fromApprover: 'alice',
+  toApprover: 'bob',
+  transferredBy: 'workflow-admin',
+  reason: 'Alice left the company',
+  documentType: 'purchase_order',  // optional scoping
+  dryRun: true,                    // see what would move first
+});
+// { transferred: [{ instanceId, level, documentId }], failed: [...], scanned, dryRun }
+```
+
+Each move goes through `reassign()`, so every guard, audit entry, event and
+authorization check that applies to a single reassignment applies here too —
+there is no bulk short-cut around them. Inside a parallel group each open branch
+is moved separately, since one person can hold several open levels on the same
+document.
+
+The sweep is **not atomic**: it reports per-instance failures rather than rolling
+back. A partial transfer is the useful outcome — the approvals that can move
+should move, and the ones that cannot are named so a human can look at them.
+
 ### Attachments
 
 Attach supporting evidence — a quote PDF, a signed contract, a screenshot of a

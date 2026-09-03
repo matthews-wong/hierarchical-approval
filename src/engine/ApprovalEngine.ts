@@ -35,6 +35,7 @@ import {
   RequestInfoOptionsSchema,
   AddAttachmentOptionsSchema,
   RemoveAttachmentOptionsSchema,
+  TransferApprovalsOptionsSchema,
   ProvideInfoOptionsSchema,
   type SubmitOptions,
   type ApproveOptions,
@@ -50,6 +51,7 @@ import {
   type RequestInfoOptions,
   type AddAttachmentOptions,
   type RemoveAttachmentOptions,
+  type TransferApprovalsOptions,
   type ProvideInfoOptions,
 } from '../utils/validate.js';
 import { EventBus } from '../utils/EventBus.js';
@@ -154,6 +156,18 @@ export interface BulkResult {
   succeeded: ApprovalInstance[];
   failed: Array<{ instanceId: string; error: ApprovalError }>;
   total: number;
+}
+
+/** Outcome of a {@link ApprovalEngine.transferApprovals} sweep. */
+export interface TransferResult {
+  /** One entry per level actually moved (an instance can hold the approver on several open branches). */
+  transferred: Array<{ instanceId: string; level: number; documentId: string }>;
+  /** Instances that could not be moved, with the reason. */
+  failed: Array<{ instanceId: string; error: ApprovalError }>;
+  /** Instances examined. */
+  scanned: number;
+  /** True when nothing was written. */
+  dryRun: boolean;
 }
 
 export interface ApprovalStatistics {
@@ -1160,7 +1174,7 @@ export class ApprovalEngine {
         throw new ApprovalForbiddenError('Cannot delegate to yourself.');
       }
 
-      const level = this.currentLevelInstance(instance);
+      const level = this.resolveActorLevel(instance, opts.fromApprover, opts.level);
       await this.runAuthorizationPolicy({
         operation: 'delegate',
         actorId: opts.fromApprover,
@@ -1254,7 +1268,7 @@ export class ApprovalEngine {
         throw new ApprovalForbiddenError('Cannot reassign an approver to themselves.');
       }
 
-      const level = this.currentLevelInstance(instance);
+      const level = this.resolveActorLevel(instance, opts.fromApprover, opts.level);
       await this.runAuthorizationPolicy({
         operation: 'reassign',
         actorId: opts.reassignedBy,
@@ -1996,9 +2010,7 @@ export class ApprovalEngine {
       });
 
       const now = this.clock.now();
-      instance.attachments = (instance.attachments ?? []).filter(
-        (a) => a.id !== opts.attachmentId,
-      );
+      instance.attachments = (instance.attachments ?? []).filter((a) => a.id !== opts.attachmentId);
       instance.updatedAt = now;
 
       const auditEntry: AuditEntry = {
@@ -2414,6 +2426,109 @@ export class ApprovalEngine {
   }
 
   /** Approve multiple instances in one call. Never throws — failures collected in result.failed. */
+  /**
+   * Move every pending approval assigned to one person over to another.
+   *
+   * Someone leaves, changes team, or goes on long-term leave, and their queue
+   * has to go somewhere. Doing it by hand means finding every open instance
+   * first — across parallel branches, where one person can hold several open
+   * levels on the same document — and missing one leaves an approval that can
+   * never complete.
+   *
+   * Each move goes through {@link reassign}, so every guard, audit entry, event
+   * and authorization check that applies to a single reassignment applies here
+   * too. There is no bulk short-cut around them.
+   *
+   * The sweep is **not atomic**: it reassigns one level at a time and reports
+   * per-instance failures rather than rolling back. A partial transfer is the
+   * useful outcome — the approvals that could move should move, and the ones
+   * that could not are named so a human can look at them.
+   *
+   * @param raw - Who is moving to whom, and why.
+   * @returns What moved, what did not, and why. With `dryRun` nothing is written.
+   */
+  async transferApprovals(
+    raw: TransferApprovalsOptions,
+    auditCtx?: AuditContext,
+  ): Promise<TransferResult> {
+    const opts = parseOrThrow(() => TransferApprovalsOptionsSchema.parse(raw));
+
+    if (opts.fromApprover === opts.toApprover) {
+      throw new ApprovalValidationError(
+        'transferApprovals requires different fromApprover and toApprover.',
+      );
+    }
+
+    const queue = await this.opts.adapter.getInstancesByApprover(this.tenantId, opts.fromApprover, {
+      limit: opts.limit,
+      offset: 0,
+    });
+
+    const result: TransferResult = {
+      transferred: [],
+      failed: [],
+      scanned: 0,
+      dryRun: opts.dryRun,
+    };
+
+    for (const instance of queue.items) {
+      if (opts.documentType && instance.documentType !== opts.documentType) continue;
+      result.scanned++;
+
+      // One person can hold several open branches of a parallel group on the
+      // same document; each is a separate level and must be moved separately.
+      const levels = instance.levels.filter(
+        (l) => l.status === 'pending' && l.approverIds.includes(opts.fromApprover),
+      );
+
+      for (const level of levels) {
+        if (opts.dryRun) {
+          result.transferred.push({
+            instanceId: instance.id,
+            level: level.level,
+            documentId: instance.documentId,
+          });
+          continue;
+        }
+        try {
+          await this.reassign(
+            instance.id,
+            {
+              reassignedBy: opts.transferredBy,
+              fromApprover: opts.fromApprover,
+              toApprover: opts.toApprover,
+              reason: opts.reason,
+              level: level.level,
+            },
+            auditCtx,
+          );
+          result.transferred.push({
+            instanceId: instance.id,
+            level: level.level,
+            documentId: instance.documentId,
+          });
+        } catch (err) {
+          result.failed.push({
+            instanceId: instance.id,
+            error: err instanceof ApprovalError ? err : new ApprovalError(String(err), 'UNKNOWN'),
+          });
+        }
+      }
+    }
+
+    this.logger.info('transferApprovals: sweep complete', {
+      tenantId: this.tenantId,
+      fromApprover: opts.fromApprover,
+      toApprover: opts.toApprover,
+      scanned: result.scanned,
+      transferred: result.transferred.length,
+      failed: result.failed.length,
+      dryRun: opts.dryRun,
+    });
+
+    return result;
+  }
+
   async bulkApprove(
     instanceIds: string[],
     raw: ApproveOptions,
