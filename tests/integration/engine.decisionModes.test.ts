@@ -84,6 +84,26 @@ describe('ApprovalEngine — quorum mode', () => {
     ).rejects.toThrow(/minApprovals/);
     await engine.shutdown();
   });
+
+  it('rejects a quorum minApprovals that exceeds the static approver count', async () => {
+    const engine = makeEngine();
+    await expect(
+      engine.defineTemplate({
+        name: 'Overreaching Quorum',
+        documentType: 'x',
+        levels: [
+          {
+            level: 1,
+            name: 'L1',
+            mode: 'quorum',
+            minApprovals: 3,
+            approvers: [{ type: 'user', userId: 'a' }, { type: 'user', userId: 'b' }],
+          },
+        ],
+      }),
+    ).rejects.toThrow(/requires 3 approvals but only 2 approver/);
+    await engine.shutdown();
+  });
 });
 
 describe('ApprovalEngine — weighted mode', () => {
@@ -114,6 +134,27 @@ describe('ApprovalEngine — weighted mode', () => {
 
     const result = await engine.reject(inst.id, { approverId: 'cfo', reason: 'over budget' });
     expect(result.status).toBe('rejected');
+    await engine.shutdown();
+  });
+
+  it('rejects a negative weight at definition time', async () => {
+    const engine = makeEngine();
+    await expect(
+      engine.defineTemplate({
+        name: 'Bad Weighted',
+        documentType: 'x',
+        levels: [
+          {
+            level: 1,
+            name: 'L1',
+            mode: 'weighted',
+            threshold: 1,
+            weights: { cfo: -1 },
+            approvers: [{ type: 'user', userId: 'cfo' }],
+          },
+        ],
+      }),
+    ).rejects.toThrow(/Weight for "cfo" must be a non-negative number/);
     await engine.shutdown();
   });
 });
