@@ -137,4 +137,27 @@ describe('boolean condition expressions through the engine', () => {
     expect(await submitWith({ amount: 4999 })).toEqual(['Manager']);
     expect(await submitWith({ amount: null })).toEqual(['Manager', 'Finance']);
   });
+
+  it('validateTemplate accepts an array-form `when` as AND-shorthand', () => {
+    const result = engine.validateTemplate(
+      base({
+        conditions: [
+          {
+            when: [
+              { field: 'amount', operator: '>', value: 5000 },
+              { field: 'dept', operator: '==', value: 'engineering' },
+            ],
+            skipLevels: [2],
+          },
+        ],
+      }),
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it('validateTemplate rejects an empty array-form `when`', () => {
+    const result = engine.validateTemplate(base({ conditions: [{ when: [], skipLevels: [2] }] }));
+    expect(result.valid).toBe(false);
+    expect(result.errors.map((e) => e.message)).toContain('Condition list must not be empty.');
+  });
 });
