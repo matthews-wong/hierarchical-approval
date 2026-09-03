@@ -399,6 +399,24 @@ engine.registerConditionOperator('between', (actual, expected) => {
 });
 ```
 
+### Writing a custom storage adapter
+
+Implement `IStorageAdapter`. Most methods map straightforwardly onto a table;
+one deserves a note:
+
+```ts
+countInstances(tenantId: string, filter: InstanceFilter): Promise<number>;
+```
+
+Reporting asks for counts far more often than rows, so this exists to let the
+database answer with a real `COUNT(*)` rather than fetching a page and reading
+its total. If you have nothing better to hand, one line is a valid start:
+
+```ts
+countInstances = (tenantId, filter) =>
+  this.getInstancesByFilter(tenantId, filter, { limit: 1, offset: 0 }).then((r) => r.total);
+```
+
 ### Who is holding things up
 
 `getStatistics()` answers how the tenant is doing; `getWorkload()` answers who

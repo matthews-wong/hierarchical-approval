@@ -2649,12 +2649,7 @@ export class ApprovalEngine {
     let overdueCount = 0;
 
     try {
-      const result = await this.opts.adapter.getInstancesByFilter(
-        this.tenantId,
-        { status: 'pending' },
-        { limit: 1, offset: 0 },
-      );
-      pendingCount = result.total;
+      pendingCount = await this.opts.adapter.countInstances(this.tenantId, { status: 'pending' });
     } catch {
       adapterStatus = 'error';
     }
@@ -2776,9 +2771,7 @@ export class ApprovalEngine {
 
     const counts = await Promise.all(
       statuses.map((status) =>
-        this.opts.adapter
-          .getInstancesByFilter(this.tenantId, { ...filter, status }, { limit: 1, offset: 0 })
-          .then((r) => r.total),
+        this.opts.adapter.countInstances(this.tenantId, { ...filter, status }),
       ),
     );
 
@@ -2812,30 +2805,10 @@ export class ApprovalEngine {
         templates.map(async (template) => {
           const base = { ...filter, templateName: template.name };
           const [tTotal, tApproved, tRejected, tPending, tCycleTime] = await Promise.all([
-            this.opts.adapter
-              .getInstancesByFilter(this.tenantId, base, { limit: 1, offset: 0 })
-              .then((r) => r.total),
-            this.opts.adapter
-              .getInstancesByFilter(
-                this.tenantId,
-                { ...base, status: 'approved' },
-                { limit: 1, offset: 0 },
-              )
-              .then((r) => r.total),
-            this.opts.adapter
-              .getInstancesByFilter(
-                this.tenantId,
-                { ...base, status: 'rejected' },
-                { limit: 1, offset: 0 },
-              )
-              .then((r) => r.total),
-            this.opts.adapter
-              .getInstancesByFilter(
-                this.tenantId,
-                { ...base, status: 'pending' },
-                { limit: 1, offset: 0 },
-              )
-              .then((r) => r.total),
+            this.opts.adapter.countInstances(this.tenantId, base),
+            this.opts.adapter.countInstances(this.tenantId, { ...base, status: 'approved' }),
+            this.opts.adapter.countInstances(this.tenantId, { ...base, status: 'rejected' }),
+            this.opts.adapter.countInstances(this.tenantId, { ...base, status: 'pending' }),
             this.computeCycleTimeStats(base),
           ]);
           if (tTotal > 0) {

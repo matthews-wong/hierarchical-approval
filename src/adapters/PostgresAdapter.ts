@@ -442,6 +442,54 @@ export class PostgresAdapter implements IStorageAdapter {
     };
   }
 
+  async countInstances(tenantId: string, filter: InstanceFilter): Promise<number> {
+    const pool = await this.getPool();
+    const conditions: string[] = ['tenant_id = $1'];
+    const params: unknown[] = [tenantId];
+    let idx = 2;
+
+    if (filter.status) {
+      conditions.push(`status = $${idx++}`);
+      params.push(filter.status);
+    }
+    if (filter.documentType) {
+      conditions.push(`document_type = $${idx++}`);
+      params.push(filter.documentType);
+    }
+    if (filter.submittedBy) {
+      conditions.push(`submitted_by = $${idx++}`);
+      params.push(filter.submittedBy);
+    }
+    if (filter.templateName) {
+      conditions.push(`template_name = $${idx++}`);
+      params.push(filter.templateName);
+    }
+    if (filter.fromDate) {
+      conditions.push(`created_at >= $${idx++}`);
+      params.push(filter.fromDate.toISOString());
+    }
+    if (filter.toDate) {
+      conditions.push(`created_at <= $${idx++}`);
+      params.push(filter.toDate.toISOString());
+    }
+    if (filter.data) {
+      for (const [path, expected] of Object.entries(filter.data)) {
+        conditions.push(jsonbPathCondition(path, idx));
+        params.push(toPgTextArray(path), JSON.stringify(expected ?? null));
+        idx += 2;
+      }
+    }
+
+    // A bare COUNT(*): no row payload to serialise, and the planner is free to
+    // satisfy it from an index rather than touching the JSONB columns at all.
+    const result = await pool.query(
+      `SELECT COUNT(*)::bigint AS count FROM ${this.p}_instances WHERE ${conditions.join(' AND ')}`,
+      params,
+    );
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    return row ? Number(row['count']) : 0;
+  }
+
   async getOverdueInstances(
     tenantId: string,
     asOf: Date,

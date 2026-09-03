@@ -7,6 +7,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [2.0.0] - 2026-09-04
+
+### BREAKING — `IStorageAdapter` requires `countInstances`
+
+**Only affects custom storage adapters.** The bundled `MemoryAdapter` and
+`PostgresAdapter` implement it; if you use those, upgrading needs no code
+change (run `migrate()` if you have not since 1.7.0).
+
+Reporting needs counts far more often than rows. `getStatistics()` alone issued
+`4N + 5` count queries for a tenant with N templates, and every one of them went
+through `getInstancesByFilter(…, { limit: 1 })` — making the database compute the
+count *and* serialise a complete instance row, JSONB levels and document data
+included, only to discard it. `healthCheck()` did the same.
+
+```ts
+countInstances(tenantId: string, filter: InstanceFilter): Promise<number>;
+```
+
+`PostgresAdapter` answers it with a bare `SELECT COUNT(*)`: no row payload, no
+`COUNT(*) OVER()` window, and the planner is free to satisfy it from an index
+rather than touching the JSONB columns at all. Every filter — including the
+`data` dot-path matching from 1.4.0 — is supported and parameterised.
+
+**Migrating a custom adapter.** One line restores the previous behaviour, and
+you can replace it with a real count query whenever it suits:
+
+```ts
+countInstances = (tenantId, filter) =>
+  this.getInstancesByFilter(tenantId, filter, { limit: 1, offset: 0 }).then((r) => r.total);
+```
+
+No behaviour changes for callers: `getStatistics()` and `healthCheck()` return
+exactly what they did, computed without fetching rows nobody reads. The
+cycle-time sweep still reads rows, because it needs their timestamps.
+
 ## [1.9.0] - 2026-09-04
 
 ### Added — `getWorkload()`

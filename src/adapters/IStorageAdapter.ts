@@ -80,6 +80,26 @@ export interface IStorageAdapter {
     asOf: Date,
     filter?: InstanceFilter,
   ): Promise<ApprovalInstance[]>;
+  /**
+   * Count instances matching a filter, without fetching any of them.
+   *
+   * Reporting needs counts far more often than rows: `getStatistics()` alone
+   * issues `4N + 5` of them for a tenant with N templates. Answering those
+   * through `getInstancesByFilter` made the database compute the count *and*
+   * serialise a full instance row — JSONB levels, document data and all — for
+   * every one, only to discard it.
+   *
+   * A custom adapter with nothing better available can satisfy this in one line:
+   *
+   * ```ts
+   * countInstances = (tenantId, filter) =>
+   *   this.getInstancesByFilter(tenantId, filter, { limit: 1, offset: 0 })
+   *       .then((r) => r.total);
+   * ```
+   *
+   * @since 2.0.0 — required. See the release notes for the migration.
+   */
+  countInstances(tenantId: string, filter: InstanceFilter): Promise<number>;
   getIdempotentInstance(tenantId: string, idempotencyKey: string): Promise<ApprovalInstance | null>;
 
   // Audit (append-only)

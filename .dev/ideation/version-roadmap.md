@@ -27,7 +27,7 @@ major boundaries where a breaking change is expected anyway.
 | 1.8.0 ✅ | transferApprovals() + fix delegate/reassign on parallel branches | Engine |
 | _later_ | Sub-workflows — a level that spawns a child instance | Engine |
 | 1.9.0 ✅ | getWorkload() — who owes a decision, and how overdue | Engine |
-| 2.0.0 | Adapter interface v2 (breaking) | Adapters |
+| 2.0.0 ✅ | Adapter interface v2 — required countInstances (breaking) | Adapters |
 | 2.1.x+ | To be planned once 2.0.0 lands | — |
 
 Versions past 2.0.0 stay deliberately unplanned: the adapter break will

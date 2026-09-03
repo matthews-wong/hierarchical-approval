@@ -201,6 +201,14 @@ export class MemoryAdapter implements IStorageAdapter {
       .map((i) => reviveDates(deepClone(i)));
   }
 
+  async countInstances(tenantId: string, filter: InstanceFilter): Promise<number> {
+    let count = 0;
+    for (const instance of this.instances.values()) {
+      if (instance.tenantId === tenantId && applyFilter(instance, filter)) count++;
+    }
+    return count;
+  }
+
   async getInstancesByCursor(
     tenantId: string,
     filter: InstanceFilter,
