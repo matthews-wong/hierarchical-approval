@@ -51,6 +51,26 @@ function reviveTemplateDates(template: ApprovalTemplate): ApprovalTemplate {
   return { ...template, createdAt: new Date(template.createdAt) };
 }
 
+/**
+ * Build the SQL fragment matching a dot-path in the JSONB `data` column.
+ *
+ * Uses `#>` with a text[] path so a nested path is one parameterised lookup and
+ * the path segments are never interpolated into SQL. Comparison is against the
+ * value as JSONB, which makes an object or array value match structurally
+ * rather than by its serialised text.
+ */
+function jsonbPathCondition(path: string, paramIdx: number): string {
+  return `data #> $${paramIdx}::text[] = $${paramIdx + 1}::jsonb`;
+}
+
+/** Postgres text[] literal for a dot-path, e.g. "vendor.id" -> {vendor,id}. */
+function toPgTextArray(path: string): string {
+  return `{${path
+    .split('.')
+    .map((seg) => `"${seg.replace(/(["\\])/g, '\\$1')}"`)
+    .join(',')}}`;
+}
+
 export class PostgresAdapter implements IStorageAdapter {
   private _pool: import('pg').Pool | null = null;
   private readonly prefix: string;
@@ -368,6 +388,13 @@ export class PostgresAdapter implements IStorageAdapter {
       conditions.push(`created_at <= $${idx++}`);
       params.push(filter.toDate.toISOString());
     }
+    if (filter.data) {
+      for (const [path, expected] of Object.entries(filter.data)) {
+        conditions.push(jsonbPathCondition(path, idx));
+        params.push(toPgTextArray(path), JSON.stringify(expected ?? null));
+        idx += 2;
+      }
+    }
 
     const offset = opts?.offset ?? 0;
     const limit = opts?.limit ?? 50;
@@ -504,6 +531,13 @@ export class PostgresAdapter implements IStorageAdapter {
     if (filter.templateName) {
       conditions.push(`template_name = $${idx++}`);
       params.push(filter.templateName);
+    }
+    if (filter.data) {
+      for (const [path, expected] of Object.entries(filter.data)) {
+        conditions.push(jsonbPathCondition(path, idx));
+        params.push(toPgTextArray(path), JSON.stringify(expected ?? null));
+        idx += 2;
+      }
     }
 
     const { cursor, limit, direction = 'forward' } = opts;

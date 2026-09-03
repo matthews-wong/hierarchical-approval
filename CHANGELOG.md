@@ -7,6 +7,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [1.4.0] - 2026-09-04
+
+### Added — filter instances by document data
+
+- **`InstanceFilter` gains `data`.** Filters covered status, document type,
+  submitter, template and date, but nothing about the document itself, so
+  "every pending purchase order for vendor ACME" meant paging the whole tenant
+  and filtering in application code — which scales badly and pushes the same
+  logic into every caller.
+
+  ```ts
+  await engine.queryInstances({
+    status: 'pending',
+    data: { 'vendor.id': 'v-1', region: 'EU' },
+  });
+  ```
+
+  Keys are dot-paths, values compare by deep equality (so object and array
+  values match structurally), and all pairs must match. Available on
+  `queryInstances()`, `queryInstancesByCursor()` and `getStatistics()`.
+
+- **Paths resolve over own properties only**, mirroring how conditions read
+  field paths — a filter and a condition written against the same path agree on
+  what it means, and an inherited prototype member can never make an instance
+  match a query.
+
+- **On PostgreSQL this compiles to a parameterised JSONB path lookup**
+  (`data #> $n::text[] = $n+1::jsonb`). Path segments travel as a parameter and
+  are never interpolated into SQL. Comparison is against JSONB rather than
+  serialised text, so structural matching holds on both adapters. Index hot
+  paths with `CREATE INDEX ON approval_instances ((data #> '{vendor,id}'))`.
+
 ## [1.3.0] - 2026-09-04
 
 ### Added — out-of-office cover

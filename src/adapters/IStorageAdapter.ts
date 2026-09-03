@@ -1,4 +1,9 @@
-import type { ApprovalTemplate, ApprovalInstance, AuditEntry, ApprovalStatus } from '../types/index.js';
+import type {
+  ApprovalTemplate,
+  ApprovalInstance,
+  AuditEntry,
+  ApprovalStatus,
+} from '../types/index.js';
 
 export interface PaginationOpts {
   limit: number;
@@ -31,6 +36,16 @@ export interface InstanceFilter {
   templateName?: string;
   fromDate?: Date;
   toDate?: Date;
+  /**
+   * Match instances whose document `data` contains these field/value pairs —
+   * "every purchase order for vendor ACME", without the caller fetching a page
+   * at a time and filtering in application code.
+   *
+   * Keys are dot-paths (`vendor.id`), values compare by deep equality, and all
+   * pairs must match. Matching is on **own** properties only, mirroring how
+   * conditions resolve field paths.
+   */
+  data?: Record<string, unknown>;
 }
 
 export interface IStorageAdapter {
@@ -60,11 +75,12 @@ export interface IStorageAdapter {
     filter: InstanceFilter,
     opts: CursorPaginationOpts,
   ): Promise<CursorPaginatedResult<ApprovalInstance>>;
-  getOverdueInstances(tenantId: string, asOf: Date, filter?: InstanceFilter): Promise<ApprovalInstance[]>;
-  getIdempotentInstance(
+  getOverdueInstances(
     tenantId: string,
-    idempotencyKey: string,
-  ): Promise<ApprovalInstance | null>;
+    asOf: Date,
+    filter?: InstanceFilter,
+  ): Promise<ApprovalInstance[]>;
+  getIdempotentInstance(tenantId: string, idempotencyKey: string): Promise<ApprovalInstance | null>;
 
   // Audit (append-only)
   appendAuditEntry(tenantId: string, instanceId: string, entry: AuditEntry): Promise<void>;

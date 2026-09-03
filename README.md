@@ -399,6 +399,33 @@ engine.registerConditionOperator('between', (actual, expected) => {
 });
 ```
 
+### Filtering by document data
+
+Every query filter accepts `data`, matching against the document body itself —
+"every purchase order for vendor ACME" without fetching pages and filtering in
+application code:
+
+```ts
+const { items } = await engine.queryInstances({
+  status: 'pending',
+  data: { 'vendor.id': 'v-1', region: 'EU' },   // dot-paths; all pairs must match
+});
+```
+
+Values compare by deep equality, so an object or array value matches
+structurally. Keys resolve over **own** properties only, mirroring how
+conditions read field paths, so an inherited prototype member can never make an
+instance match. Works with `queryInstances()`, `queryInstancesByCursor()` and
+`getStatistics()`.
+
+On PostgreSQL this becomes a parameterised JSONB path lookup — the path travels
+as a parameter and is never interpolated into SQL. Index the paths you filter on
+often:
+
+```sql
+CREATE INDEX ON approval_instances ((data #> '{vendor,id}'));
+```
+
 ### Out-of-office cover
 
 Approvers go on leave, and a chain that waits on an absent person stalls.

@@ -35,6 +35,37 @@ function reviveTemplateDates(template: ApprovalTemplate): ApprovalTemplate {
   return { ...template, createdAt: new Date(template.createdAt) };
 }
 
+/**
+ * Read a dot-path from a document, over **own** properties only.
+ *
+ * Mirrors how conditions resolve field paths, so a filter and a condition
+ * written against the same path agree about what that path means — and an
+ * inherited prototype member can never make an instance match a query.
+ */
+function readPath(data: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((obj, key) => {
+    if (obj !== null && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, key)) {
+      return (obj as Record<string, unknown>)[key];
+    }
+    return undefined;
+  }, data);
+}
+
+/** Structural equality, so a filter can match an object or array value. */
+function deepEquals(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const aKeys = Object.keys(a as Record<string, unknown>);
+  const bKeys = Object.keys(b as Record<string, unknown>);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every(
+    (k) =>
+      Object.prototype.hasOwnProperty.call(b, k) &&
+      deepEquals((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
+  );
+}
+
 function applyFilter(instance: ApprovalInstance, filter: InstanceFilter): boolean {
   if (filter.status && instance.status !== filter.status) return false;
   if (filter.documentType && instance.documentType !== filter.documentType) return false;
@@ -43,6 +74,11 @@ function applyFilter(instance: ApprovalInstance, filter: InstanceFilter): boolea
   // Stored instances carry string dates (deepClone JSON round-trip), so wrap before comparing.
   if (filter.fromDate && new Date(instance.createdAt) < filter.fromDate) return false;
   if (filter.toDate && new Date(instance.createdAt) > filter.toDate) return false;
+  if (filter.data) {
+    for (const [path, expected] of Object.entries(filter.data)) {
+      if (!deepEquals(readPath(instance.data ?? {}, path), expected)) return false;
+    }
+  }
   return true;
 }
 
