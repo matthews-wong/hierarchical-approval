@@ -68,4 +68,6 @@ export type {
   AddCommentOptions,
   OverrideOptions,
   UpdateDataOptions,
+  RequestInfoOptions,
+  ProvideInfoOptions,
 } from './utils/validate.js';

@@ -101,6 +101,26 @@ export interface ReminderEvent extends ApprovalEvent {
   reminderNumber: number;
 }
 
+/** Emitted when an approver asks the submitter for clarification. */
+export interface InfoRequestedEvent extends ApprovalEvent {
+  askedBy: string;
+  question: string;
+  level: number;
+  /** Who is expected to answer — the submitter. */
+  recipients: string[];
+}
+
+/** Emitted when the question is answered and the instance comes off hold. */
+export interface InfoProvidedEvent extends ApprovalEvent {
+  respondedBy: string;
+  response: string;
+  level: number;
+  /** How long the instance spent on hold; deadlines were extended by this much. */
+  heldForMs: number;
+  /** The approvers waiting again now that the question is answered. */
+  recipients: string[];
+}
+
 export interface ApprovalEventMap {
   'approval:submitted': SubmittedEvent;
   'approval:approved': ApprovedEvent;
@@ -117,6 +137,8 @@ export interface ApprovalEventMap {
   'approval:sla_breached': SlaBreachedEvent;
   'approval:data_updated': DataUpdatedEvent;
   'approval:reminder': ReminderEvent;
+  'approval:info_requested': InfoRequestedEvent;
+  'approval:info_provided': InfoProvidedEvent;
 }
 
 export type ApprovalEventName = keyof ApprovalEventMap;

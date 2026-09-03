@@ -31,6 +31,8 @@ import {
   AddCommentOptionsSchema,
   OverrideOptionsSchema,
   UpdateDataOptionsSchema,
+  RequestInfoOptionsSchema,
+  ProvideInfoOptionsSchema,
   type SubmitOptions,
   type ApproveOptions,
   type RejectOptions,
@@ -42,6 +44,8 @@ import {
   type AddCommentOptions,
   type OverrideOptions,
   type UpdateDataOptions,
+  type RequestInfoOptions,
+  type ProvideInfoOptions,
 } from '../utils/validate.js';
 import { EventBus } from '../utils/EventBus.js';
 import type { Logger } from '../utils/Logger.js';
@@ -1615,6 +1619,229 @@ export class ApprovalEngine {
 
     instance.levels = [...frozen, ...rebuiltFuture];
     return { addedLevels: addedLevels.sort((a, b) => a - b), removedLevels };
+  }
+
+  /**
+   * Ask the submitter for clarification without rejecting.
+   *
+   * Approvers routinely need one fact before they can decide. The only ways to
+   * express that were to reject — which throws away every approval already
+   * collected and forces a resubmit — or to leave the request sitting while the
+   * question is chased by email, which quietly burns the SLA the approver is
+   * measured on.
+   *
+   * The instance stays `pending` and keeps its approvers: this is a question,
+   * not a decision. What changes is the clock — escalation, SLA and expiry
+   * deadlines stop advancing while the question is open, because time spent
+   * waiting on the submitter is not time the approver is sitting on their hands.
+   *
+   * @throws ApprovalError if the instance is not pending, or a question is already open.
+   */
+  async requestInfo(
+    instanceId: string,
+    raw: RequestInfoOptions,
+    auditCtx?: AuditContext,
+  ): Promise<ApprovalInstance> {
+    const opts = parseOrThrow(() => RequestInfoOptionsSchema.parse(raw));
+
+    return this.withOptimisticRetry(instanceId, async (instance) => {
+      assertStatus(instance, 'pending');
+      if (instance.infoRequest) {
+        throw new ApprovalError(
+          `A clarification request is already open on this approval (asked by "${instance.infoRequest.askedBy}"). Answer it with provideInfo() first.`,
+          'INFO_ALREADY_REQUESTED',
+        );
+      }
+
+      const level = this.resolveActorLevel(instance, opts.approverId, opts.level);
+      assertApproverOnLevel(level, opts.approverId);
+
+      await this.runAuthorizationPolicy({
+        operation: 'requestInfo',
+        actorId: opts.approverId,
+        instance,
+        level,
+        opts: opts as Record<string, unknown>,
+      });
+      await this.runMiddlewareBefore({
+        operation: 'requestInfo',
+        instanceId,
+        actorId: opts.approverId,
+        tenantId: this.tenantId,
+        input: opts,
+      });
+
+      const now = this.clock.now();
+      instance.infoRequest = {
+        askedBy: opts.approverId,
+        question: opts.question,
+        askedAt: now,
+        level: level.level,
+      };
+      instance.updatedAt = now;
+
+      const auditEntry: AuditEntry = {
+        action: 'info_requested',
+        actorId: opts.approverId,
+        level: level.level,
+        timestamp: now,
+        comment: opts.question,
+        ...auditCtx,
+      };
+      instance.auditLog.push(auditEntry);
+
+      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
+      await this.runExternalAudit(instance, auditEntry);
+      this.opts.metricsAdapter?.increment('approval.info_requested', { tenantId: this.tenantId });
+      this.logger.info('requestInfo: clarification requested', {
+        tenantId: this.tenantId,
+        instanceId,
+        level: level.level,
+      });
+
+      const payload = {
+        instanceId,
+        documentId: instance.documentId,
+        documentType: instance.documentType,
+        timestamp: now,
+        askedBy: opts.approverId,
+        question: opts.question,
+        level: level.level,
+        recipients: [instance.submittedBy],
+      };
+      this.bus.emit('approval:info_requested', payload);
+      await this.notifyAdapters('approval:info_requested', instance, payload);
+      await this.runMiddlewareAfter(
+        {
+          operation: 'requestInfo',
+          instanceId,
+          actorId: opts.approverId,
+          tenantId: this.tenantId,
+          input: opts,
+        },
+        instance,
+      );
+      return instance;
+    });
+  }
+
+  /**
+   * Answer an open clarification request and take the instance off hold.
+   *
+   * Every deadline that was paused is pushed out by exactly how long the
+   * question was open, so an approver gets back the full remaining time they
+   * had before asking rather than being penalised for asking at all.
+   *
+   * @throws ApprovalError if no question is open.
+   */
+  async provideInfo(
+    instanceId: string,
+    raw: ProvideInfoOptions,
+    auditCtx?: AuditContext,
+  ): Promise<ApprovalInstance> {
+    const opts = parseOrThrow(() => ProvideInfoOptionsSchema.parse(raw));
+
+    return this.withOptimisticRetry(instanceId, async (instance) => {
+      assertStatus(instance, 'pending');
+      const open = instance.infoRequest;
+      if (!open) {
+        throw new ApprovalError(
+          'No clarification request is open on this approval.',
+          'NO_INFO_REQUESTED',
+        );
+      }
+
+      await this.runAuthorizationPolicy({
+        operation: 'provideInfo',
+        actorId: opts.respondedBy,
+        instance,
+        opts: opts as Record<string, unknown>,
+      });
+      await this.runMiddlewareBefore({
+        operation: 'provideInfo',
+        instanceId,
+        actorId: opts.respondedBy,
+        tenantId: this.tenantId,
+        input: opts,
+      });
+
+      const now = this.clock.now();
+      const heldForMs = Math.max(0, now.getTime() - new Date(open.askedAt).getTime());
+      this.extendDeadlinesBy(instance, heldForMs);
+
+      instance.infoRequest = undefined;
+      instance.updatedAt = now;
+
+      const auditEntry: AuditEntry = {
+        action: 'info_provided',
+        actorId: opts.respondedBy,
+        level: open.level,
+        timestamp: now,
+        comment: opts.response,
+        oldValue: { question: open.question, askedBy: open.askedBy },
+        newValue: { heldForMs },
+        ...auditCtx,
+      };
+      instance.auditLog.push(auditEntry);
+
+      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
+      await this.runExternalAudit(instance, auditEntry);
+      this.opts.metricsAdapter?.increment('approval.info_provided', { tenantId: this.tenantId });
+      this.logger.info('provideInfo: clarification answered', {
+        tenantId: this.tenantId,
+        instanceId,
+        heldForMs,
+      });
+
+      const payload = {
+        instanceId,
+        documentId: instance.documentId,
+        documentType: instance.documentType,
+        timestamp: now,
+        respondedBy: opts.respondedBy,
+        response: opts.response,
+        level: open.level,
+        heldForMs,
+        recipients: [...new Set(this.pendingLevels(instance).flatMap((l) => l.approverIds))],
+      };
+      this.bus.emit('approval:info_provided', payload);
+      await this.notifyAdapters('approval:info_provided', instance, payload);
+      await this.runMiddlewareAfter(
+        {
+          operation: 'provideInfo',
+          instanceId,
+          actorId: opts.respondedBy,
+          tenantId: this.tenantId,
+          input: opts,
+        },
+        instance,
+      );
+      return instance;
+    });
+  }
+
+  /**
+   * Push every pending deadline out by `ms`.
+   *
+   * Used to give back time an instance spent on hold. Deadlines that are not
+   * set stay unset — a level with no escalation configured does not acquire one
+   * by being held.
+   */
+  private extendDeadlinesBy(instance: ApprovalInstance, ms: number): void {
+    if (ms <= 0) return;
+    const shift = (d: Date | undefined): Date | undefined =>
+      d === undefined ? undefined : new Date(new Date(d).getTime() + ms);
+
+    instance.expiresAt = shift(instance.expiresAt);
+    instance.slaDeadlineAt = shift(instance.slaDeadlineAt);
+    for (const level of instance.levels) {
+      if (level.status !== 'pending') continue;
+      level.escalationDueAt = shift(level.escalationDueAt);
+      level.reminderDueAt = shift(level.reminderDueAt);
+      level.delegatedUntil = shift(level.delegatedUntil);
+    }
   }
 
   /** Add a comment to an instance without approving or rejecting. */

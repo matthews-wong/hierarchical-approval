@@ -399,6 +399,36 @@ engine.registerConditionOperator('between', (actual, expected) => {
 });
 ```
 
+### Asking the submitter a question
+
+Approvers routinely need one fact before they can decide. `requestInfo()` puts
+the approval on hold without rejecting it:
+
+```ts
+await engine.requestInfo(instance.id, {
+  approverId: 'mgr-1',
+  question: 'Which cost centre should this book to?',
+});
+
+// ...later
+await engine.provideInfo(instance.id, {
+  respondedBy: 'buyer-1',
+  response: 'CC-42',
+});
+```
+
+The instance stays `pending` and keeps its approvers — this is a question, not a
+decision. What changes is the clock: **escalation, SLA, reminder and expiry
+deadlines stop advancing while the question is open**, and on answer every one
+is pushed out by exactly how long the hold lasted. An approver gets back the
+time they had before asking, rather than being penalised for asking.
+
+Emits `approval:info_requested` (addressed to the submitter) and
+`approval:info_provided` (addressed to the waiting approvers, carrying
+`heldForMs`), and records `info_requested` / `info_provided` audit entries.
+
+Only one question can be open at a time; answer it before asking another.
+
 ### Filtering by document data
 
 Every query filter accepts `data`, matching against the document body itself —

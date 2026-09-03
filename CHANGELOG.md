@@ -7,6 +7,43 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [1.5.0] - 2026-09-04
+
+### Added — request for information
+
+- **`requestInfo()` / `provideInfo()` let an approver ask the submitter a
+  question without rejecting.** Approvers routinely need one fact before they
+  can decide, and there was no way to say so: rejecting throws away every
+  approval already collected and forces a resubmit, while chasing the question
+  by email leaves the request sitting and quietly burns the SLA the approver is
+  measured on.
+
+  ```ts
+  await engine.requestInfo(id, { approverId: 'mgr-1', question: 'Which cost centre?' });
+  await engine.provideInfo(id, { respondedBy: 'buyer-1', response: 'CC-42' });
+  ```
+
+  The instance stays `pending` and keeps its approvers — this is a question, not
+  a decision.
+
+- **Deadlines are paused for the duration of the hold.** The scheduler skips a
+  held instance entirely, so escalation, reminders, SLA breach and expiry cannot
+  fire while the submitter owes an answer; on answer, every deadline that was
+  set is pushed out by exactly how long the question was open. An approver gets
+  back the time they had before asking rather than being penalised for asking.
+  A deadline that was never configured is not invented by being held.
+
+- **Wiring:** emits `approval:info_requested` (addressed to the submitter) and
+  `approval:info_provided` (addressed to the waiting approvers, carrying
+  `heldForMs`); records `info_requested` / `info_provided` audit entries;
+  increments `approval.info_requested` / `approval.info_provided`; and adds both
+  operations to the authorization-policy set. Only one question may be open at a
+  time.
+
+  New exports: `InfoRequest`, `InfoRequestedEvent`, `InfoProvidedEvent`,
+  `RequestInfoOptions`, `ProvideInfoOptions`. `ApprovalInstance` gains
+  `infoRequest`.
+
 ## [1.4.0] - 2026-09-04
 
 ### Added — filter instances by document data

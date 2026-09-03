@@ -97,6 +97,18 @@ export class EscalationScheduler {
 
     for (const instance of instances) {
       try {
+        // 0. An open clarification request puts the instance on hold: its
+        // deadlines do not advance while the submitter owes an answer. Skipping
+        // the whole tick is what makes that true — extending deadlines only on
+        // resume would still let a long hold escalate or expire mid-wait.
+        if (instance.infoRequest) {
+          this.logger.debug('EscalationScheduler: skipping instance on hold', {
+            tenantId: this.tenantId,
+            instanceId: instance.id,
+          });
+          continue;
+        }
+
         // 1. Check delegation expiry — revert before other checks
         if (this.onRevertDelegation) {
           for (const level of instance.levels) {

@@ -10,6 +10,8 @@ export type MetricName =
   | 'approval.overridden'
   | 'approval.data_updated'
   | 'approval.reminded'
+  | 'approval.info_requested'
+  | 'approval.info_provided'
   | 'approval.conflict_retry'
   | 'approval.operation_duration_ms';
 

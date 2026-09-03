@@ -68,6 +68,18 @@ export const OverrideOptionsSchema = z.object({
   justification: z.string().min(1),
 });
 
+export const RequestInfoOptionsSchema = z.object({
+  approverId: z.string().min(1),
+  question: z.string().min(1),
+  /** Which open level is asking; only needed inside a parallel group. */
+  level: z.number().int().optional(),
+});
+
+export const ProvideInfoOptionsSchema = z.object({
+  respondedBy: z.string().min(1),
+  response: z.string().min(1),
+});
+
 export const UpdateDataOptionsSchema = z.object({
   updatedBy: z.string().min(1),
   data: z.record(z.string(), z.unknown()),
@@ -89,3 +101,5 @@ export type ResubmitOptions = z.infer<typeof ResubmitOptionsSchema>;
 export type AddCommentOptions = z.infer<typeof AddCommentOptionsSchema>;
 export type OverrideOptions = z.infer<typeof OverrideOptionsSchema>;
 export type UpdateDataOptions = z.infer<typeof UpdateDataOptionsSchema>;
+export type RequestInfoOptions = z.infer<typeof RequestInfoOptionsSchema>;
+export type ProvideInfoOptions = z.infer<typeof ProvideInfoOptionsSchema>;

@@ -20,7 +20,7 @@ major boundaries where a breaking change is expected anyway.
 | 1.2.0 ✅ | Template inheritance — `extends` with level overrides | TemplateRegistry |
 | 1.3.0 ✅ | Out-of-office cover (injected provider) | Resolver |
 | 1.4.0 ✅ | Instance filtering by document data | Adapters |
-| 1.5.0 | _(freed — delivered as 1.4.0; to be re-planned)_ | — |
+| 1.5.0 ✅ | Request for information (hold, with paused deadlines) | Engine |
 | 1.6.0 | Attachment references on instances and decisions | Types + adapters |
 | 1.7.0 | _(freed — pulled forward to 1.3.0; to be re-planned)_ | — |
 | 1.8.0 | Sub-workflows — a level that spawns a child instance | Engine |

@@ -18,6 +18,8 @@ export type AuditAction =
   | 'overridden'
   | 'data_updated'
   | 'reminded'
+  | 'info_requested'
+  | 'info_provided'
   | 'expired';
 
 export interface AuditEntry {
@@ -78,6 +80,20 @@ export interface ApprovalLevelInstance {
   delegatedTo?: string;
 }
 
+/**
+ * An open request for clarification from an approver back to the submitter.
+ *
+ * The instance stays `pending` and keeps its approvers — this is a question,
+ * not a rejection — but its deadlines are paused while the question is open.
+ */
+export interface InfoRequest {
+  askedBy: string;
+  question: string;
+  askedAt: Date;
+  /** The level whose approver asked. */
+  level: number;
+}
+
 /** Snapshot of template configuration captured at submit time to insulate in-flight instances from template updates. */
 export interface TemplateSnapshot {
   escalation?: EscalationConfig;
@@ -115,4 +131,9 @@ export interface ApprovalInstance {
   slaDeadlineAt?: Date;
   /** Timestamp when the SLA deadline was first breached; set by the scheduler. */
   slaBreachedAt?: Date;
+  /**
+   * Open request for clarification. While set, the instance is on hold: its
+   * escalation, SLA and expiry deadlines do not advance.
+   */
+  infoRequest?: InfoRequest;
 }

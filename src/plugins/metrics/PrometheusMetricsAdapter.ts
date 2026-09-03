@@ -70,6 +70,8 @@ const COUNTER_HELP: Record<MetricName, string> = {
   'approval.overridden': 'Total approval instances overridden by an administrator.',
   'approval.data_updated': 'Total document-data updates applied to pending instances.',
   'approval.reminded': 'Total reminders sent to pending approvers.',
+  'approval.info_requested': 'Total clarification requests raised by approvers.',
+  'approval.info_provided': 'Total clarification requests answered.',
   'approval.conflict_retry': 'Total optimistic-concurrency conflict retries.',
   'approval.operation_duration_ms': 'Duration of approval engine operations in milliseconds.',
 };

@@ -12,7 +12,9 @@ export interface AuthorizationContext {
     | 'override'
     | 'resubmit'
     | 'addComment'
-    | 'updateData';
+    | 'updateData'
+    | 'requestInfo'
+    | 'provideInfo';
   actorId: string;
   instance: Readonly<ApprovalInstance>;
   level?: Readonly<ApprovalLevelInstance>;
