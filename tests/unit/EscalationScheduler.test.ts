@@ -306,4 +306,33 @@ describe('EscalationScheduler — error paths', () => {
     expect(handlers.onSlaBreach).not.toHaveBeenCalled();
     expect(handlers.onRevertDelegation).not.toHaveBeenCalled();
   });
+
+  it('logs a throwing onRevertDelegation and still escalates', async () => {
+    const { scheduler, adapter, handlers, calls } = makeScheduler();
+    handlers.onRevertDelegation.mockRejectedValue(new Error('revert boom'));
+    adapter.getOverdueInstances.mockResolvedValue([
+      makeInstance({
+        levels: [
+          {
+            level: 1,
+            name: 'L1',
+            status: 'pending',
+            approvers: [{ type: 'user', userId: 'bob' }],
+            delegatedUntil: PAST,
+            delegatedFrom: 'alice',
+            escalationDueAt: PAST,
+          },
+        ],
+      }),
+    ]);
+
+    await expect(scheduler.tick()).resolves.toBeUndefined();
+
+    expect(calls.error).toHaveBeenCalledWith(
+      expect.stringContaining('failed to revert delegation'),
+      expect.any(Error),
+      expect.objectContaining({ tenantId: 't', instanceId: 'inst-1', levelNumber: 1 }),
+    );
+    expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1');
+  });
 });
