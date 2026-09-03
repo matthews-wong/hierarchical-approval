@@ -89,6 +89,7 @@ import {
   ApprovalConflictError,
   ApprovalForbiddenError,
   ApprovalValidationError,
+  ApprovalTemplateNotFoundError,
 } from '../errors.js';
 import type { INotificationAdapter } from '../adapters/INotificationAdapter.js';
 import type { IAuditAdapter } from '../adapters/IAuditAdapter.js';
@@ -192,6 +193,32 @@ export interface ApproverWorkload {
   oldestPendingAt?: Date;
   /** Age of that oldest item. `0` when they hold nothing. */
   oldestAgeMs: number;
+}
+
+/** Version stamp on an exported bundle, so an importer can reject a shape it does not understand. */
+export const TEMPLATE_BUNDLE_VERSION = 1;
+
+/**
+ * A portable set of templates, safe to move between environments.
+ *
+ * Deliberately carries no `id`, `tenantId`, `createdAt`, `version` or
+ * `previousVersionId`: those describe one row in one database, and importing
+ * them would either collide with the target's own ids or silently claim a
+ * lineage the target never had.
+ */
+export interface TemplateBundle {
+  bundleVersion: number;
+  exportedAt: Date;
+  templates: ApprovalTemplateConfig[];
+}
+
+/** Outcome of {@link ApprovalEngine.importTemplates}. */
+export interface ImportResult {
+  created: string[];
+  updated: string[];
+  skipped: string[];
+  errors: Array<{ name: string; message: string }>;
+  dryRun: boolean;
 }
 
 export interface ApprovalStatistics {
@@ -2822,6 +2849,139 @@ export class ApprovalEngine {
         oldestAgeMs: Number.isFinite(row.oldest) ? now.getTime() - row.oldest : 0,
       }))
       .sort((a, b) => b.pending - a.pending || a.approverId.localeCompare(b.approverId));
+  }
+
+  /**
+   * Export templates as a portable bundle.
+   *
+   * Approval configuration is written once and then has to travel — authored in
+   * a sandbox, reviewed, promoted to production. Reading `listTemplates()` and
+   * re-posting the rows carried each environment's own `id`, `tenantId` and
+   * version lineage with it, which either collided on arrival or silently
+   * claimed a history the target never had. This strips all of it.
+   *
+   * @param names - Templates to include; omit for all of them.
+   */
+  async exportTemplates(names?: string[]): Promise<TemplateBundle> {
+    const all = await this.registry.list();
+    const wanted = names ? all.filter((t) => names.includes(t.name)) : all;
+
+    if (names) {
+      const missing = names.filter((n) => !all.some((t) => t.name === n));
+      if (missing.length > 0) {
+        throw new ApprovalTemplateNotFoundError(missing.join(', '));
+      }
+    }
+
+    return {
+      bundleVersion: TEMPLATE_BUNDLE_VERSION,
+      exportedAt: this.clock.now(),
+      templates: wanted.map((t) => {
+        // Everything environment-specific is dropped, not blanked, so a
+        // round-trip cannot reintroduce a stale id.
+        const {
+          id: _id,
+          tenantId: _tenantId,
+          createdAt: _createdAt,
+          version: _version,
+          previousVersionId: _previousVersionId,
+          ...config
+        } = t;
+        return config;
+      }),
+    };
+  }
+
+  /**
+   * Import a bundle produced by {@link exportTemplates}.
+   *
+   * **Every template is validated before any is written.** A bundle that is
+   * half-applied is worse than one rejected outright: the tenant is left in a
+   * state matching neither environment, and the operator has no way to tell
+   * which half landed. Per-template failures during the write phase are still
+   * reported individually, since a storage error can occur after validation
+   * passes.
+   *
+   * @param bundle - The bundle to apply.
+   * @param opts - `mode: 'create'` (default) refuses to touch existing
+   *   templates; `'upsert'` updates them. `dryRun` reports without writing.
+   */
+  async importTemplates(
+    bundle: TemplateBundle,
+    opts: { mode?: 'create' | 'upsert'; dryRun?: boolean } = {},
+  ): Promise<ImportResult> {
+    const mode = opts.mode ?? 'create';
+    const dryRun = opts.dryRun ?? false;
+
+    if (bundle.bundleVersion !== TEMPLATE_BUNDLE_VERSION) {
+      throw new ApprovalValidationError(
+        `Unsupported template bundle version ${bundle.bundleVersion}; this engine reads version ${TEMPLATE_BUNDLE_VERSION}.`,
+      );
+    }
+    if (!Array.isArray(bundle.templates) || bundle.templates.length === 0) {
+      throw new ApprovalValidationError('Template bundle contains no templates.');
+    }
+
+    const duplicates = bundle.templates
+      .map((t) => t.name)
+      .filter((name, i, all) => all.indexOf(name) !== i);
+    if (duplicates.length > 0) {
+      throw new ApprovalValidationError(
+        `Template bundle contains duplicate names: ${[...new Set(duplicates)].join(', ')}.`,
+      );
+    }
+
+    // Validate everything first — see the note above on half-applied bundles.
+    const invalid: Array<{ name: string; message: string }> = [];
+    for (const config of bundle.templates) {
+      const result = this.validateTemplate(config);
+      if (!result.valid) {
+        invalid.push({
+          name: config.name,
+          message: result.errors[0]?.message ?? 'unknown validation error',
+        });
+      }
+    }
+    if (invalid.length > 0) {
+      throw new ApprovalValidationError(
+        `Template bundle failed validation and was not applied: ${invalid
+          .map((e) => `${e.name}: ${e.message}`)
+          .join('; ')}`,
+      );
+    }
+
+    const result: ImportResult = { created: [], updated: [], skipped: [], errors: [], dryRun };
+
+    for (const config of bundle.templates) {
+      const existing = await this.opts.adapter.getTemplate(this.tenantId, config.name);
+      try {
+        if (existing && mode === 'create') {
+          result.skipped.push(config.name);
+          continue;
+        }
+        if (existing) {
+          if (!dryRun) await this.registry.update(config);
+          result.updated.push(config.name);
+        } else {
+          if (!dryRun) await this.registry.define(config);
+          result.created.push(config.name);
+        }
+      } catch (err) {
+        result.errors.push({ name: config.name, message: (err as Error).message });
+      }
+    }
+
+    this.logger.info('importTemplates: bundle applied', {
+      tenantId: this.tenantId,
+      mode,
+      dryRun,
+      created: result.created.length,
+      updated: result.updated.length,
+      skipped: result.skipped.length,
+      errors: result.errors.length,
+    });
+
+    return result;
   }
 
   async getStatistics(filter: Omit<InstanceFilter, 'status'> = {}): Promise<ApprovalStatistics> {

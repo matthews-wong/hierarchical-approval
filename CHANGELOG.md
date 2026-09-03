@@ -7,6 +7,43 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [2.2.0] - 2026-09-04
+
+### Added — template export / import
+
+- **`exportTemplates()` and `importTemplates()` move approval configuration
+  between environments.** Templates are authored in a sandbox, reviewed, then
+  promoted — but the only way to carry them across was to read `listTemplates()`
+  and re-post the rows, which dragged each environment's own `id`, `tenantId`
+  and version lineage along. Those either collided on arrival or silently
+  claimed a history the target never had.
+
+  ```ts
+  const bundle = await sandbox.exportTemplates(['PO', 'INV']);
+  await production.importTemplates(bundle, { mode: 'upsert', dryRun: true });
+  ```
+
+  A bundle is plain JSON, version-stamped, and carries no environment-specific
+  fields — they are stripped, not blanked, so a round trip cannot reintroduce a
+  stale id. The target assigns its own identity.
+
+- **`mode: 'create'`** (default) skips templates that already exist;
+  **`'upsert'`** updates them, bumping the version and recording
+  `previousVersionId` exactly as `updateTemplate()` does. `dryRun` reports
+  without writing.
+
+- **Every template is validated before any is written.** A half-applied bundle
+  is worse than one rejected outright: the tenant ends up matching neither
+  environment and the operator cannot tell which half landed. Validation
+  failures reject the whole bundle and name the offending template; storage
+  errors during the write phase are still reported per template, since those can
+  occur after validation passes.
+
+  Import also rejects an unsupported `bundleVersion`, an empty bundle, and
+  duplicate names within one bundle.
+
+  New exports: `TemplateBundle`, `ImportResult`, `TEMPLATE_BUNDLE_VERSION`.
+
 ## [2.1.0] - 2026-09-04
 
 ### Added — sub-workflows

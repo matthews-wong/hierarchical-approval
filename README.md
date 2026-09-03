@@ -468,6 +468,32 @@ The sweep is **not atomic**: it reports per-instance failures rather than rollin
 back. A partial transfer is the useful outcome — the approvals that can move
 should move, and the ones that cannot are named so a human can look at them.
 
+### Promoting templates between environments
+
+Approval configuration is authored somewhere safe, reviewed, then promoted.
+`exportTemplates()` produces a portable bundle and `importTemplates()` applies
+it:
+
+```ts
+const bundle = await sandbox.exportTemplates(['PO', 'INV']);   // omit names for all
+const result = await production.importTemplates(bundle, { mode: 'upsert', dryRun: true });
+// { created: [], updated: ['PO', 'INV'], skipped: [], errors: [], dryRun: true }
+```
+
+A bundle is plain JSON and carries **no** `id`, `tenantId`, `createdAt`,
+`version` or `previousVersionId` — those describe one row in one database, and
+importing them would either collide with the target's ids or claim a lineage the
+target never had. The target assigns its own.
+
+`mode: 'create'` (the default) skips templates that already exist; `'upsert'`
+updates them, bumping the version and recording `previousVersionId` as a normal
+`updateTemplate()` would.
+
+**Every template is validated before any is written.** A half-applied bundle
+leaves the tenant matching neither environment with no way to tell which half
+landed, so a bundle that fails validation is rejected whole, naming the
+offending template.
+
 ### Sub-workflows
 
 A level can delegate to a whole separate approval instead of to a list of

@@ -1,4 +1,4 @@
-export { ApprovalEngine } from './engine/ApprovalEngine.js';
+export { ApprovalEngine, TEMPLATE_BUNDLE_VERSION } from './engine/ApprovalEngine.js';
 export type {
   ApprovalEngineOptions,
   ValidationResult,
@@ -7,6 +7,8 @@ export type {
   PreviewResult,
   BulkResult,
   TransferResult,
+  TemplateBundle,
+  ImportResult,
   ApprovalStatistics,
   ApproverWorkload,
   CycleTimeStats,
