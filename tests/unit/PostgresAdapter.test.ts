@@ -121,6 +121,8 @@ describe('PostgresAdapter — optimistic locking', () => {
 
     await expect(adapter.updateInstance(instance, 2)).resolves.toBeUndefined();
 
+    // The parameter list carries every mutable column, not just the handful
+    // updateInstance used to write — see PostgresAdapter.persistence.test.ts.
     expect(query).toHaveBeenCalledWith(expect.any(String), [
       't',
       'inst-1',
@@ -131,6 +133,13 @@ describe('PostgresAdapter — optimistic locking', () => {
       '[]',
       null,
       instance.updatedAt.toISOString(),
+      JSON.stringify(instance.data ?? {}),
+      JSON.stringify(instance.metadata ?? {}),
+      null,
+      null,
+      null,
+      null,
+      null,
     ]);
   });
 

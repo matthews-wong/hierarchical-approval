@@ -144,6 +144,7 @@ export class PostgresAdapter implements IStorageAdapter {
         sla_deadline_at     TIMESTAMPTZ,
         sla_breached_at     TIMESTAMPTZ,
         template_snapshot   JSONB,
+        info_request        JSONB,
         created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (tenant_id, id),
@@ -186,6 +187,7 @@ export class PostgresAdapter implements IStorageAdapter {
       ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS sla_deadline_at TIMESTAMPTZ;
       ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS sla_breached_at TIMESTAMPTZ;
       ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS template_snapshot JSONB;
+      ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS info_request JSONB;
     `);
   }
 
@@ -252,9 +254,9 @@ export class PostgresAdapter implements IStorageAdapter {
           status, current_level, version, idempotency_key,
           data, metadata, levels,
           parent_instance_id, expires_at, deadline_action,
-          sla_deadline_at, sla_breached_at, template_snapshot,
+          sla_deadline_at, sla_breached_at, template_snapshot, info_request,
           created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
        ON CONFLICT (tenant_id, id) DO NOTHING`,
       [
         instance.id,
@@ -277,6 +279,7 @@ export class PostgresAdapter implements IStorageAdapter {
         instance.slaDeadlineAt?.toISOString() ?? null,
         instance.slaBreachedAt?.toISOString() ?? null,
         instance.templateSnapshot ? JSON.stringify(instance.templateSnapshot) : null,
+        instance.infoRequest ? JSON.stringify(instance.infoRequest) : null,
         instance.createdAt.toISOString(),
         instance.updatedAt.toISOString(),
       ],
@@ -286,13 +289,24 @@ export class PostgresAdapter implements IStorageAdapter {
   async updateInstance(instance: ApprovalInstance, expectedVersion: number): Promise<void> {
     const pool = await this.getPool();
     const result = await pool.query(
+      // Every column an engine operation can mutate must be written here.
+      // Listing only a subset silently dropped writes: updateData() changed
+      // `data`, requestInfo() set `info_request`, and provideInfo() shifted the
+      // deadline columns — none of which reached the database.
       `UPDATE ${this.p}_instances SET
-         status           = $4,
-         current_level    = $5,
-         version          = $6 + 1,
-         levels           = $7,
-         sla_breached_at  = $8,
-         updated_at       = $9
+         status            = $4,
+         current_level     = $5,
+         version           = $6 + 1,
+         levels            = $7,
+         sla_breached_at   = $8,
+         updated_at        = $9,
+         data              = $10,
+         metadata          = $11,
+         expires_at        = $12,
+         deadline_action   = $13,
+         sla_deadline_at   = $14,
+         template_snapshot = $15,
+         info_request      = $16
        WHERE tenant_id = $1 AND id = $2 AND version = $3
        RETURNING id`,
       [
@@ -305,6 +319,13 @@ export class PostgresAdapter implements IStorageAdapter {
         JSON.stringify(instance.levels),
         instance.slaBreachedAt?.toISOString() ?? null,
         instance.updatedAt.toISOString(),
+        JSON.stringify(instance.data ?? {}),
+        JSON.stringify(instance.metadata ?? {}),
+        instance.expiresAt?.toISOString() ?? null,
+        instance.deadlineAction ?? null,
+        instance.slaDeadlineAt?.toISOString() ?? null,
+        instance.templateSnapshot ? JSON.stringify(instance.templateSnapshot) : null,
+        instance.infoRequest ? JSON.stringify(instance.infoRequest) : null,
       ],
     );
     if (result.rowCount === 0) throw new ApprovalConflictError(instance.id);
@@ -612,6 +633,12 @@ export class PostgresAdapter implements IStorageAdapter {
         : undefined,
       templateSnapshot:
         (row['template_snapshot'] as ApprovalInstance['templateSnapshot'] | null) ?? undefined,
+      infoRequest: row['info_request']
+        ? {
+            ...(row['info_request'] as ApprovalInstance['infoRequest'] & { askedAt: string }),
+            askedAt: new Date((row['info_request'] as { askedAt: string }).askedAt),
+          }
+        : undefined,
       createdAt: new Date(row['created_at'] as string),
       updatedAt: new Date(row['updated_at'] as string),
     };

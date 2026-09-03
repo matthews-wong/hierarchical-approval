@@ -7,6 +7,48 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [1.6.0] - 2026-09-04
+
+### Fixed — PostgresAdapter silently dropped most instance updates
+
+**Anyone running the PostgreSQL adapter should upgrade and run `migrate()`.**
+`MemoryAdapter` stores whole objects and was always correct, so this reproduced
+only against a real database — which is exactly where it mattered.
+
+`updateInstance` wrote just six columns (`status`, `current_level`, `version`,
+`levels`, `sla_breached_at`, `updated_at`). Every other field an operation
+mutates was computed, logged, emitted as an event, and then thrown away on
+write:
+
+- **`updateData()` (0.9.0) did not change the stored document.** The engine
+  recomputed the chain and emitted `approval:data_updated`, but `data` was never
+  written, so the next read returned the old values — and any later
+  re-evaluation ran against them.
+- **`requestInfo()` (1.5.0) lost the hold entirely.** `info_request` had no
+  column at all, so a held instance came back unheld: `provideInfo()` then threw
+  "No clarification request is open", and the scheduler escalated and expired an
+  approval that was supposed to be paused.
+- **`provideInfo()`'s deadline give-back never landed** — `expires_at` and
+  `sla_deadline_at` were not written, so the time an instance spent on hold was
+  silently forfeited.
+- `metadata`, `deadline_action` and `template_snapshot` were likewise never
+  updated after insert.
+
+`updateInstance` now writes every mutable column, `saveInstance` and
+`rowToInstance` carry `info_request` (reviving `askedAt` as a `Date`), and
+`migrate()` adds the column to existing deployments via
+`ADD COLUMN IF NOT EXISTS`. Optimistic concurrency is unchanged — the update
+still guards on `version`.
+
+Regression tests assert the generated SQL and parameters for each field, so a
+future column cannot be added to the type and forgotten in the writer.
+
+### Note on the roadmap
+
+Attachment references were the planned 1.6.0. They are deferred: shipping a new
+feature ahead of a data-loss fix in an already-published release would have been
+the wrong order.
+
 ## [1.5.0] - 2026-09-04
 
 ### Added — request for information
