@@ -14,7 +14,9 @@ export interface AuthorizationContext {
     | 'addComment'
     | 'updateData'
     | 'requestInfo'
-    | 'provideInfo';
+    | 'provideInfo'
+    | 'addAttachment'
+    | 'removeAttachment';
   actorId: string;
   instance: Readonly<ApprovalInstance>;
   level?: Readonly<ApprovalLevelInstance>;

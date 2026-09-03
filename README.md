@@ -399,6 +399,40 @@ engine.registerConditionOperator('between', (actual, expected) => {
 });
 ```
 
+### Attachments
+
+Attach supporting evidence — a quote PDF, a signed contract, a screenshot of a
+system of record:
+
+```ts
+const withQuote = await engine.addAttachment(instance.id, {
+  actorId: 'buyer-1',
+  name: 'quote.pdf',
+  uri: 's3://procurement/quotes/q-1.pdf',   // a reference, not bytes
+  contentType: 'application/pdf',
+  sizeBytes: 48_120,
+});
+
+await engine.removeAttachment(instance.id, {
+  actorId: 'buyer-1',
+  attachmentId: withQuote.attachments[0].id,
+  reason: 'superseded by revised quote',
+});
+```
+
+**The engine stores references, never bytes.** Approval documents belong in the
+object store or DMS you already run, which handles retention, virus scanning and
+access control far better than an approval table could — copying them here would
+make the audit database the largest and least governed copy of them.
+
+Removing detaches the reference; it never deletes from the underlying store,
+which is the DMS's call. The audit entry keeps the name and URI of what was
+removed, so the trail still shows an approver saw evidence that is no longer
+listed.
+
+Emits `approval:attachment_added` / `approval:attachment_removed`. Allowed on
+any non-terminal instance, subject to your authorization policy.
+
 ### Asking the submitter a question
 
 Approvers routinely need one fact before they can decide. `requestInfo()` puts

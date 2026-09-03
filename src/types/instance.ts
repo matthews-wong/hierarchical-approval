@@ -20,6 +20,8 @@ export type AuditAction =
   | 'reminded'
   | 'info_requested'
   | 'info_provided'
+  | 'attachment_added'
+  | 'attachment_removed'
   | 'expired';
 
 export interface AuditEntry {
@@ -81,6 +83,30 @@ export interface ApprovalLevelInstance {
 }
 
 /**
+ * A pointer to supporting evidence for an approval — a quote PDF, a signed
+ * contract, a screenshot of a system of record.
+ *
+ * The engine stores a **reference**, never bytes. Approval documents belong in
+ * the object store or DMS the organisation already runs, which handles
+ * retention, virus scanning and access control far better than an approval
+ * table could; duplicating them here would make the audit database the largest
+ * and least governed copy of them.
+ */
+export interface Attachment {
+  id: string;
+  /** Human-readable file name, shown in approval UIs. */
+  name: string;
+  /** Where the file actually lives — an S3 URI, DMS id, or https URL. */
+  uri: string;
+  contentType?: string;
+  sizeBytes?: number;
+  addedBy: string;
+  addedAt: Date;
+  /** The level in play when it was attached, for context in the audit trail. */
+  level?: number;
+}
+
+/**
  * An open request for clarification from an approver back to the submitter.
  *
  * The instance stays `pending` and keeps its approvers — this is a question,
@@ -136,4 +162,6 @@ export interface ApprovalInstance {
    * escalation, SLA and expiry deadlines do not advance.
    */
   infoRequest?: InfoRequest;
+  /** Supporting evidence attached to this approval. References only, never bytes. */
+  attachments?: Attachment[];
 }

@@ -12,6 +12,7 @@ import type {
   ApprovalTemplateConfig,
   ApprovalInstance,
   ApprovalLevelInstance,
+  Attachment,
   AuditEntry,
   AuditContext,
   ResolverFn,
@@ -32,6 +33,8 @@ import {
   OverrideOptionsSchema,
   UpdateDataOptionsSchema,
   RequestInfoOptionsSchema,
+  AddAttachmentOptionsSchema,
+  RemoveAttachmentOptionsSchema,
   ProvideInfoOptionsSchema,
   type SubmitOptions,
   type ApproveOptions,
@@ -45,6 +48,8 @@ import {
   type OverrideOptions,
   type UpdateDataOptions,
   type RequestInfoOptions,
+  type AddAttachmentOptions,
+  type RemoveAttachmentOptions,
   type ProvideInfoOptions,
 } from '../utils/validate.js';
 import { EventBus } from '../utils/EventBus.js';
@@ -1842,6 +1847,203 @@ export class ApprovalEngine {
       level.reminderDueAt = shift(level.reminderDueAt);
       level.delegatedUntil = shift(level.delegatedUntil);
     }
+  }
+
+  /**
+   * Attach supporting evidence to an approval — a quote PDF, a signed contract,
+   * a screenshot of a system of record.
+   *
+   * Stores a **reference**, never bytes. Approval documents belong in the object
+   * store or DMS the organisation already runs, which handles retention, virus
+   * scanning and access control far better than an approval table could;
+   * copying them here would make the audit database the largest and least
+   * governed copy of them.
+   *
+   * Allowed on any non-terminal instance, by anyone the authorization policy
+   * permits: the submitter adding a missing quote and an approver adding the
+   * note that justifies their decision are both ordinary.
+   */
+  async addAttachment(
+    instanceId: string,
+    raw: AddAttachmentOptions,
+    auditCtx?: AuditContext,
+  ): Promise<ApprovalInstance> {
+    const opts = parseOrThrow(() => AddAttachmentOptionsSchema.parse(raw));
+
+    return this.withOptimisticRetry(instanceId, async (instance) => {
+      if (TERMINAL_STATUSES.has(instance.status)) {
+        throw new ApprovalError(
+          `Cannot attach to a "${instance.status}" approval.`,
+          'CANNOT_ATTACH',
+        );
+      }
+
+      await this.runAuthorizationPolicy({
+        operation: 'addAttachment',
+        actorId: opts.actorId,
+        instance,
+        opts: opts as Record<string, unknown>,
+      });
+      await this.runMiddlewareBefore({
+        operation: 'addAttachment',
+        instanceId,
+        actorId: opts.actorId,
+        tenantId: this.tenantId,
+        input: opts,
+      });
+
+      const now = this.clock.now();
+      const attachment: Attachment = {
+        id: this.generateId('att'),
+        name: opts.name,
+        uri: opts.uri,
+        contentType: opts.contentType,
+        sizeBytes: opts.sizeBytes,
+        addedBy: opts.actorId,
+        addedAt: now,
+        level: instance.currentLevel,
+      };
+      instance.attachments = [...(instance.attachments ?? []), attachment];
+      instance.updatedAt = now;
+
+      const auditEntry: AuditEntry = {
+        action: 'attachment_added',
+        actorId: opts.actorId,
+        level: instance.currentLevel,
+        timestamp: now,
+        newValue: { id: attachment.id, name: attachment.name, uri: attachment.uri },
+        ...auditCtx,
+      };
+      instance.auditLog.push(auditEntry);
+
+      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
+      await this.runExternalAudit(instance, auditEntry);
+      this.opts.metricsAdapter?.increment('approval.attachment_added', {
+        tenantId: this.tenantId,
+      });
+
+      const payload = {
+        instanceId,
+        documentId: instance.documentId,
+        documentType: instance.documentType,
+        timestamp: now,
+        actorId: opts.actorId,
+        attachmentId: attachment.id,
+        name: attachment.name,
+        uri: attachment.uri,
+        level: attachment.level,
+      };
+      this.bus.emit('approval:attachment_added', payload);
+      await this.notifyAdapters('approval:attachment_added', instance, payload);
+      await this.runMiddlewareAfter(
+        {
+          operation: 'addAttachment',
+          instanceId,
+          actorId: opts.actorId,
+          tenantId: this.tenantId,
+          input: opts,
+        },
+        instance,
+      );
+      return instance;
+    });
+  }
+
+  /**
+   * Detach a reference from an approval.
+   *
+   * The audit entry keeps the name and URI of what was removed, so the record
+   * still shows an approver saw evidence that is no longer listed — dropping
+   * that would let the trail imply a decision was made on less than it was.
+   * Nothing is deleted from the underlying store; that is the DMS's call.
+   */
+  async removeAttachment(
+    instanceId: string,
+    raw: RemoveAttachmentOptions,
+    auditCtx?: AuditContext,
+  ): Promise<ApprovalInstance> {
+    const opts = parseOrThrow(() => RemoveAttachmentOptionsSchema.parse(raw));
+
+    return this.withOptimisticRetry(instanceId, async (instance) => {
+      if (TERMINAL_STATUSES.has(instance.status)) {
+        throw new ApprovalError(
+          `Cannot modify attachments on a "${instance.status}" approval.`,
+          'CANNOT_ATTACH',
+        );
+      }
+
+      const existing = (instance.attachments ?? []).find((a) => a.id === opts.attachmentId);
+      if (!existing) {
+        throw new ApprovalError(
+          `Attachment "${opts.attachmentId}" is not on this approval.`,
+          'ATTACHMENT_NOT_FOUND',
+        );
+      }
+
+      await this.runAuthorizationPolicy({
+        operation: 'removeAttachment',
+        actorId: opts.actorId,
+        instance,
+        opts: opts as Record<string, unknown>,
+      });
+      await this.runMiddlewareBefore({
+        operation: 'removeAttachment',
+        instanceId,
+        actorId: opts.actorId,
+        tenantId: this.tenantId,
+        input: opts,
+      });
+
+      const now = this.clock.now();
+      instance.attachments = (instance.attachments ?? []).filter(
+        (a) => a.id !== opts.attachmentId,
+      );
+      instance.updatedAt = now;
+
+      const auditEntry: AuditEntry = {
+        action: 'attachment_removed',
+        actorId: opts.actorId,
+        level: instance.currentLevel,
+        timestamp: now,
+        reason: opts.reason,
+        oldValue: { id: existing.id, name: existing.name, uri: existing.uri },
+        ...auditCtx,
+      };
+      instance.auditLog.push(auditEntry);
+
+      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
+      await this.runExternalAudit(instance, auditEntry);
+      this.opts.metricsAdapter?.increment('approval.attachment_removed', {
+        tenantId: this.tenantId,
+      });
+
+      const payload = {
+        instanceId,
+        documentId: instance.documentId,
+        documentType: instance.documentType,
+        timestamp: now,
+        actorId: opts.actorId,
+        attachmentId: existing.id,
+        name: existing.name,
+        uri: existing.uri,
+        level: existing.level,
+      };
+      this.bus.emit('approval:attachment_removed', payload);
+      await this.notifyAdapters('approval:attachment_removed', instance, payload);
+      await this.runMiddlewareAfter(
+        {
+          operation: 'removeAttachment',
+          instanceId,
+          actorId: opts.actorId,
+          tenantId: this.tenantId,
+          input: opts,
+        },
+        instance,
+      );
+      return instance;
+    });
   }
 
   /** Add a comment to an instance without approving or rejecting. */

@@ -140,6 +140,7 @@ describe('PostgresAdapter — optimistic locking', () => {
       null,
       null,
       null,
+      JSON.stringify(instance.attachments ?? []),
     ]);
   });
 

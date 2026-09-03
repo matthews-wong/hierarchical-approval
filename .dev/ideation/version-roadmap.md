@@ -22,8 +22,8 @@ major boundaries where a breaking change is expected anyway.
 | 1.4.0 ✅ | Instance filtering by document data | Adapters |
 | 1.5.0 ✅ | Request for information (hold, with paused deadlines) | Engine |
 | 1.6.0 ✅ | Fix: PostgresAdapter dropped most instance updates | Adapters |
-| _later_ | Attachment references (deferred from 1.6.0) | Types + adapters |
-| 1.7.0 | _(freed — pulled forward to 1.3.0; to be re-planned)_ | — |
+| 1.7.0 ✅ | Attachment references (deferred from 1.6.0) | Types + adapters |
+
 | 1.8.0 | Sub-workflows — a level that spawns a child instance | Engine |
 | 1.9.0 | Approval simulation / dry-run against historical data | Engine |
 | 2.0.0 | Adapter interface v2 (breaking) | Adapters |

@@ -7,6 +7,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [1.7.0] - 2026-09-04
+
+### Added — attachment references
+
+- **`addAttachment()` / `removeAttachment()` attach supporting evidence to an
+  approval** — a quote PDF, a signed contract, a screenshot of a system of
+  record. Approvers had nowhere to put the document their decision rested on, so
+  it lived in an email thread the audit trail never saw.
+
+  ```ts
+  await engine.addAttachment(id, {
+    actorId: 'buyer-1',
+    name: 'quote.pdf',
+    uri: 's3://procurement/quotes/q-1.pdf',
+    contentType: 'application/pdf',
+    sizeBytes: 48_120,
+  });
+  ```
+
+- **References only, never bytes.** Approval documents belong in the object
+  store or DMS the organisation already runs, which handles retention, virus
+  scanning and access control far better than an approval table could; copying
+  them here would make the audit database the largest and least governed copy of
+  them. Removing detaches the reference and never deletes from the underlying
+  store.
+
+- **The audit trail keeps what was removed** — name and URI are recorded on the
+  `attachment_removed` entry, so the record still shows an approver saw evidence
+  that is no longer listed. Dropping that would let the trail imply a decision
+  was made on less than it was.
+
+- Persisted across all four PostgreSQL sites (schema, `migrate()`,
+  insert, update, and read-back), with `addedAt` revived as a `Date`. An
+  instance with no attachments reads back as `undefined` rather than `[]`,
+  keeping the round-trip shape identical to `MemoryAdapter`.
+
+  New exports: `Attachment`, `AttachmentEvent`, `AddAttachmentOptions`,
+  `RemoveAttachmentOptions`. `ApprovalInstance` gains `attachments`.
+
 ## [1.6.0] - 2026-09-04
 
 ### Fixed — PostgresAdapter silently dropped most instance updates

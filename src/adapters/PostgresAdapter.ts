@@ -18,7 +18,7 @@ import type {
   CursorPaginationOpts,
   CursorPaginatedResult,
 } from './IStorageAdapter.js';
-import type { ApprovalTemplate, ApprovalInstance, AuditEntry } from '../types/index.js';
+import type { ApprovalTemplate, ApprovalInstance, AuditEntry, Attachment } from '../types/index.js';
 import { ApprovalConflictError, ApprovalValidationError } from '../errors.js';
 
 export interface PostgresAdapterOptions {
@@ -145,6 +145,7 @@ export class PostgresAdapter implements IStorageAdapter {
         sla_breached_at     TIMESTAMPTZ,
         template_snapshot   JSONB,
         info_request        JSONB,
+        attachments         JSONB NOT NULL DEFAULT '[]',
         created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (tenant_id, id),
@@ -188,6 +189,7 @@ export class PostgresAdapter implements IStorageAdapter {
       ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS sla_breached_at TIMESTAMPTZ;
       ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS template_snapshot JSONB;
       ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS info_request JSONB;
+      ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]';
     `);
   }
 
@@ -254,9 +256,9 @@ export class PostgresAdapter implements IStorageAdapter {
           status, current_level, version, idempotency_key,
           data, metadata, levels,
           parent_instance_id, expires_at, deadline_action,
-          sla_deadline_at, sla_breached_at, template_snapshot, info_request,
+          sla_deadline_at, sla_breached_at, template_snapshot, info_request, attachments,
           created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
        ON CONFLICT (tenant_id, id) DO NOTHING`,
       [
         instance.id,
@@ -280,6 +282,7 @@ export class PostgresAdapter implements IStorageAdapter {
         instance.slaBreachedAt?.toISOString() ?? null,
         instance.templateSnapshot ? JSON.stringify(instance.templateSnapshot) : null,
         instance.infoRequest ? JSON.stringify(instance.infoRequest) : null,
+        JSON.stringify(instance.attachments ?? []),
         instance.createdAt.toISOString(),
         instance.updatedAt.toISOString(),
       ],
@@ -306,7 +309,8 @@ export class PostgresAdapter implements IStorageAdapter {
          deadline_action   = $13,
          sla_deadline_at   = $14,
          template_snapshot = $15,
-         info_request      = $16
+         info_request      = $16,
+         attachments       = $17
        WHERE tenant_id = $1 AND id = $2 AND version = $3
        RETURNING id`,
       [
@@ -326,6 +330,7 @@ export class PostgresAdapter implements IStorageAdapter {
         instance.slaDeadlineAt?.toISOString() ?? null,
         instance.templateSnapshot ? JSON.stringify(instance.templateSnapshot) : null,
         instance.infoRequest ? JSON.stringify(instance.infoRequest) : null,
+        JSON.stringify(instance.attachments ?? []),
       ],
     );
     if (result.rowCount === 0) throw new ApprovalConflictError(instance.id);
@@ -633,6 +638,12 @@ export class PostgresAdapter implements IStorageAdapter {
         : undefined,
       templateSnapshot:
         (row['template_snapshot'] as ApprovalInstance['templateSnapshot'] | null) ?? undefined,
+      // Absent attachments map to undefined, not [], so a Postgres round trip
+      // returns the same shape MemoryAdapter does for an instance that never
+      // had any — the parity the round-trip test pins down.
+      attachments: ((row['attachments'] as Attachment[] | null) ?? []).length
+        ? (row['attachments'] as Attachment[]).map((a) => ({ ...a, addedAt: new Date(a.addedAt) }))
+        : undefined,
       infoRequest: row['info_request']
         ? {
             ...(row['info_request'] as ApprovalInstance['infoRequest'] & { askedAt: string }),

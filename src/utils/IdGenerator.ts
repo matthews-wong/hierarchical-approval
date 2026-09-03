@@ -1,4 +1,4 @@
-export type IdGeneratorPrefix = 'inst' | 'tpl';
+export type IdGeneratorPrefix = 'inst' | 'tpl' | 'att';
 
 export type IdGeneratorFn = (prefix: IdGeneratorPrefix) => string;
 

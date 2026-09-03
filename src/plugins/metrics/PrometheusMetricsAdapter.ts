@@ -72,6 +72,8 @@ const COUNTER_HELP: Record<MetricName, string> = {
   'approval.reminded': 'Total reminders sent to pending approvers.',
   'approval.info_requested': 'Total clarification requests raised by approvers.',
   'approval.info_provided': 'Total clarification requests answered.',
+  'approval.attachment_added': 'Total attachment references added to approvals.',
+  'approval.attachment_removed': 'Total attachment references removed from approvals.',
   'approval.conflict_retry': 'Total optimistic-concurrency conflict retries.',
   'approval.operation_duration_ms': 'Duration of approval engine operations in milliseconds.',
 };

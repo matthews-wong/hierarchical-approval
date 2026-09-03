@@ -121,6 +121,15 @@ export interface InfoProvidedEvent extends ApprovalEvent {
   recipients: string[];
 }
 
+/** Emitted when supporting evidence is attached to or removed from an approval. */
+export interface AttachmentEvent extends ApprovalEvent {
+  actorId: string;
+  attachmentId: string;
+  name: string;
+  uri: string;
+  level?: number;
+}
+
 export interface ApprovalEventMap {
   'approval:submitted': SubmittedEvent;
   'approval:approved': ApprovedEvent;
@@ -139,6 +148,8 @@ export interface ApprovalEventMap {
   'approval:reminder': ReminderEvent;
   'approval:info_requested': InfoRequestedEvent;
   'approval:info_provided': InfoProvidedEvent;
+  'approval:attachment_added': AttachmentEvent;
+  'approval:attachment_removed': AttachmentEvent;
 }
 
 export type ApprovalEventName = keyof ApprovalEventMap;

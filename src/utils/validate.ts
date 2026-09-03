@@ -80,6 +80,21 @@ export const ProvideInfoOptionsSchema = z.object({
   response: z.string().min(1),
 });
 
+export const AddAttachmentOptionsSchema = z.object({
+  actorId: z.string().min(1),
+  name: z.string().min(1),
+  /** Where the file lives. A reference — the engine never stores bytes. */
+  uri: z.string().min(1),
+  contentType: z.string().optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
+});
+
+export const RemoveAttachmentOptionsSchema = z.object({
+  actorId: z.string().min(1),
+  attachmentId: z.string().min(1),
+  reason: z.string().optional(),
+});
+
 export const UpdateDataOptionsSchema = z.object({
   updatedBy: z.string().min(1),
   data: z.record(z.string(), z.unknown()),
@@ -103,3 +118,5 @@ export type OverrideOptions = z.infer<typeof OverrideOptionsSchema>;
 export type UpdateDataOptions = z.infer<typeof UpdateDataOptionsSchema>;
 export type RequestInfoOptions = z.infer<typeof RequestInfoOptionsSchema>;
 export type ProvideInfoOptions = z.infer<typeof ProvideInfoOptionsSchema>;
+export type AddAttachmentOptions = z.infer<typeof AddAttachmentOptionsSchema>;
+export type RemoveAttachmentOptions = z.infer<typeof RemoveAttachmentOptionsSchema>;

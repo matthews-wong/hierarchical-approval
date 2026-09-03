@@ -12,6 +12,8 @@ export type MetricName =
   | 'approval.reminded'
   | 'approval.info_requested'
   | 'approval.info_provided'
+  | 'approval.attachment_added'
+  | 'approval.attachment_removed'
   | 'approval.conflict_retry'
   | 'approval.operation_duration_ms';
 
