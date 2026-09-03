@@ -7,6 +7,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [1.3.0] - 2026-09-04
+
+### Added — out-of-office cover
+
+- **`outOfOfficeProvider` swaps absent approvers for their stand-in.** An
+  approver on leave stalled the chain until somebody noticed and reassigned by
+  hand; `delegate()` needed the absent person to initiate it, and `reassign()`
+  needed an administrator to spot the problem first.
+
+  ```ts
+  new ApprovalEngine({
+    adapter,
+    outOfOfficeProvider: {
+      getDelegateFor: async (userId, at) => hr.coverFor(userId, at), // null when available
+    },
+  });
+  ```
+
+  Applied wherever approvers are resolved — at submit, when a level activates,
+  on escalation, and in `previewApprovalChain()`, so a preview cannot disagree
+  with what `submit()` goes on to do.
+
+  Kept as an injected provider rather than engine-owned state because absence
+  lives in the HR or directory system that already tracks leave; storing it here
+  too would guarantee the two disagree. The resolution time is passed to the
+  provider, so cover can be date-bound.
+
+- **Substitution is transitive but bounded.** An A→B→C chain of absences lands
+  on whoever is actually present, up to five hops. A cover *cycle* (A covers B
+  while B covers A) stops and leaves the original approver assigned — visible and
+  fixable, unlike a hang. A provider that throws is treated as "no cover known",
+  because an HR lookup failing must not stop an approval being routed at all.
+
+  New export: `OutOfOfficeProvider`.
+
 ## [1.2.0] - 2026-09-04
 
 ### Added — template inheritance

@@ -18,11 +18,11 @@ major boundaries where a breaking change is expected anyway.
 | 1.0.0 ✅ | Parallel branch groups — concurrent levels that join before advancing | Engine (flagship) |
 | 1.1.0 ✅ | Approval reminders — recurring nudges before escalation | Scheduler plugin |
 | 1.2.0 ✅ | Template inheritance — `extends` with level overrides | TemplateRegistry |
-| 1.3.0 | Withdraw + amend flow for submitters | Engine |
+| 1.3.0 ✅ | Out-of-office cover (injected provider) | Resolver |
 | 1.4.0 | Approval policies as reusable named rule sets | Engine |
 | 1.5.0 | Instance search — full filter grammar over data fields | Adapters |
 | 1.6.0 | Attachment references on instances and decisions | Types + adapters |
-| 1.7.0 | Out-of-office / auto-delegation windows | Engine |
+| 1.7.0 | _(freed — pulled forward to 1.3.0; to be re-planned)_ | — |
 | 1.8.0 | Sub-workflows — a level that spawns a child instance | Engine |
 | 1.9.0 | Approval simulation / dry-run against historical data | Engine |
 | 2.0.0 | Adapter interface v2 (breaking) | Adapters |
@@ -30,6 +30,13 @@ major boundaries where a breaking change is expected anyway.
 
 Versions past 2.0.0 stay deliberately unplanned: the adapter break will
 reshape what is cheap to build next, and committing now would be guesswork.
+
+## Amendments
+
+- **1.3.0 was re-planned.** The slot held "withdraw + amend for submitters",
+  but `cancel()` already covered withdraw and `updateData()` (0.9.0) covered
+  amend, so building it would have been padding. Out-of-office cover was pulled
+  forward from 1.7.0 instead, per the no-padding rule below.
 
 ## Rules for the series
 

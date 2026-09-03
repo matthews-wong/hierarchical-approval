@@ -52,7 +52,12 @@ import type { BusinessCalendar } from '../utils/BusinessCalendar.js';
 import type { IdGeneratorPrefix } from '../utils/IdGenerator.js';
 import { defaultIdGenerator } from '../utils/IdGenerator.js';
 import { TemplateRegistry } from './TemplateRegistry.js';
-import { LevelResolver, type OrgProvider, type ApproverResolverFn } from './LevelResolver.js';
+import {
+  LevelResolver,
+  type OrgProvider,
+  type ApproverResolverFn,
+  type OutOfOfficeProvider,
+} from './LevelResolver.js';
 import { EscalationScheduler } from './EscalationScheduler.js';
 import {
   evaluateConditions,
@@ -237,6 +242,11 @@ export interface ApprovalEngineOptions {
   adapter: IStorageAdapter;
   tenantId?: string;
   orgProvider?: OrgProvider;
+  /**
+   * Supplies stand-ins for approvers who are away, so leave does not stall a
+   * chain. Consulted every time approvers are resolved.
+   */
+  outOfOfficeProvider?: OutOfOfficeProvider;
   logger?: Logger;
   escalationPollIntervalMs?: number;
   /** Maximum number of instances allowed in a single bulk operation. Default: 200. */
@@ -668,6 +678,8 @@ export class ApprovalEngine {
         opts.submittedBy,
         opts.data,
         this.opts.orgProvider,
+        this.opts.outOfOfficeProvider,
+        now,
       );
     }
 
@@ -1830,11 +1842,15 @@ export class ApprovalEngine {
     const levels: PreviewChainLevel[] = [];
     for (const cfg of allLevelCfgs) {
       try {
+        // Preview must show who would actually be assigned, cover included —
+        // otherwise it disagrees with what submit() goes on to do.
         const resolvedApprovers = await this.resolver.resolveApprovers(
           cfg.approvers,
           submittedBy,
           data,
           this.opts.orgProvider,
+          this.opts.outOfOfficeProvider,
+          this.clock.now(),
         );
         levels.push({ level: cfg.level, name: cfg.name, resolvedApprovers, mode: cfg.mode });
       } catch {
@@ -2316,6 +2332,8 @@ export class ApprovalEngine {
         instance.submittedBy,
         instance.data,
         this.opts.orgProvider,
+        this.opts.outOfOfficeProvider,
+        this.clock.now(),
       );
 
       const filteredApprovers = newApprovers.filter((id) => id !== instance.submittedBy);
@@ -2673,6 +2691,8 @@ export class ApprovalEngine {
         instance.submittedBy,
         instance.data,
         this.opts.orgProvider,
+        this.opts.outOfOfficeProvider,
+        now,
       );
       if (lvl.escalationAfterDays) {
         lvl.escalationDueAt = this.deadlineFrom(now, lvl.escalationAfterDays);

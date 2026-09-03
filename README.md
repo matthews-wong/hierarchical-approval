@@ -399,6 +399,33 @@ engine.registerConditionOperator('between', (actual, expected) => {
 });
 ```
 
+### Out-of-office cover
+
+Approvers go on leave, and a chain that waits on an absent person stalls.
+Configure a provider and absent approvers are swapped for their stand-in
+wherever approvers are resolved — at submit, when a level activates, on
+escalation, and in `previewApprovalChain()`:
+
+```ts
+const engine = new ApprovalEngine({
+  adapter,
+  outOfOfficeProvider: {
+    // Return the stand-in, or null when the approver is available.
+    getDelegateFor: async (userId, at) => hr.coverFor(userId, at),
+  },
+});
+```
+
+Absence lives in the HR or directory system that already tracks leave, so this
+is an injected provider rather than engine-owned state — duplicating that data
+here would guarantee the two disagree. The resolution time is passed in, so
+cover can be date-bound.
+
+Substitution is transitive (A away → B, B away → C lands on C) up to five hops.
+A cover *cycle* stops rather than looping, and a provider that throws is treated
+as "no cover known" — an HR lookup failing must not stop an approval being
+routed at all.
+
 ### Template inheritance
 
 ERP tenants run many near-identical workflows — one per region, entity or

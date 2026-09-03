@@ -12,7 +12,11 @@ export type {
   RetryPolicy,
   IdempotencyKeyFn,
 } from './engine/ApprovalEngine.js';
-export type { OrgProvider, ApproverResolverFn } from './engine/LevelResolver.js';
+export type {
+  OrgProvider,
+  ApproverResolverFn,
+  OutOfOfficeProvider,
+} from './engine/LevelResolver.js';
 export {
   toComparableNumber,
   validateConditionExpression,

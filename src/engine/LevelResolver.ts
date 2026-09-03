@@ -1,6 +1,9 @@
 import type { ApproverConfig, ResolverFn } from '../types/index.js';
 import { ApprovalValidationError } from '../errors.js';
 
+/** Cap on transitive out-of-office substitution, so a cover cycle terminates. */
+const MAX_OOO_HOPS = 5;
+
 export interface OrgProvider {
   getUsersByRole(role: string, tenantId?: string): Promise<string[]> | string[];
   /** Optional: resolve users by department name. */
@@ -10,7 +13,32 @@ export interface OrgProvider {
   /** Optional: resolve the skip-level manager of a user. */
   getSkipLevelManagerOf?(userId: string, tenantId?: string): Promise<string | null> | string | null;
   /** Optional: resolve users matching a custom attribute/value pair. */
-  getUsersByAttribute?(attr: string, value: unknown, tenantId?: string): Promise<string[]> | string[];
+  getUsersByAttribute?(
+    attr: string,
+    value: unknown,
+    tenantId?: string,
+  ): Promise<string[]> | string[];
+}
+
+/**
+ * Supplies out-of-office cover so an approver on leave does not stall a chain.
+ *
+ * Consulted whenever a level's approvers are resolved — at submit, when a level
+ * activates, and when a chain is previewed. Kept as an injected provider rather
+ * than engine-owned state because absence lives in the HR or directory system
+ * that already knows about leave; duplicating it here would guarantee the two
+ * disagree.
+ */
+export interface OutOfOfficeProvider {
+  /**
+   * @param userId - The approver about to be assigned.
+   * @param at - The moment cover is being resolved for.
+   * @returns The user to stand in, or null/undefined when the approver is available.
+   */
+  getDelegateFor(
+    userId: string,
+    at: Date,
+  ): Promise<string | null | undefined> | string | null | undefined;
 }
 
 export type ApproverResolverFn = (
@@ -35,6 +63,8 @@ export class LevelResolver {
     submittedBy: string,
     data: Record<string, unknown>,
     orgProvider?: OrgProvider,
+    outOfOffice?: OutOfOfficeProvider,
+    at?: Date,
   ): Promise<string[]> {
     const resolved: string[] = [];
 
@@ -56,7 +86,9 @@ export class LevelResolver {
           break;
         }
         case 'dynamic': {
-          const fn = this.resolvers.get((approver as { type: 'dynamic'; resolver: string }).resolver);
+          const fn = this.resolvers.get(
+            (approver as { type: 'dynamic'; resolver: string }).resolver,
+          );
           if (!fn) {
             throw new Error(
               `No resolver registered for "${(approver as { type: 'dynamic'; resolver: string }).resolver}". Call engine.registerResolver("${(approver as { type: 'dynamic'; resolver: string }).resolver}", fn) first.`,
@@ -74,7 +106,11 @@ export class LevelResolver {
               `Unknown approver type "${approver.type}". Register it with engine.registerApproverType("${approver.type}", fn) first.`,
             );
           }
-          const ids = await customFn(approver as Record<string, unknown>, { submittedBy, data, orgProvider });
+          const ids = await customFn(approver as Record<string, unknown>, {
+            submittedBy,
+            data,
+            orgProvider,
+          });
           resolved.push(...ids);
           break;
         }
@@ -87,6 +123,46 @@ export class LevelResolver {
         'No approvers resolved for this level. Check your approver configuration — role may have no members or dynamic resolver returned empty.',
       );
     }
-    return result;
+    return this.applyOutOfOffice(result, outOfOffice, at);
+  }
+
+  /**
+   * Replace approvers who are away with their cover.
+   *
+   * Substitution is transitive up to {@link MAX_OOO_HOPS} so an A→B→C chain of
+   * absences still lands on someone present, but a cycle (A covers B while B
+   * covers A) simply stops rather than looping — leaving the original approver
+   * assigned, which is visible and fixable, unlike a hang.
+   *
+   * A provider that throws is treated as "no cover known": an HR lookup failing
+   * must not block an approval from being routed at all.
+   */
+  private async applyOutOfOffice(
+    userIds: string[],
+    provider: OutOfOfficeProvider | undefined,
+    at: Date | undefined,
+  ): Promise<string[]> {
+    if (!provider) return userIds;
+    const asOf = at ?? new Date();
+    const covered: string[] = [];
+
+    for (const original of userIds) {
+      let current = original;
+      const seen = new Set<string>([current]);
+      for (let hop = 0; hop < MAX_OOO_HOPS; hop++) {
+        let delegate: string | null | undefined;
+        try {
+          delegate = await provider.getDelegateFor(current, asOf);
+        } catch {
+          break;
+        }
+        if (!delegate || delegate === current || seen.has(delegate)) break;
+        seen.add(delegate);
+        current = delegate;
+      }
+      covered.push(current);
+    }
+
+    return [...new Set(covered)];
   }
 }
