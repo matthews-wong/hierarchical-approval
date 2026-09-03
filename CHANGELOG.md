@@ -7,6 +7,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [0.9.0] - 2026-09-04
+
+### Added — `updateData()`: edit a pending document and recompute its chain
+
+- **`engine.updateData(instanceId, opts)` changes an in-flight instance's
+  document data and re-evaluates the template's conditions against it.**
+  Documents change after submission — a corrected line item, a reclassified
+  vendor, a revised amount — and the chain computed at submit time can be wrong
+  the moment that happens. The only previous remedy was to cancel and resubmit,
+  which discarded every approval already collected along with its audit trail.
+
+  ```ts
+  await engine.updateData(instance.id, {
+    updatedBy: 'buyer-1',
+    data: { amount: 20000 },      // merged by default; mode: 'replace' swaps wholesale
+    reason: 'Corrected line items',
+  });
+  ```
+
+  `recomputeChain: false` applies a data correction without touching the chain.
+
+- **Decided history is frozen.** Only levels after the current one are
+  recomputed. A level that is already approved, or is actively collecting
+  decisions, is never removed: a `skipLevels` condition that would drop it is
+  ignored, because editing data must not retract an approval that was given. A
+  condition that would *insert* a level at or before the current level throws
+  `ApprovalValidationError` rather than silently dropping an approval step the
+  template says is required.
+
+  A future level that survives re-evaluation is preserved object-identical, so a
+  delegation already arranged on it survives an unrelated edit elsewhere in the
+  document.
+
+- **Wiring:** emits `approval:data_updated` (`changedFields`, `addedLevels`,
+  `removedLevels`), records a `data_updated` audit entry carrying the before and
+  after data, increments `approval.data_updated`, and adds `updateData` to the
+  authorization-policy operation set — so it runs through the same
+  authz/middleware/audit/notification pipeline as every other operation.
+
+  New exports: `UpdateDataOptions`, `DataUpdatedEvent`.
+
 ## [0.8.0] - 2026-09-04
 
 ### Added — boolean condition expressions

@@ -30,6 +30,7 @@ import {
   ResubmitOptionsSchema,
   AddCommentOptionsSchema,
   OverrideOptionsSchema,
+  UpdateDataOptionsSchema,
   type SubmitOptions,
   type ApproveOptions,
   type RejectOptions,
@@ -40,6 +41,7 @@ import {
   type ResubmitOptions,
   type AddCommentOptions,
   type OverrideOptions,
+  type UpdateDataOptions,
 } from '../utils/validate.js';
 import { EventBus } from '../utils/EventBus.js';
 import type { Logger } from '../utils/Logger.js';
@@ -450,9 +452,7 @@ export class ApprovalEngine {
 
     if (config.conditions) {
       config.conditions.forEach((rule, ruleIdx) => {
-        errors.push(
-          ...validateConditionExpression(rule.when, `conditions[${ruleIdx}].when`),
-        );
+        errors.push(...validateConditionExpression(rule.when, `conditions[${ruleIdx}].when`));
         if (rule.addLevels) {
           rule.addLevels.forEach((al, alIdx) => {
             const conflictsWithStatic = config.levels.some((l) => l.level === al.level);
@@ -1278,6 +1278,209 @@ export class ApprovalEngine {
   ): Promise<ApprovalInstance> {
     parseOrThrow(() => EscalateOptionsSchema.parse(raw));
     return this.escalateInternal(instanceId, raw.escalatedBy, auditCtx);
+  }
+
+  /**
+   * Change an instance's document data while it is still pending, and
+   * re-evaluate the template's conditions against the new values.
+   *
+   * Documents change after submission — a line item is corrected, a vendor is
+   * reclassified, an amount is revised — and the approval chain that was
+   * computed at submit time can be wrong the moment that happens. Without this,
+   * the only way to reflect a correction was to cancel and resubmit, losing the
+   * approvals already collected and the audit trail with them.
+   *
+   * **Only the part of the chain that has not been reached is recomputed.**
+   * Levels before {@link ApprovalInstance.currentLevel}, and the current level
+   * itself, are frozen: an approval that has already been given cannot be
+   * retracted by editing data, and a level that is actively collecting
+   * decisions is not pulled out from under its approvers. Conditions that would
+   * skip such a level are therefore ignored — history cannot be rewritten — and
+   * a condition that would *insert* a level at or before the current one throws
+   * rather than silently dropping an approval step that should have run.
+   *
+   * @param instanceId - The pending instance to update.
+   * @param raw - Who is updating, the new data, and how to apply it.
+   * @param auditCtx - Optional compliance context recorded on the audit entry.
+   * @returns The updated instance.
+   * @throws ApprovalError if the instance is not pending.
+   * @throws ApprovalValidationError if re-evaluation would insert a level at or
+   *   before the current level, or would leave the chain with no levels.
+   */
+  async updateData(
+    instanceId: string,
+    raw: UpdateDataOptions,
+    auditCtx?: AuditContext,
+  ): Promise<ApprovalInstance> {
+    const opts = parseOrThrow(() => UpdateDataOptionsSchema.parse(raw));
+
+    return this.withOptimisticRetry(instanceId, async (instance) => {
+      if (instance.status !== 'pending') {
+        throw new ApprovalError(
+          `Cannot update data on a "${instance.status}" approval. Only pending instances can be edited.`,
+          'CANNOT_UPDATE_DATA',
+        );
+      }
+
+      await this.runAuthorizationPolicy({
+        operation: 'updateData',
+        actorId: opts.updatedBy,
+        instance,
+        opts: opts as Record<string, unknown>,
+      });
+      await this.runMiddlewareBefore({
+        operation: 'updateData',
+        instanceId,
+        actorId: opts.updatedBy,
+        tenantId: this.tenantId,
+        input: opts,
+      });
+
+      const previousData = instance.data;
+      const nextData: Record<string, unknown> =
+        opts.mode === 'replace' ? { ...opts.data } : { ...previousData, ...opts.data };
+
+      const changedFields = [...new Set([...Object.keys(previousData), ...Object.keys(nextData)])]
+        .filter((k) => !Object.is(previousData[k], nextData[k]))
+        .sort();
+
+      const now = this.clock.now();
+      let addedLevels: number[] = [];
+      let removedLevels: number[] = [];
+
+      if (opts.recomputeChain) {
+        const recomputed = await this.recomputeFutureChain(instance, nextData);
+        addedLevels = recomputed.addedLevels;
+        removedLevels = recomputed.removedLevels;
+      }
+
+      instance.data = nextData;
+      instance.updatedAt = now;
+
+      const auditEntry: AuditEntry = {
+        action: 'data_updated',
+        actorId: opts.updatedBy,
+        level: instance.currentLevel,
+        timestamp: now,
+        reason: opts.reason,
+        oldValue: { data: previousData },
+        newValue: { data: nextData, addedLevels, removedLevels },
+        ...auditCtx,
+      };
+      instance.auditLog.push(auditEntry);
+
+      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
+      await this.runExternalAudit(instance, auditEntry);
+      this.opts.metricsAdapter?.increment('approval.data_updated', { tenantId: this.tenantId });
+      this.logger.info('updateData: instance data updated', {
+        tenantId: this.tenantId,
+        instanceId,
+        changedFields,
+        addedLevels,
+        removedLevels,
+      });
+
+      const payload = {
+        instanceId,
+        documentId: instance.documentId,
+        documentType: instance.documentType,
+        timestamp: now,
+        updatedBy: opts.updatedBy,
+        reason: opts.reason,
+        changedFields,
+        addedLevels,
+        removedLevels,
+      };
+      this.bus.emit('approval:data_updated', payload);
+      await this.notifyAdapters('approval:data_updated', instance, payload);
+      await this.runMiddlewareAfter(
+        {
+          operation: 'updateData',
+          instanceId,
+          actorId: opts.updatedBy,
+          tenantId: this.tenantId,
+          input: opts,
+        },
+        instance,
+      );
+      return instance;
+    });
+  }
+
+  /**
+   * Recompute the not-yet-reached portion of an instance's level chain against
+   * new data, mutating `instance.levels` in place.
+   *
+   * Levels at or before `currentLevel` are treated as immutable history. See
+   * {@link updateData} for why.
+   */
+  private async recomputeFutureChain(
+    instance: ApprovalInstance,
+    nextData: Record<string, unknown>,
+  ): Promise<{ addedLevels: number[]; removedLevels: number[] }> {
+    const template = await this.registry.get(instance.templateName);
+    const mutations = evaluateConditions(template.conditions ?? [], nextData);
+
+    const desired = [...template.levels, ...mutations.addLevels]
+      .filter((l) => !mutations.skipLevels.has(l.level))
+      .sort((a, b) => a.level - b.level);
+
+    const frozen = instance.levels.filter((l) => l.level <= instance.currentLevel);
+    const frozenNums = new Set(frozen.map((l) => l.level));
+    const futureCfgs = desired.filter((l) => l.level > instance.currentLevel);
+
+    // A level the new data introduces behind the cursor cannot be honoured: the
+    // instance has already moved past that point. Failing loudly beats silently
+    // dropping an approval step the template says is required.
+    const behindCursor = desired.find(
+      (l) => l.level <= instance.currentLevel && !frozenNums.has(l.level),
+    );
+    if (behindCursor) {
+      throw new ApprovalValidationError(
+        `Re-evaluating conditions would insert level ${behindCursor.level} ("${behindCursor.name}"), which is at or before the current level ${instance.currentLevel}. Cancel and resubmit if the chain must change retroactively.`,
+      );
+    }
+
+    const existingFuture = new Map(
+      instance.levels.filter((l) => l.level > instance.currentLevel).map((l) => [l.level, l]),
+    );
+    const desiredNums = new Set(futureCfgs.map((l) => l.level));
+
+    const addedLevels = futureCfgs.filter((l) => !existingFuture.has(l.level)).map((l) => l.level);
+    const removedLevels = [...existingFuture.keys()]
+      .filter((n) => !desiredNums.has(n))
+      .sort((a, b) => a - b);
+
+    if (frozen.length === 0 && futureCfgs.length === 0) {
+      throw new ApprovalValidationError(
+        'Re-evaluating conditions would leave the instance with no levels. Check that skipLevels conditions are not removing all levels.',
+      );
+    }
+
+    const rebuiltFuture: ApprovalLevelInstance[] = futureCfgs.map((cfg) => {
+      const kept = existingFuture.get(cfg.level);
+      // Preserve an untouched waiting level as-is so any delegation already
+      // arranged on it survives a data edit elsewhere in the document.
+      if (kept) return kept;
+      return {
+        level: cfg.level,
+        name: cfg.name,
+        mode: cfg.mode,
+        approverConfigs: cfg.approvers,
+        approverIds: [],
+        approvedBy: [],
+        rejectedBy: [],
+        status: 'waiting' as const,
+        minApprovals: cfg.minApprovals,
+        threshold: cfg.threshold,
+        weights: cfg.weights,
+        escalationAfterDays: cfg.escalationAfterDays,
+      };
+    });
+
+    instance.levels = [...frozen, ...rebuiltFuture];
+    return { addedLevels: addedLevels.sort((a, b) => a - b), removedLevels };
   }
 
   /** Add a comment to an instance without approving or rejecting. */

@@ -16,6 +16,7 @@ export type AuditAction =
   | 'commented'
   | 'resubmitted'
   | 'overridden'
+  | 'data_updated'
   | 'expired';
 
 export interface AuditEntry {

@@ -75,6 +75,23 @@ export interface SlaBreachedEvent extends ApprovalEvent {
   slaDeadlineAt: Date;
 }
 
+/**
+ * Emitted when an instance's document data is changed while it is still
+ * pending. {@link addedLevels} and {@link removedLevels} describe how the
+ * remaining approval chain was recomputed — both empty when the data change
+ * did not affect it.
+ */
+export interface DataUpdatedEvent extends ApprovalEvent {
+  updatedBy: string;
+  reason?: string;
+  /** Field paths whose values differ after the update. */
+  changedFields: string[];
+  /** Level numbers added to the future chain by re-evaluating conditions. */
+  addedLevels: number[];
+  /** Level numbers removed from the future chain by re-evaluating conditions. */
+  removedLevels: number[];
+}
+
 export interface ApprovalEventMap {
   'approval:submitted': SubmittedEvent;
   'approval:approved': ApprovedEvent;
@@ -89,6 +106,7 @@ export interface ApprovalEventMap {
   'approval:overridden': OverriddenEvent;
   'approval:expired': ExpiredEvent;
   'approval:sla_breached': SlaBreachedEvent;
+  'approval:data_updated': DataUpdatedEvent;
 }
 
 export type ApprovalEventName = keyof ApprovalEventMap;

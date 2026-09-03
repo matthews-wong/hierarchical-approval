@@ -68,6 +68,7 @@ const COUNTER_HELP: Record<MetricName, string> = {
   'approval.escalated': 'Total approval levels escalated.',
   'approval.reassigned': 'Total approval levels reassigned.',
   'approval.overridden': 'Total approval instances overridden by an administrator.',
+  'approval.data_updated': 'Total document-data updates applied to pending instances.',
   'approval.conflict_retry': 'Total optimistic-concurrency conflict retries.',
   'approval.operation_duration_ms': 'Duration of approval engine operations in milliseconds.',
 };

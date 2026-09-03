@@ -8,6 +8,7 @@ export type MetricName =
   | 'approval.escalated'
   | 'approval.reassigned'
   | 'approval.overridden'
+  | 'approval.data_updated'
   | 'approval.conflict_retry'
   | 'approval.operation_duration_ms';
 

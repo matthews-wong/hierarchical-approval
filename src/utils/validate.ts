@@ -61,6 +61,16 @@ export const OverrideOptionsSchema = z.object({
   justification: z.string().min(1),
 });
 
+export const UpdateDataOptionsSchema = z.object({
+  updatedBy: z.string().min(1),
+  data: z.record(z.string(), z.unknown()),
+  /** Merge into existing data (default) or replace it wholesale. */
+  mode: z.enum(['merge', 'replace']).default('merge'),
+  reason: z.string().optional(),
+  /** Re-evaluate template conditions against the new data (default true). */
+  recomputeChain: z.boolean().default(true),
+});
+
 export type SubmitOptions = z.infer<typeof SubmitOptionsSchema>;
 export type ApproveOptions = z.infer<typeof ApproveOptionsSchema>;
 export type RejectOptions = z.infer<typeof RejectOptionsSchema>;
@@ -71,3 +81,4 @@ export type EscalateOptions = z.infer<typeof EscalateOptionsSchema>;
 export type ResubmitOptions = z.infer<typeof ResubmitOptionsSchema>;
 export type AddCommentOptions = z.infer<typeof AddCommentOptionsSchema>;
 export type OverrideOptions = z.infer<typeof OverrideOptionsSchema>;
+export type UpdateDataOptions = z.infer<typeof UpdateDataOptionsSchema>;

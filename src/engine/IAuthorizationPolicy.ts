@@ -11,7 +11,8 @@ export interface AuthorizationContext {
     | 'escalate'
     | 'override'
     | 'resubmit'
-    | 'addComment';
+    | 'addComment'
+    | 'updateData';
   actorId: string;
   instance: Readonly<ApprovalInstance>;
   level?: Readonly<ApprovalLevelInstance>;

@@ -399,6 +399,42 @@ engine.registerConditionOperator('between', (actual, expected) => {
 });
 ```
 
+### Editing a document mid-flight
+
+Documents change after submission — a line item is corrected, a vendor
+reclassified, an amount revised. `updateData()` applies the change and
+re-evaluates the template's conditions, so the chain reflects the corrected
+document without cancelling and resubmitting (which would throw away the
+approvals already collected):
+
+```ts
+const updated = await engine.updateData(instance.id, {
+  updatedBy: 'buyer-1',
+  data: { amount: 20000 },   // merged into existing data
+  reason: 'Corrected line items',
+});
+// amount crossed the 10k threshold -> the CFO level is now in the chain
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `data` | required | Fields to apply |
+| `mode` | `'merge'` | `'merge'` keeps untouched keys; `'replace'` swaps the whole object |
+| `reason` | — | Recorded on the audit entry |
+| `recomputeChain` | `true` | Set `false` to correct data without touching the chain |
+
+**Decided history is frozen.** Only levels *after* the current one are
+recomputed. A level that is already approved, or is actively collecting
+decisions, is never removed — a `skipLevels` condition that would drop it is
+ignored, because an approval that has been given cannot be retracted by editing
+data. A condition that would *insert* a level at or before the current one
+throws rather than silently dropping a required approval step; cancel and
+resubmit if the chain genuinely must change retroactively.
+
+Emits `approval:data_updated` with `changedFields`, `addedLevels` and
+`removedLevels`, and records a `data_updated` audit entry holding the before and
+after data. Only pending instances can be edited.
+
 ---
 
 ## Installation and setup

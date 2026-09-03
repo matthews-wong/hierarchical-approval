@@ -63,4 +63,5 @@ export type {
   ResubmitOptions,
   AddCommentOptions,
   OverrideOptions,
+  UpdateDataOptions,
 } from './utils/validate.js';
