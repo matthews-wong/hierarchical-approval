@@ -7,6 +7,73 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [0.7.0] - 2026-09-04
+
+### Fixed — two condition-evaluation bypasses
+
+Both of these let a `ConditionRule` fire when it should not have, and because
+conditions decide which levels an instance gets, a spurious match on a
+`skipLevels` rule **removes approval levels from a live document**. Anyone using
+`skipLevels` — or `addLevels` to *escalate* above a threshold — should upgrade.
+
+- **Numeric operators no longer coerce non-numbers to zero.** `>`, `<`, `>=` and
+  `<=` compared with `Number(actual)`, and `Number()` maps `null`, `''`, `'   '`,
+  `[]` and `false` all to `0`. So a fast-track rule like
+  `{ when: { field: 'amount', operator: '<', value: 5000 }, skipLevels: [2, 3] }`
+  matched a purchase order whose `amount` was `null` or blank, silently skipping
+  two approval levels on exactly the documents whose value was unknown. `false`
+  and `[]` did the same, and `true` compared as `1`.
+
+  A numeric comparison against a non-number is now treated as *undecidable* rather
+  than false-y: it reports **no match**, which is the outcome `undefined` has
+  always produced. Accepted operands are finite numbers, bigints, `Date`
+  (compared as epoch milliseconds), and numeric strings such as `'100'` or
+  `' 1e3 '` — ERP payloads routinely arrive as JSON strings, so string comparison
+  is retained. Rejected: `null`, `undefined`, booleans, arrays, objects, blank
+  strings, `NaN` and `Infinity`.
+
+  **Behaviour change.** A rule that was matching on blank or boolean data stops
+  matching. That is the fix, but it does change which levels such an instance
+  gets, so re-check any template whose conditions run against optional fields.
+  `==` and `!=` are untouched — they were already strict.
+
+- **Dot-path field lookup now reads own properties only.** `getField` tested
+  `key in obj`, which walks the prototype chain, so a condition on `isFastTrack`
+  was satisfied by an inherited `Object.prototype.isFastTrack` that no document
+  ever declared — turning any prototype pollution elsewhere in the dependency
+  tree into an approval-level bypass. Resolution now uses
+  `Object.prototype.hasOwnProperty`, so a segment that is not an own property
+  resolves to `undefined` exactly as an absent field does. This also closes
+  `__proto__`, `constructor` and `prototype` as readable paths.
+
+  **Behaviour change.** Context data whose fields live on a prototype (a class
+  instance with getters, rather than a plain object) no longer resolves. Plain
+  objects, arrays, array indices and `Object.create(null)` objects are
+  unaffected, and context data does not survive JSONB round-tripping as a class
+  instance in any case.
+
+### Added
+
+- **`toComparableNumber(value)` is exported from the package root.** The same
+  strict coercion the built-in numeric operators use, returning `number` or
+  `null`, so a custom operator registered with `registerConditionOperator()` can
+  inherit the identical semantics instead of re-introducing `Number()`. The
+  README's `between` recipe now uses it — the previous version of that snippet
+  demonstrated the zero-coercion bug.
+
+### Tests
+
+- Restored the **17 `ConditionEvaluator` unit tests that commit `8d648d8`
+  deleted**, having replaced the suite body with a `// ... existing tests ...`
+  placeholder and a single test. Coverage of the evaluator had silently dropped
+  to 74% of statements and 56% of functions.
+- Added 36 tests across the two fixes (per-type non-comparable operand matrix for
+  each numeric operator, the `skipLevels` bypass scenario, prototype-pollution
+  guards, `toComparableNumber` directly) plus an executable copy of the README's
+  custom-operator recipes, so a documented snippet cannot rot or stop compiling.
+  All 24 of the pre-existing-bug assertions were confirmed to fail against the
+  unfixed source.
+
 ## [0.6.0] - 2026-08-21
 
 ### Fixed — event delivery, template reads, and the CI lint gate
