@@ -3,12 +3,57 @@ import { ApprovalValidationError } from '../errors.js';
 
 export type ConditionOperatorFn = (actual: unknown, expected: unknown) => boolean;
 
+/**
+ * Coerce a value to a number *only* when it unambiguously represents one.
+ *
+ * Plain `Number()` maps `null`, `''`, `'   '`, `[]` and `false` all to `0`, which
+ * in an approval engine is an approval-bypass hazard: a rule such as
+ * `{ amount: '<' 5000 } -> skipLevels: [2, 3]` would fire on a document whose
+ * `amount` is missing or blank, silently skipping two approval levels. Numeric
+ * comparison against a value that is not a number is not "false-y", it is
+ * *undecidable*, so this returns `null` and the comparison reports no match —
+ * the same outcome `undefined` has always produced.
+ *
+ * Accepted: finite numbers, bigints, `Date` (compared as epoch ms), and numeric
+ * strings such as `'100'` or `' 1e3 '` (ERP payloads routinely arrive as JSON
+ * strings). Rejected: `null`, `undefined`, booleans, arrays, objects, blank
+ * strings, and the non-finite `NaN` / `Infinity`.
+ *
+ * @param value - The raw value taken from the condition or the context data.
+ * @returns The numeric value, or `null` when the value is not comparable.
+ */
+export function toComparableNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'bigint') return Number(value);
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isFinite(time) ? time : null;
+  }
+  if (typeof value === 'string') {
+    // Number('') and Number('   ') are both 0 — reject blanks before coercing.
+    if (value.trim() === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/** Build a numeric operator that reports no match unless BOTH operands are comparable numbers. */
+function numeric(compare: (left: number, right: number) => boolean): ConditionOperatorFn {
+  return (actual, expected) => {
+    const left = toComparableNumber(actual);
+    const right = toComparableNumber(expected);
+    if (left === null || right === null) return false;
+    return compare(left, right);
+  };
+}
+
 // Built-in operators seeded at module load time.
 const operatorRegistry = new Map<string, ConditionOperatorFn>([
-  ['>', (a, e) => Number(a) > Number(e)],
-  ['<', (a, e) => Number(a) < Number(e)],
-  ['>=', (a, e) => Number(a) >= Number(e)],
-  ['<=', (a, e) => Number(a) <= Number(e)],
+  ['>', numeric((a, e) => a > e)],
+  ['<', numeric((a, e) => a < e)],
+  ['>=', numeric((a, e) => a >= e)],
+  ['<=', numeric((a, e) => a <= e)],
   ['==', (a, e) => a === e],
   ['!=', (a, e) => a !== e],
   ['in', (a, e) => Array.isArray(e) && e.includes(a)],
