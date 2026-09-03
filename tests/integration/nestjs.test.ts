@@ -96,6 +96,19 @@ describe('HierarchicalApprovalModule.forRootAsync', () => {
 
     await moduleRef.close();
   });
+
+  it('defaults imports and inject to empty arrays when omitted', async () => {
+    const dyn = HierarchicalApprovalModule.forRootAsync({
+      useFactory: () => opts(),
+    });
+    expect(dyn.imports).toEqual([]);
+
+    const moduleRef = await Test.createTestingModule({ imports: [dyn] }).compile();
+    const engine = moduleRef.get<ApprovalEngine>(APPROVAL_ENGINE);
+    expect(await runApproval(engine)).toBe('approved');
+
+    await moduleRef.close();
+  });
 });
 
 describe('APPROVAL_ENGINE injection', () => {
