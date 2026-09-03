@@ -204,6 +204,61 @@ describe('validateTemplate — addLevels conflicts', () => {
   });
 });
 
+// ─── already-acted guards on approve/reject ──────────────────────────────────
+
+describe('already-acted guards', () => {
+  it('rejects a second approve from the same approver while the level is still pending', async () => {
+    const engine = makeEngine();
+    await engine.defineTemplate({
+      name: 'AllMode',
+      documentType: 'doc',
+      levels: [{
+        level: 1,
+        name: 'L1',
+        mode: 'all',
+        approvers: [{ type: 'user', userId: 'a1' }, { type: 'user', userId: 'a2' }],
+      }],
+    });
+    const inst = await engine.submit({ templateName: 'AllMode', documentId: 'AA-001', documentType: 'doc', submittedBy: 'sub', data: {} });
+
+    const pending = await engine.approve(inst.id, { approverId: 'a1' });
+    expect(pending.status).toBe('pending');
+
+    await expect(engine.approve(inst.id, { approverId: 'a1' })).rejects.toMatchObject({
+      code: 'ALREADY_ACTED',
+    });
+    await engine.shutdown();
+  });
+
+  it('rejects a second reject from the same approver while the level is still pending', async () => {
+    const engine = makeEngine();
+    await engine.defineTemplate({
+      name: 'QuorumMode',
+      documentType: 'doc',
+      levels: [{
+        level: 1,
+        name: 'L1',
+        mode: 'quorum',
+        minApprovals: 2,
+        approvers: [
+          { type: 'user', userId: 'a1' },
+          { type: 'user', userId: 'a2' },
+          { type: 'user', userId: 'a3' },
+        ],
+      }],
+    });
+    const inst = await engine.submit({ templateName: 'QuorumMode', documentId: 'AA-002', documentType: 'doc', submittedBy: 'sub', data: {} });
+
+    const pending = await engine.reject(inst.id, { approverId: 'a1', reason: 'no' });
+    expect(pending.status).toBe('pending');
+
+    await expect(engine.reject(inst.id, { approverId: 'a1', reason: 'again' })).rejects.toMatchObject({
+      code: 'ALREADY_ACTED',
+    });
+    await engine.shutdown();
+  });
+});
+
 // ─── P1 Guard 3: returnTo='previous' at level 1 throws ───────────────────────
 
 describe('P1 Guard 3 — returnTo=previous at first level', () => {
