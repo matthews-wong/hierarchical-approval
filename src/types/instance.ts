@@ -17,6 +17,7 @@ export type AuditAction =
   | 'resubmitted'
   | 'overridden'
   | 'data_updated'
+  | 'reminded'
   | 'expired';
 
 export interface AuditEntry {
@@ -62,6 +63,13 @@ export interface ApprovalLevelInstance {
   weights?: Record<string, number>;
   escalationDueAt?: Date;
   escalationAfterDays?: number;
+  /** When the next reminder for this level is due; cleared when the level closes. */
+  reminderDueAt?: Date;
+  /** How many reminders have already been sent for this level. */
+  remindersSent?: number;
+  reminderAfterDays?: number;
+  reminderEveryDays?: number;
+  maxReminders?: number;
   /** Set when a delegation has a time limit — the original approver is restored when this date passes. */
   delegatedUntil?: Date;
   /** The approver who delegated away from this slot; used to revert when delegatedUntil expires. */

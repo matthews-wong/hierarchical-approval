@@ -92,6 +92,15 @@ export interface DataUpdatedEvent extends ApprovalEvent {
   removedLevels: number[];
 }
 
+/** Emitted when a pending level's approvers are nudged. */
+export interface ReminderEvent extends ApprovalEvent {
+  level: number;
+  /** Approvers who still owe a decision on this level. */
+  recipients: string[];
+  /** 1 for the first reminder on this level, 2 for the next, and so on. */
+  reminderNumber: number;
+}
+
 export interface ApprovalEventMap {
   'approval:submitted': SubmittedEvent;
   'approval:approved': ApprovedEvent;
@@ -107,6 +116,7 @@ export interface ApprovalEventMap {
   'approval:expired': ExpiredEvent;
   'approval:sla_breached': SlaBreachedEvent;
   'approval:data_updated': DataUpdatedEvent;
+  'approval:reminder': ReminderEvent;
 }
 
 export type ApprovalEventName = keyof ApprovalEventMap;

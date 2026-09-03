@@ -424,6 +424,12 @@ export class PostgresAdapter implements IStorageAdapter {
               AND (lvl->>'delegatedUntil')::timestamptz <= $2
               AND (lvl->>'delegatedFrom') IS NOT NULL
           )
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(levels) AS lvl
+            WHERE lvl->>'status' = 'pending'
+              AND (lvl->>'reminderDueAt') IS NOT NULL
+              AND (lvl->>'reminderDueAt')::timestamptz <= $2
+          )
         )`;
     const result = await pool.query(query, values);
     return result.rows.map((r) => this.rowToInstance(r as Record<string, unknown>));

@@ -69,6 +69,7 @@ const COUNTER_HELP: Record<MetricName, string> = {
   'approval.reassigned': 'Total approval levels reassigned.',
   'approval.overridden': 'Total approval instances overridden by an administrator.',
   'approval.data_updated': 'Total document-data updates applied to pending instances.',
+  'approval.reminded': 'Total reminders sent to pending approvers.',
   'approval.conflict_retry': 'Total optimistic-concurrency conflict retries.',
   'approval.operation_duration_ms': 'Duration of approval engine operations in milliseconds.',
 };
@@ -117,9 +118,9 @@ export class PrometheusMetricsAdapter implements IMetricsAdapter {
     this.logger = config.logger ?? noopLogger;
     this.namespace = config.namespace ? `${config.namespace}_` : '';
     const raw = config.buckets ?? DEFAULT_TIMING_BUCKETS_MS;
-    const cleaned = Array.from(
-      new Set(raw.filter((b) => Number.isFinite(b) && b >= 0)),
-    ).sort((a, b) => a - b);
+    const cleaned = Array.from(new Set(raw.filter((b) => Number.isFinite(b) && b >= 0))).sort(
+      (a, b) => a - b,
+    );
     this.buckets = cleaned.length > 0 ? cleaned : [...DEFAULT_TIMING_BUCKETS_MS];
   }
 

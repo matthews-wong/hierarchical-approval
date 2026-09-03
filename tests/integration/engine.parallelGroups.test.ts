@@ -253,3 +253,34 @@ describe('parallel branch groups', () => {
     });
   });
 });
+
+describe('escalation reaches every open branch', () => {
+  it('returns an overdue upper branch from getOverdueInstances', async () => {
+    // Regression guard: MemoryAdapter matched only instance.currentLevel, so an
+    // overdue branch above the lowest one in a group was never even fetched,
+    // and could not escalate. PostgresAdapter already scanned every level.
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({ adapter });
+    await engine.defineTemplate({
+      name: 'PO',
+      documentType: 'purchase_order',
+      levels: [
+        { ...lvl(1, 'Finance', 'fin', 'review'), escalationAfterDays: 5 },
+        { ...lvl(2, 'Legal', 'legal', 'review'), escalationAfterDays: 1 },
+      ],
+    });
+    const i = await engine.submit({
+      templateName: 'PO',
+      documentId: 'doc-esc',
+      documentType: 'purchase_order',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    expect(i.currentLevel).toBe(1);
+
+    // Two days on: Legal (level 2, the upper branch) is overdue; Finance is not.
+    const asOf = new Date(Date.now() + 2 * 86_400_000);
+    const overdue = await adapter.getOverdueInstances('default', asOf);
+    expect(overdue.map((o) => o.id)).toContain(i.id);
+  });
+});

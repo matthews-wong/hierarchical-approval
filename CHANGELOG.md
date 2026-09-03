@@ -7,6 +7,53 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [1.1.0] - 2026-09-04
+
+### Added — approval reminders
+
+- **Levels can nudge their pending approvers before escalating.** Escalation
+  reassigns work, which is the wrong instrument for an approval that is merely
+  late; the only alternative was an out-of-band cron job reading the database.
+
+  ```ts
+  { level: 1, name: 'Manager', ...,
+    reminderAfterDays: 2,   // first nudge two days after the level opens
+    reminderEveryDays: 1,   // then daily
+    maxReminders: 3 }       // default 3
+  ```
+
+  Emits `approval:reminder` (`level`, `recipients`, `reminderNumber`), records a
+  `reminded` audit entry, and increments `approval.reminded`. Recipients exclude
+  anyone who has already voted, so a half-decided quorum level stops pestering
+  the approvers who did their part. Reminders stop when the level closes or the
+  cap is reached, and never change who can approve or when the level escalates.
+
+  `validateTemplate()` rejects non-positive intervals, a non-integer
+  `maxReminders`, and `reminderEveryDays` without `reminderAfterDays` — which
+  would configure a repeat for a reminder that never fires.
+
+  New export: `ReminderEvent`. `EscalationSchedulerOpts` gains `onRemind`.
+
+### Fixed — escalation could not reach every branch of a parallel group
+
+- **Only the lowest-numbered branch of a parallel group could escalate.** Both
+  the scheduler and `MemoryAdapter.getOverdueInstances` matched levels against
+  `instance.currentLevel`, which names just one level of a group. An overdue
+  upper branch was never fetched and never escalated — it would wait forever.
+  Introduced with parallel groups in 1.0.0.
+
+  Escalation now considers every open branch, and `escalateInternal` takes the
+  level to escalate rather than assuming the current one.
+
+  This also settles a pre-existing disagreement between the adapters:
+  `PostgresAdapter` already scanned *all* levels for `escalationDueAt` while
+  `MemoryAdapter` scanned one, so the same template escalated differently
+  depending on which adapter was in use. Both now scan every open branch.
+
+- **`getOverdueInstances` also reports due reminders** in both adapters —
+  without which the scheduler would never see a reminder-due instance and no
+  reminder would ever be sent.
+
 ## [1.0.0] - 2026-09-04
 
 First stable release. The public API is now considered settled: breaking changes

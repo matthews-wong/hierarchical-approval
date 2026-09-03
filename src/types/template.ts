@@ -38,6 +38,19 @@ export interface ApprovalLevelConfig {
   group?: string;
   escalationAfterDays?: number;
   /**
+   * Send a reminder to this level's pending approvers this many days after the
+   * level opens. Escalation reassigns work; a reminder only nudges, which is
+   * usually what an overdue-but-not-yet-critical approval needs.
+   */
+  reminderAfterDays?: number;
+  /**
+   * Repeat the reminder every this many days after the first one. Omit for a
+   * single reminder.
+   */
+  reminderEveryDays?: number;
+  /** Maximum reminders to send for this level. Defaults to 3. */
+  maxReminders?: number;
+  /**
    * Required when mode is 'quorum'. The minimum number of approvals needed to
    * pass this level (an N-of-M threshold). The level is rejected as soon as it
    * becomes impossible to reach this count.

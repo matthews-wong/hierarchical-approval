@@ -91,6 +91,8 @@ export {
   ApprovalTemplateNotFoundError,
 } from '../errors.js';
 
+/** Reminders sent for one level before the engine stops nudging, absent an explicit cap. */
+const DEFAULT_MAX_REMINDERS = 3;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_BASE_DELAY_MS = 50;
 const TERMINAL_STATUSES = new Set<ApprovalInstance['status']>([
@@ -330,8 +332,8 @@ export class ApprovalEngine {
     this.escalation = new EscalationScheduler({
       adapter: opts.adapter,
       tenantId: this.tenantId,
-      onEscalate: async (id) => {
-        await this.escalateInternal(id);
+      onEscalate: async (id, levelNumber) => {
+        await this.escalateInternal(id, 'system', undefined, levelNumber);
       },
       onExpire: async (id, action) => {
         await this.expireInstance(id, action);
@@ -341,6 +343,9 @@ export class ApprovalEngine {
       },
       onRevertDelegation: async (id, level, from) => {
         await this.revertDelegation(id, level, from);
+      },
+      onRemind: async (id, levelNumber) => {
+        await this.sendReminder(id, levelNumber);
       },
       pollIntervalMs: this.escalationPollIntervalMs,
       logger: this.logger,
@@ -398,6 +403,33 @@ export class ApprovalEngine {
           errors.push({
             field: `levels[${i}].approvers`,
             message: `Level ${l.level} must have at least one approver.`,
+          });
+        }
+        if (l.reminderAfterDays !== undefined && l.reminderAfterDays <= 0) {
+          errors.push({
+            field: `levels[${i}].reminderAfterDays`,
+            message: `Level ${l.level} reminderAfterDays must be a positive number.`,
+          });
+        }
+        if (l.reminderEveryDays !== undefined && l.reminderEveryDays <= 0) {
+          errors.push({
+            field: `levels[${i}].reminderEveryDays`,
+            message: `Level ${l.level} reminderEveryDays must be a positive number.`,
+          });
+        }
+        if (
+          l.maxReminders !== undefined &&
+          (!Number.isInteger(l.maxReminders) || l.maxReminders < 1)
+        ) {
+          errors.push({
+            field: `levels[${i}].maxReminders`,
+            message: `Level ${l.level} maxReminders must be a positive integer.`,
+          });
+        }
+        if (l.reminderEveryDays !== undefined && l.reminderAfterDays === undefined) {
+          errors.push({
+            field: `levels[${i}].reminderEveryDays`,
+            message: `Level ${l.level} sets reminderEveryDays without reminderAfterDays, so no reminder would ever be sent.`,
           });
         }
         if (l.escalationAfterDays !== undefined && l.escalationAfterDays <= 0) {
@@ -609,6 +641,14 @@ export class ApprovalEngine {
           inFirstGroup && cfg.escalationAfterDays
             ? this.deadlineFrom(now, cfg.escalationAfterDays)
             : undefined,
+        reminderAfterDays: cfg.reminderAfterDays,
+        reminderEveryDays: cfg.reminderEveryDays,
+        maxReminders: cfg.maxReminders,
+        remindersSent: 0,
+        reminderDueAt:
+          inFirstGroup && cfg.reminderAfterDays
+            ? this.deadlineFrom(now, cfg.reminderAfterDays)
+            : undefined,
       };
     });
 
@@ -767,6 +807,7 @@ export class ApprovalEngine {
 
       if (isLevelApproved(level)) {
         level.status = 'approved';
+        level.reminderDueAt = undefined;
 
         // Inside a parallel group the instance holds until every branch resolves;
         // a single branch finishing is not progress the rest of the chain can see.
@@ -2250,6 +2291,7 @@ export class ApprovalEngine {
     instanceId: string,
     escalatedBy = 'system',
     auditCtx?: AuditContext,
+    levelNumber?: number,
   ): Promise<ApprovalInstance> {
     return this.withOptimisticRetry(instanceId, async (instance) => {
       if (instance.status !== 'pending') return instance;
@@ -2278,7 +2320,13 @@ export class ApprovalEngine {
         return instance;
       }
 
-      const level = this.currentLevelInstance(instance);
+      // A parallel group has several open branches, each with its own deadline;
+      // escalating "the current level" would leave the others stuck forever.
+      const level =
+        levelNumber === undefined
+          ? this.currentLevelInstance(instance)
+          : (instance.levels.find((l) => l.level === levelNumber) ??
+            this.currentLevelInstance(instance));
       level.approverIds = [...new Set([...level.approverIds, ...filteredApprovers])];
       level.escalationDueAt = undefined;
 
@@ -2619,9 +2667,101 @@ export class ApprovalEngine {
       if (lvl.escalationAfterDays) {
         lvl.escalationDueAt = this.deadlineFrom(now, lvl.escalationAfterDays);
       }
+      this.scheduleReminder(lvl, now);
       lvl.status = 'pending';
     }
     instance.currentLevel = group.reduce((min, l) => Math.min(min, l.level), Infinity);
+  }
+
+  /**
+   * Set (or clear) the next reminder deadline for a level that has just opened.
+   *
+   * Called wherever a level becomes pending, so a level activated by submit,
+   * by advancing, or by a group activation all schedule alike.
+   */
+  private scheduleReminder(level: ApprovalLevelInstance, from: Date): void {
+    if (!level.reminderAfterDays || level.reminderAfterDays <= 0) {
+      level.reminderDueAt = undefined;
+      return;
+    }
+    level.remindersSent = level.remindersSent ?? 0;
+    level.reminderDueAt = this.deadlineFrom(from, level.reminderAfterDays);
+  }
+
+  /**
+   * Nudge the approvers who still owe a decision on a pending level.
+   *
+   * Reminders never change who can approve or when the level escalates — they
+   * only notify. Recipients exclude anyone who has already voted, so a
+   * half-decided quorum level stops pestering the approvers who did their part.
+   */
+  private async sendReminder(instanceId: string, levelNumber: number): Promise<void> {
+    try {
+      await this.withOptimisticRetry(instanceId, async (instance) => {
+        if (instance.status !== 'pending') return instance;
+        const level = instance.levels.find((l) => l.level === levelNumber);
+        if (!level || level.status !== 'pending' || !level.reminderDueAt) return instance;
+
+        const sentSoFar = level.remindersSent ?? 0;
+        const cap = level.maxReminders ?? DEFAULT_MAX_REMINDERS;
+        if (sentSoFar >= cap) {
+          level.reminderDueAt = undefined;
+          await this.opts.adapter.updateInstance(instance, instance.version);
+          return instance;
+        }
+
+        const now = this.clock.now();
+        const reminderNumber = sentSoFar + 1;
+        level.remindersSent = reminderNumber;
+
+        // Schedule the next one, or stop if this was the last permitted.
+        level.reminderDueAt =
+          level.reminderEveryDays && reminderNumber < cap
+            ? this.deadlineFrom(now, level.reminderEveryDays)
+            : undefined;
+
+        const recipients = level.approverIds.filter(
+          (id) => !level.approvedBy.includes(id) && !level.rejectedBy.includes(id),
+        );
+
+        const auditEntry: AuditEntry = {
+          action: 'reminded',
+          actorId: 'system',
+          level: level.level,
+          timestamp: now,
+          newValue: { reminderNumber, recipients },
+        };
+        instance.auditLog.push(auditEntry);
+        instance.updatedAt = now;
+
+        await this.opts.adapter.updateInstance(instance, instance.version);
+        await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
+        await this.runExternalAudit(instance, auditEntry);
+        this.opts.metricsAdapter?.increment('approval.reminded', { tenantId: this.tenantId });
+        this.logger.info('reminder: nudged pending approvers', {
+          tenantId: this.tenantId,
+          instanceId,
+          levelNumber,
+          reminderNumber,
+          recipients,
+        });
+
+        const payload = {
+          instanceId,
+          documentId: instance.documentId,
+          documentType: instance.documentType,
+          timestamp: now,
+          level: level.level,
+          recipients,
+          reminderNumber,
+        };
+        this.bus.emit('approval:reminder', payload);
+        await this.notifyAdapters('approval:reminder', instance, payload);
+        return instance;
+      });
+    } catch (err) {
+      this.logger.error('reminder: failed to send', err, { tenantId: this.tenantId, instanceId });
+    }
   }
 
   private findNextLevel(instance: ApprovalInstance): ApprovalLevelInstance | null {

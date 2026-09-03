@@ -190,7 +190,7 @@ describe('EscalationScheduler — SLA breach', () => {
     await scheduler.tick();
 
     expect(handlers.onSlaBreach).toHaveBeenCalledWith('inst-1');
-    expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1');
+    expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1', 1);
   });
 
   it('does not re-report a breach that is already recorded', async () => {
@@ -214,7 +214,7 @@ describe('EscalationScheduler — SLA breach', () => {
     await scheduler.tick();
 
     expect(handlers.onSlaBreach).not.toHaveBeenCalled();
-    expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1');
+    expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1', 1);
   });
 });
 
@@ -244,7 +244,7 @@ describe('EscalationScheduler — error paths', () => {
       expect.any(Error),
       expect.objectContaining({ tenantId: 't', instanceId: 'inst-1' }),
     );
-    expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1');
+    expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1', 1);
   });
 
   it('a throwing onEscalate is logged and later instances are still processed', async () => {
@@ -287,7 +287,7 @@ describe('EscalationScheduler — error paths', () => {
       expect.objectContaining({ instanceId: 'inst-1' }),
     );
     expect(handlers.onEscalate).toHaveBeenCalledTimes(2);
-    expect(handlers.onEscalate).toHaveBeenLastCalledWith('inst-2');
+    expect(handlers.onEscalate).toHaveBeenLastCalledWith('inst-2', 1);
   });
 
   it('logs a failed overdue-instances fetch and touches no handlers', async () => {
@@ -333,6 +333,6 @@ describe('EscalationScheduler — error paths', () => {
       expect.any(Error),
       expect.objectContaining({ tenantId: 't', instanceId: 'inst-1', levelNumber: 1 }),
     );
-    expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1');
+    expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1', 1);
   });
 });

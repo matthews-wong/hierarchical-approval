@@ -9,6 +9,7 @@ export type MetricName =
   | 'approval.reassigned'
   | 'approval.overridden'
   | 'approval.data_updated'
+  | 'approval.reminded'
   | 'approval.conflict_retry'
   | 'approval.operation_duration_ms';
 

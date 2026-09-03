@@ -7,10 +7,16 @@ import { systemClock } from '../utils/Clock.js';
 export interface EscalationSchedulerOpts {
   adapter: IStorageAdapter;
   tenantId: string;
-  onEscalate: (instanceId: string) => Promise<void>;
+  onEscalate: (instanceId: string, levelNumber?: number) => Promise<void>;
   onExpire?: (instanceId: string, deadlineAction: 'cancel' | 'reject') => Promise<void>;
   onSlaBreach?: (instanceId: string) => Promise<void>;
-  onRevertDelegation?: (instanceId: string, levelNumber: number, fromApprover: string) => Promise<void>;
+  onRevertDelegation?: (
+    instanceId: string,
+    levelNumber: number,
+    fromApprover: string,
+  ) => Promise<void>;
+  /** Called when a pending level's reminder falls due. */
+  onRemind?: (instanceId: string, levelNumber: number) => Promise<void>;
   pollIntervalMs?: number;
   logger?: Logger;
   clock?: Clock;
@@ -27,6 +33,7 @@ export class EscalationScheduler {
   private readonly onExpire?: EscalationSchedulerOpts['onExpire'];
   private readonly onSlaBreach?: EscalationSchedulerOpts['onSlaBreach'];
   private readonly onRevertDelegation?: EscalationSchedulerOpts['onRevertDelegation'];
+  private readonly onRemind?: EscalationSchedulerOpts['onRemind'];
   private readonly pollIntervalMs: number;
   private readonly logger: Logger;
   private readonly clock: Clock;
@@ -38,6 +45,7 @@ export class EscalationScheduler {
     this.onExpire = opts.onExpire;
     this.onSlaBreach = opts.onSlaBreach;
     this.onRevertDelegation = opts.onRevertDelegation;
+    this.onRemind = opts.onRemind;
     this.pollIntervalMs = opts.pollIntervalMs ?? 60_000;
     this.logger = opts.logger ?? noopLogger;
     this.clock = opts.clock ?? systemClock;
@@ -50,9 +58,15 @@ export class EscalationScheduler {
   start(): void {
     if (this.intervalId !== null) return;
     this.intervalId = setInterval(() => {
-      this.tickPromise = this.tick().catch((err) => {
-        this.logger.error('EscalationScheduler: unhandled error in tick', err, { tenantId: this.tenantId });
-      }).finally(() => { this.tickPromise = null; });
+      this.tickPromise = this.tick()
+        .catch((err) => {
+          this.logger.error('EscalationScheduler: unhandled error in tick', err, {
+            tenantId: this.tenantId,
+          });
+        })
+        .finally(() => {
+          this.tickPromise = null;
+        });
     }, this.pollIntervalMs);
   }
 
@@ -141,14 +155,44 @@ export class EscalationScheduler {
           }
         }
 
-        // 4. Check escalation
-        const currentLevel = instance.levels.find((l) => l.level === instance.currentLevel);
-        if (currentLevel?.escalationDueAt && new Date(currentLevel.escalationDueAt) <= now) {
-          await this.onEscalate(instance.id);
-          this.logger.debug('EscalationScheduler: escalated instance', {
-            tenantId: this.tenantId,
-            instanceId: instance.id,
-          });
+        // 4. Send any due reminders, per open branch.
+        if (this.onRemind) {
+          for (const level of instance.levels) {
+            if (
+              level.status === 'pending' &&
+              level.reminderDueAt &&
+              new Date(level.reminderDueAt) <= now
+            ) {
+              try {
+                await this.onRemind(instance.id, level.level);
+              } catch (err) {
+                this.logger.error('EscalationScheduler: failed to send reminder', err, {
+                  tenantId: this.tenantId,
+                  instanceId: instance.id,
+                  levelNumber: level.level,
+                });
+              }
+            }
+          }
+        }
+
+        // 5. Check escalation on EVERY open branch. A parallel group has more
+        // than one level collecting decisions, each with its own deadline;
+        // checking only instance.currentLevel would leave the upper branches
+        // of a group unable to escalate at all.
+        for (const level of instance.levels) {
+          if (
+            level.status === 'pending' &&
+            level.escalationDueAt &&
+            new Date(level.escalationDueAt) <= now
+          ) {
+            await this.onEscalate(instance.id, level.level);
+            this.logger.debug('EscalationScheduler: escalated instance', {
+              tenantId: this.tenantId,
+              instanceId: instance.id,
+              levelNumber: level.level,
+            });
+          }
         }
       } catch (err) {
         this.logger.error('EscalationScheduler: failed to process instance', err, {
@@ -159,10 +203,7 @@ export class EscalationScheduler {
     }
   }
 
-  static computeEscalationDue(
-    escalationAfterDays: number,
-    fromDate: Date,
-  ): Date | undefined {
+  static computeEscalationDue(escalationAfterDays: number, fromDate: Date): Date | undefined {
     if (escalationAfterDays <= 0) return undefined;
     const due = new Date(fromDate);
     due.setDate(due.getDate() + escalationAfterDays);

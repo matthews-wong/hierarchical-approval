@@ -399,6 +399,31 @@ engine.registerConditionOperator('between', (actual, expected) => {
 });
 ```
 
+### Reminders
+
+Escalation reassigns work; a reminder only nudges, which is usually what an
+overdue-but-not-yet-critical approval needs. Configure it per level:
+
+```ts
+{
+  level: 1,
+  name: 'Manager',
+  approvers: [{ type: 'user', userId: 'mgr-1' }],
+  mode: 'any',
+  reminderAfterDays: 2,   // first nudge two days after the level opens
+  reminderEveryDays: 1,   // then daily
+  maxReminders: 3,        // default is 3
+}
+```
+
+Emits `approval:reminder` with `level`, `recipients` and `reminderNumber`, and
+records a `reminded` audit entry. Recipients exclude anyone who has already
+voted, so a half-decided quorum level stops pestering the approvers who did
+their part. Reminders stop when the level closes or the cap is reached, and they
+never change who can approve or when the level escalates.
+
+Requires the escalation scheduler to be running (it is by default).
+
 ### Parallel branch groups
 
 Give levels the same `group` name and they activate together, joining before

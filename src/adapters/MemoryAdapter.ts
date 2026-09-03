@@ -132,10 +132,13 @@ export class MemoryAdapter implements IStorageAdapter {
         if (i.tenantId !== tenantId || i.status !== 'pending') return false;
         if (filter.documentType && i.documentType !== filter.documentType) return false;
         if (filter.submittedBy && i.submittedBy !== filter.submittedBy) return false;
-        // Escalation overdue
-        const currentLevel = i.levels.find((l) => l.level === i.currentLevel);
-        const hasOverdueEscalation =
-          currentLevel?.escalationDueAt != null && new Date(currentLevel.escalationDueAt) <= asOf;
+        // Escalation overdue on ANY open branch. Filtering to i.currentLevel
+        // would miss the upper branches of a parallel group entirely, and left
+        // this adapter disagreeing with PostgresAdapter, which already scans
+        // every level.
+        const hasOverdueEscalation = i.levels.some(
+          (l) => l.escalationDueAt != null && new Date(l.escalationDueAt) <= asOf,
+        );
         // Instance deadline expired
         const isExpired = i.expiresAt != null && new Date(i.expiresAt) <= asOf;
         // SLA breach (not yet recorded)
@@ -149,7 +152,15 @@ export class MemoryAdapter implements IStorageAdapter {
             new Date(l.delegatedUntil) <= asOf &&
             l.delegatedFrom != null,
         );
-        return hasOverdueEscalation || isExpired || hasSLABreach || hasDelegationExpiry;
+        // Reminder due on any open branch. Without this the scheduler never
+        // sees the instance and no reminder is ever sent.
+        const hasDueReminder = i.levels.some(
+          (l) =>
+            l.status === 'pending' && l.reminderDueAt != null && new Date(l.reminderDueAt) <= asOf,
+        );
+        return (
+          hasOverdueEscalation || isExpired || hasSLABreach || hasDelegationExpiry || hasDueReminder
+        );
       })
       .map((i) => reviveDates(deepClone(i)));
   }
