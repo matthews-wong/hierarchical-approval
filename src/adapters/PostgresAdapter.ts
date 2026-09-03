@@ -442,6 +442,21 @@ export class PostgresAdapter implements IStorageAdapter {
     };
   }
 
+  async deleteInstance(tenantId: string, id: string): Promise<boolean> {
+    const pool = await this.getPool();
+    // Audit rows first: if the second statement fails, orphaned audit rows are a
+    // far better outcome than audit rows silently outliving nothing.
+    await pool.query(`DELETE FROM ${this.p}_audit_log WHERE tenant_id = $1 AND instance_id = $2`, [
+      tenantId,
+      id,
+    ]);
+    const result = await pool.query(
+      `DELETE FROM ${this.p}_instances WHERE tenant_id = $1 AND id = $2 RETURNING id`,
+      [tenantId, id],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   async countInstances(tenantId: string, filter: InstanceFilter): Promise<number> {
     const pool = await this.getPool();
     const conditions: string[] = ['tenant_id = $1'];

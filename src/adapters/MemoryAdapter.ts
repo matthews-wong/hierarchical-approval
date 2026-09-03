@@ -201,6 +201,13 @@ export class MemoryAdapter implements IStorageAdapter {
       .map((i) => reviveDates(deepClone(i)));
   }
 
+  async deleteInstance(tenantId: string, id: string): Promise<boolean> {
+    const key = `${tenantId}:${id}`;
+    // The audit trail lives on the instance in this adapter, so removing the
+    // instance removes it too — matching PostgresAdapter, which cascades.
+    return this.instances.delete(key);
+  }
+
   async countInstances(tenantId: string, filter: InstanceFilter): Promise<number> {
     let count = 0;
     for (const instance of this.instances.values()) {

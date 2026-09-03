@@ -100,6 +100,20 @@ export interface IStorageAdapter {
    * @since 2.0.0 — required. See the release notes for the migration.
    */
   countInstances(tenantId: string, filter: InstanceFilter): Promise<number>;
+  /**
+   * Permanently remove one instance and its audit rows.
+   *
+   * **Optional.** An adapter that omits it simply cannot be purged, and
+   * {@link ApprovalEngine.purgeInstances} says so rather than pretending to
+   * have deleted anything. Left optional deliberately: for many deployments the
+   * approval trail is the compliance record and the right answer is that
+   * nothing is ever deleted, which an adapter expresses by not implementing
+   * this at all.
+   *
+   * @returns true if a row was removed, false if there was nothing to remove.
+   * @since 2.3.0
+   */
+  deleteInstance?(tenantId: string, id: string): Promise<boolean>;
   getIdempotentInstance(tenantId: string, idempotencyKey: string): Promise<ApprovalInstance | null>;
 
   // Audit (append-only)

@@ -468,6 +468,31 @@ The sweep is **not atomic**: it reports per-instance failures rather than rollin
 back. A partial transfer is the useful outcome — the approvals that can move
 should move, and the ones that cannot are named so a human can look at them.
 
+### Retention
+
+Approval tables only grow, and data-minimisation rules eventually require old
+records to go:
+
+```ts
+const result = await engine.purgeInstances({
+  olderThan: new Date('2024-01-01'),
+  statuses: ['approved', 'rejected'],   // terminal statuses only
+  documentType: 'purchase_order',       // optional
+  limit: 1000,                          // default 1000
+  dryRun: true,                         // see what would go first
+});
+```
+
+**Only terminal instances are eligible.** A pending approval is live work, and
+deleting one would strand a document with no way to finish and no record of why.
+Passing a non-terminal status is rejected rather than quietly ignored.
+
+This is irreversible and removes the audit trail with the instance. In many
+deployments that trail *is* the compliance record — which is why the underlying
+`deleteInstance` is an **optional** adapter method. An adapter that does not
+implement it makes purging unavailable, and the call throws rather than
+reporting a successful purge of nothing.
+
 ### Promoting templates between environments
 
 Approval configuration is authored somewhere safe, reviewed, then promoted.

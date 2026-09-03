@@ -7,6 +7,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [2.3.0] - 2026-09-04
+
+### Added — retention
+
+- **`purgeInstances()` removes finished approvals older than a cut-off.**
+  Approval tables only grow, and data-minimisation rules eventually require old
+  records to go. There was no way to remove one, so operators reached around the
+  library and deleted rows directly — which is exactly where orphaned audit rows
+  and half-deleted instances come from.
+
+  ```ts
+  await engine.purgeInstances({
+    olderThan: new Date('2024-01-01'),
+    statuses: ['approved', 'rejected'],
+    dryRun: true,
+  });
+  ```
+
+- **Only terminal instances are eligible.** A pending approval is live work, and
+  deleting one would strand a document with no way to finish and no record of
+  why. A non-terminal status is rejected rather than quietly ignored, because a
+  caller who asked to purge pending work has misunderstood something and should
+  hear about it. The engine re-checks each instance's status and age before
+  deleting, so a custom adapter with a loose filter still cannot remove live
+  work.
+
+- **`IStorageAdapter.deleteInstance` is optional.** For many deployments the
+  approval trail *is* the compliance record and the right answer is that nothing
+  is ever deleted — an adapter expresses that by not implementing the method,
+  and `purgeInstances()` then throws rather than reporting a successful purge of
+  nothing. Both bundled adapters implement it; `PostgresAdapter` removes audit
+  rows before the instance row, since orphaned audit rows are a better failure
+  mode than audit rows outliving nothing.
+
+  New export: `PurgeResult`.
+
 ## [2.2.0] - 2026-09-04
 
 ### Added — template export / import

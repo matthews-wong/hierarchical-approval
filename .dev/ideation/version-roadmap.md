@@ -29,7 +29,8 @@ major boundaries where a breaking change is expected anyway.
 | 1.9.0 ✅ | getWorkload() — who owes a decision, and how overdue | Engine |
 | 2.0.0 ✅ | Adapter interface v2 — required countInstances (breaking) | Adapters |
 | 2.2.0 ✅ | Template export/import bundles | Engine |
-| 2.3.x+ | To be planned | — |
+| 2.3.0 ✅ | Retention — purgeInstances with terminal-only guards | Engine + adapters |
+| 2.4.x+ | To be planned | — |
 
 Versions past 2.0.0 stay deliberately unplanned: the adapter break will
 reshape what is cheap to build next, and committing now would be guesswork.

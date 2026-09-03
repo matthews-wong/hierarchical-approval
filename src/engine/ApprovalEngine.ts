@@ -111,6 +111,8 @@ export {
 /** Reminders sent for one level before the engine stops nudging, absent an explicit cap. */
 /** How deep sub-workflows may nest before the engine refuses, so a template cycle terminates. */
 const MAX_SUBWORKFLOW_DEPTH = 5;
+/** Instances one purge sweep will remove unless the caller raises it. */
+const DEFAULT_PURGE_LIMIT = 1000;
 const DEFAULT_MAX_REMINDERS = 3;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_BASE_DELAY_MS = 50;
@@ -218,6 +220,16 @@ export interface ImportResult {
   updated: string[];
   skipped: string[];
   errors: Array<{ name: string; message: string }>;
+  dryRun: boolean;
+}
+
+/** Outcome of a {@link ApprovalEngine.purgeInstances} sweep. */
+export interface PurgeResult {
+  /** Instances actually removed (or that would be, under `dryRun`). */
+  purged: Array<{ instanceId: string; documentId: string; status: ApprovalInstance['status'] }>;
+  /** Instances examined. */
+  scanned: number;
+  /** True when nothing was written. */
   dryRun: boolean;
 }
 
@@ -2979,6 +2991,102 @@ export class ApprovalEngine {
       updated: result.updated.length,
       skipped: result.skipped.length,
       errors: result.errors.length,
+    });
+
+    return result;
+  }
+
+  /**
+   * Permanently remove finished approvals older than a cut-off.
+   *
+   * Approval tables only grow, and data-minimisation rules eventually require
+   * old records to go. There was no way to remove one, so operators reached
+   * around the library and deleted rows directly — which is exactly where
+   * orphaned audit rows and half-deleted instances come from.
+   *
+   * **Only terminal instances are eligible.** A pending approval is live work;
+   * deleting one would strand a document with no way to finish and no record of
+   * why. Passing a non-terminal status is rejected rather than quietly ignored,
+   * because a caller who asked to purge pending work has misunderstood
+   * something and should hear about it.
+   *
+   * This is irreversible and removes the audit trail with the instance. In many
+   * deployments that trail *is* the compliance record, which is why the
+   * underlying `deleteInstance` is an optional adapter method: an adapter that
+   * does not implement it makes the whole operation unavailable, and this
+   * throws rather than reporting a successful purge of nothing.
+   *
+   * @param opts - Cut-off, optional status/type scoping, safety limit, dry run.
+   * @returns What was removed, or would be under `dryRun`.
+   */
+  async purgeInstances(opts: {
+    olderThan: Date;
+    statuses?: ApprovalInstance['status'][];
+    documentType?: string;
+    limit?: number;
+    dryRun?: boolean;
+  }): Promise<PurgeResult> {
+    const dryRun = opts.dryRun ?? false;
+    const limit = opts.limit ?? DEFAULT_PURGE_LIMIT;
+
+    if (!(opts.olderThan instanceof Date) || Number.isNaN(opts.olderThan.getTime())) {
+      throw new ApprovalValidationError('purgeInstances requires a valid olderThan date.');
+    }
+
+    const requested = opts.statuses ?? [...TERMINAL_STATUSES];
+    const nonTerminal = requested.filter((st) => !TERMINAL_STATUSES.has(st));
+    if (nonTerminal.length > 0) {
+      throw new ApprovalValidationError(
+        `purgeInstances refuses non-terminal statuses (${nonTerminal.join(', ')}): a pending approval is live work, and removing it would strand the document it belongs to.`,
+      );
+    }
+
+    const deleteInstance = this.opts.adapter.deleteInstance?.bind(this.opts.adapter);
+    if (!deleteInstance && !dryRun) {
+      throw new ApprovalValidationError(
+        'The configured storage adapter does not implement deleteInstance(), so instances cannot be purged.',
+      );
+    }
+
+    const result: PurgeResult = { purged: [], scanned: 0, dryRun };
+
+    for (const status of requested) {
+      if (result.purged.length >= limit) break;
+
+      const page = await this.opts.adapter.getInstancesByFilter(
+        this.tenantId,
+        {
+          status,
+          toDate: opts.olderThan,
+          ...(opts.documentType ? { documentType: opts.documentType } : {}),
+        },
+        { limit, offset: 0 },
+      );
+
+      for (const instance of page.items) {
+        if (result.purged.length >= limit) break;
+        result.scanned++;
+
+        // Defence in depth: the filter should already exclude these, but a
+        // custom adapter with a loose filter must not be able to delete live work.
+        if (!TERMINAL_STATUSES.has(instance.status)) continue;
+        if (new Date(instance.createdAt) > opts.olderThan) continue;
+
+        if (!dryRun) await deleteInstance!(this.tenantId, instance.id);
+        result.purged.push({
+          instanceId: instance.id,
+          documentId: instance.documentId,
+          status: instance.status,
+        });
+      }
+    }
+
+    this.logger.info('purgeInstances: sweep complete', {
+      tenantId: this.tenantId,
+      olderThan: opts.olderThan.toISOString(),
+      scanned: result.scanned,
+      purged: result.purged.length,
+      dryRun,
     });
 
     return result;

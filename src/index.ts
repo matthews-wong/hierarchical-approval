@@ -9,6 +9,7 @@ export type {
   TransferResult,
   TemplateBundle,
   ImportResult,
+  PurgeResult,
   ApprovalStatistics,
   ApproverWorkload,
   CycleTimeStats,
