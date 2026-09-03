@@ -55,6 +55,7 @@ import { EscalationScheduler } from './EscalationScheduler.js';
 import {
   evaluateConditions,
   registerConditionOperator,
+  validateConditionExpression,
   type ConditionOperatorFn,
 } from './ConditionEvaluator.js';
 import {
@@ -449,6 +450,9 @@ export class ApprovalEngine {
 
     if (config.conditions) {
       config.conditions.forEach((rule, ruleIdx) => {
+        errors.push(
+          ...validateConditionExpression(rule.when, `conditions[${ruleIdx}].when`),
+        );
         if (rule.addLevels) {
           rule.addLevels.forEach((al, alIdx) => {
             const conflictsWithStatic = config.levels.some((l) => l.level === al.level);

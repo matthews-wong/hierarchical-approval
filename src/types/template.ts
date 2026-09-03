@@ -3,7 +3,16 @@ import type { ApproverConfig } from './approver.js';
 export type ApprovalMode = 'all' | 'any' | 'majority' | 'quorum' | 'weighted';
 
 /** Built-in operators. Use engine.registerConditionOperator() to add custom ones. */
-export type ConditionOperator = '>' | '<' | '>=' | '<=' | '==' | '!=' | 'in' | 'not_in' | (string & {});
+export type ConditionOperator =
+  | '>'
+  | '<'
+  | '>='
+  | '<='
+  | '=='
+  | '!='
+  | 'in'
+  | 'not_in'
+  | (string & {});
 
 export interface Condition {
   field: string;
@@ -36,8 +45,33 @@ export interface ApprovalLevelConfig {
   weights?: Record<string, number>;
 }
 
+/**
+ * A boolean combinator over nested condition expressions.
+ *
+ * Exactly one key is set. `all` and `any` take a non-empty list; `not` inverts
+ * a single expression. They nest arbitrarily, so a rule can express
+ * "(A and B) or not C" without the caller flattening it by hand.
+ */
+export type ConditionGroup =
+  | { all: ConditionExpression[]; any?: never; not?: never }
+  | { any: ConditionExpression[]; all?: never; not?: never }
+  | { not: ConditionExpression; all?: never; any?: never };
+
+/**
+ * Anything that can appear in a rule's `when`.
+ *
+ * A bare {@link Condition} is a single test. An array is shorthand for `all`
+ * (kept so existing templates keep working). A {@link ConditionGroup} is an
+ * explicit combinator.
+ */
+export type ConditionExpression = Condition | ConditionExpression[] | ConditionGroup;
+
 export interface ConditionRule {
-  when: Condition | Condition[];
+  /**
+   * The test that decides whether this rule's mutations apply. An array means
+   * every element must hold; use {@link ConditionGroup} for `any` / `not`.
+   */
+  when: ConditionExpression;
   addLevels?: ApprovalLevelConfig[];
   skipLevels?: number[];
 }

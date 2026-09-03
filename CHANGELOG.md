@@ -7,6 +7,51 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [0.8.0] - 2026-09-04
+
+### Added — boolean condition expressions
+
+- **A rule's `when` now accepts `all`, `any` and `not` groups, nestable to any
+  depth.** Conditions previously supported a single test or an array meaning
+  AND, so "escalate when the amount is large **or** the vendor is high-risk"
+  could not be written as one rule — it took two rules with duplicated
+  `addLevels`, and anything involving negation or a mix of AND and OR had no
+  expression at all.
+
+  ```ts
+  when: {
+    any: [
+      { all: [
+          { field: 'amount', operator: '>', value: 1000 },
+          { field: 'dept', operator: '==', value: 'engineering' },
+      ] },
+      { field: 'override', operator: '==', value: true },
+    ],
+  }
+  ```
+
+  A group sets exactly one combinator. `any` short-circuits on the first child
+  that holds. New `ConditionExpression` and `ConditionGroup` types are exported
+  from the package root.
+
+  **Fully backward compatible.** A bare condition still works, and an array is
+  shorthand for `all` — exactly what `when: [...]` already meant.
+
+- **Condition trees are validated when the template is defined.** `validateTemplate()`
+  and `defineTemplate()` now reject an empty `all`/`any`, a group setting more
+  than one combinator, a non-array `all`/`any`, and a leaf missing its `field`
+  or `operator` — reporting the offending path, e.g.
+  `conditions[0].when.any[1].operator`. Previously a malformed condition was
+  only discovered at submit time, on a real document.
+
+  Operator *names* are deliberately not checked at definition time, because
+  custom operators can be registered after a template is defined; an unknown
+  operator still throws when the condition is evaluated.
+
+- **`validateConditionExpression(expression, path)` is exported** for callers
+  that build condition trees dynamically and want to check one before handing it
+  to a template. It collects every problem rather than throwing on the first.
+
 ## [0.7.0] - 2026-09-04
 
 ### Fixed — two condition-evaluation bypasses

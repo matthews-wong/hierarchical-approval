@@ -305,6 +305,47 @@ conditions: [
 
 **Built-in operators:** `>`, `<`, `>=`, `<=`, `==`, `!=`, `in`, `not_in`
 
+#### Combining conditions
+
+A `when` can be a single condition, an array (every element must hold), or a
+boolean group — `all`, `any`, `not` — which nest to any depth:
+
+```ts
+conditions: [
+  {
+    // (amount > 1000 AND dept is engineering) OR an explicit override flag
+    when: {
+      any: [
+        {
+          all: [
+            { field: 'amount', operator: '>', value: 1000 },
+            { field: 'dept', operator: '==', value: 'engineering' },
+          ],
+        },
+        { field: 'override', operator: '==', value: true },
+      ],
+    },
+    addLevels: [{ level: 3, name: 'CFO', approvers: [{ type: 'user', userId: 'cfo' }], mode: 'any' }],
+  },
+  {
+    // Everything outside the US skips the domestic finance review
+    when: { not: { field: 'region', operator: '==', value: 'US' } },
+    skipLevels: [2],
+  },
+]
+```
+
+A group sets exactly one of `all` / `any` / `not`. `any` short-circuits on the
+first child that holds. An array is shorthand for `all`, so every template
+written before groups existed keeps working unchanged.
+
+Groups are checked when the template is defined, not when a document is
+submitted — `validateTemplate()` and `defineTemplate()` reject an empty `all`,
+a group setting two combinators, or a leaf missing its `field`/`operator`, and
+report the offending path (`conditions[0].when.any[1].operator`). Operator
+*names* are deliberately not checked there, since custom operators may be
+registered after the template is defined.
+
 #### How values are compared
 
 `==` and `!=` compare **strictly** — `'100'` does not equal `100`.

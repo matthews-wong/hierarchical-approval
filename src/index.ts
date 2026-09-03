@@ -13,7 +13,10 @@ export type {
   IdempotencyKeyFn,
 } from './engine/ApprovalEngine.js';
 export type { OrgProvider, ApproverResolverFn } from './engine/LevelResolver.js';
-export { toComparableNumber } from './engine/ConditionEvaluator.js';
+export {
+  toComparableNumber,
+  validateConditionExpression,
+} from './engine/ConditionEvaluator.js';
 export type { ConditionOperatorFn } from './engine/ConditionEvaluator.js';
 export { EscalationScheduler } from './engine/EscalationScheduler.js';
 export type { EscalationSchedulerOpts } from './engine/EscalationScheduler.js';

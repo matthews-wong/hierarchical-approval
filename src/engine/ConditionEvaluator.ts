@@ -1,4 +1,10 @@
-import type { Condition, ConditionRule, ApprovalLevelConfig } from '../types/index.js';
+import type {
+  Condition,
+  ConditionExpression,
+  ConditionGroup,
+  ConditionRule,
+  ApprovalLevelConfig,
+} from '../types/index.js';
 import { ApprovalValidationError } from '../errors.js';
 
 export type ConditionOperatorFn = (actual: unknown, expected: unknown) => boolean;
@@ -110,11 +116,121 @@ function evaluateCondition(condition: Condition, data: Record<string, unknown>):
   return fn(actual, condition.value);
 }
 
-function evaluateRule(rule: Condition | Condition[], data: Record<string, unknown>): boolean {
-  if (Array.isArray(rule)) {
-    return rule.every((c) => evaluateCondition(c, data));
+/** Narrow an expression to a boolean combinator, or return null if it is a leaf condition. */
+function asGroup(expression: ConditionExpression): ConditionGroup | null {
+  if (expression === null || typeof expression !== 'object' || Array.isArray(expression)) {
+    return null;
   }
-  return evaluateCondition(rule, data);
+  const candidate = expression as Partial<Record<'all' | 'any' | 'not', unknown>>;
+  const keys = (['all', 'any', 'not'] as const).filter((k) => candidate[k] !== undefined);
+  if (keys.length === 0) return null;
+  if (keys.length > 1) {
+    throw new ApprovalValidationError(
+      `Condition group must set exactly one of "all", "any" or "not" (got ${keys.join(', ')}).`,
+    );
+  }
+  const key = keys[0] as 'all' | 'any' | 'not';
+  if (key !== 'not' && !Array.isArray(candidate[key])) {
+    throw new ApprovalValidationError(`Condition group "${key}" must be an array of expressions.`);
+  }
+  if (key !== 'not' && (candidate[key] as unknown[]).length === 0) {
+    // An empty `all` is vacuously true and an empty `any` vacuously false; both are
+    // far more likely to be a construction bug than an intent, so reject them.
+    throw new ApprovalValidationError(`Condition group "${key}" must not be empty.`);
+  }
+  return expression as ConditionGroup;
+}
+
+/**
+ * Evaluate a condition expression tree.
+ *
+ * A bare condition is a leaf; an array is shorthand for `all`, which is what a
+ * `when: [...]` meant before groups existed; and a group applies its
+ * combinator to nested expressions, recursing to any depth.
+ */
+function evaluateExpression(
+  expression: ConditionExpression,
+  data: Record<string, unknown>,
+): boolean {
+  if (Array.isArray(expression)) {
+    return expression.every((child) => evaluateExpression(child, data));
+  }
+
+  const group = asGroup(expression);
+  if (group === null) {
+    return evaluateCondition(expression as Condition, data);
+  }
+  if (group.all !== undefined) {
+    return group.all.every((child) => evaluateExpression(child, data));
+  }
+  if (group.any !== undefined) {
+    return group.any.some((child) => evaluateExpression(child, data));
+  }
+  return !evaluateExpression(group.not, data);
+}
+
+/**
+ * Statically check a condition expression tree, collecting every problem rather
+ * than throwing on the first.
+ *
+ * Runs at template-definition time so a malformed group is caught while the
+ * author is looking at it, instead of at submit time on a real document. The
+ * operator check is deliberately deferred: custom operators can be registered
+ * after a template is defined, so an unknown name is only an error once the
+ * condition is actually evaluated.
+ *
+ * @param expression - The `when` expression to check.
+ * @param path - Field path prefix used in reported errors.
+ * @returns One entry per problem found; empty when the tree is well formed.
+ */
+export function validateConditionExpression(
+  expression: ConditionExpression,
+  path: string,
+): Array<{ field: string; message: string }> {
+  const errors: Array<{ field: string; message: string }> = [];
+
+  const walk = (node: ConditionExpression, at: string): void => {
+    if (Array.isArray(node)) {
+      if (node.length === 0) {
+        errors.push({ field: at, message: 'Condition list must not be empty.' });
+      }
+      node.forEach((child, i) => walk(child, `${at}[${i}]`));
+      return;
+    }
+
+    let group: ConditionGroup | null;
+    try {
+      group = asGroup(node);
+    } catch (err) {
+      errors.push({ field: at, message: (err as Error).message });
+      return;
+    }
+
+    if (group === null) {
+      const leaf = node as Partial<Condition>;
+      if (typeof leaf?.field !== 'string' || leaf.field.length === 0) {
+        errors.push({
+          field: `${at}.field`,
+          message: 'Condition requires a non-empty field path.',
+        });
+      }
+      if (typeof leaf?.operator !== 'string' || leaf.operator.length === 0) {
+        errors.push({ field: `${at}.operator`, message: 'Condition requires an operator.' });
+      }
+      return;
+    }
+
+    if (group.all !== undefined) {
+      group.all.forEach((child, i) => walk(child, `${at}.all[${i}]`));
+    } else if (group.any !== undefined) {
+      group.any.forEach((child, i) => walk(child, `${at}.any[${i}]`));
+    } else {
+      walk(group.not, `${at}.not`);
+    }
+  };
+
+  walk(expression, path);
+  return errors;
 }
 
 export interface LevelMutations {
@@ -129,7 +245,7 @@ export function evaluateConditions(
   const mutations: LevelMutations = { addLevels: [], skipLevels: new Set() };
 
   for (const rule of conditions) {
-    if (evaluateRule(rule.when, data)) {
+    if (evaluateExpression(rule.when, data)) {
       if (rule.addLevels) mutations.addLevels.push(...rule.addLevels);
       if (rule.skipLevels) rule.skipLevels.forEach((l) => mutations.skipLevels.add(l));
     }
