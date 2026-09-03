@@ -124,6 +124,13 @@ describe('isLevelApproved', () => {
   it('throws when the level has no approvers at all', () => {
     expect(() => isLevelApproved(makeLevel('any', [], [], []))).toThrow(/has no approvers/);
   });
+
+  it('unknown mode throws — exhaustiveness guard', () => {
+    const bogus = 'bogus' as unknown as ApprovalLevelInstance['mode'];
+    expect(() => isLevelApproved(makeLevel(bogus, ['a'], [], []))).toThrow(
+      /Unhandled approval mode: bogus/,
+    );
+  });
 });
 
 describe('isLevelRejected', () => {
@@ -185,6 +192,13 @@ describe('isLevelRejected', () => {
 
   it('throws when the level has no approvers at all', () => {
     expect(() => isLevelRejected(makeLevel('any', [], [], []))).toThrow(/has no approvers/);
+  });
+
+  it('unknown mode throws — exhaustiveness guard', () => {
+    const bogus = 'bogus' as unknown as ApprovalLevelInstance['mode'];
+    expect(() => isLevelRejected(makeLevel(bogus, ['a'], [], []))).toThrow(
+      /Unhandled approval mode: bogus/,
+    );
   });
 });
 
