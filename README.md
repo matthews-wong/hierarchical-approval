@@ -305,6 +305,33 @@ conditions: [
 
 **Built-in operators:** `>`, `<`, `>=`, `<=`, `==`, `!=`, `in`, `not_in`
 
+#### How values are compared
+
+`==` and `!=` compare **strictly** — `'100'` does not equal `100`.
+
+The numeric operators (`>`, `<`, `>=`, `<=`) match only when **both** sides are
+unambiguously numeric: finite numbers, bigints, `Date` (compared as epoch
+milliseconds), and numeric strings such as `'100'` or `' 1e3 '` — because ERP
+payloads routinely arrive as JSON strings. Anything else — `null`, `undefined`,
+`true`/`false`, arrays, objects, blank strings, `NaN`, `Infinity` — is treated as
+*not comparable*, and the condition reports **no match**.
+
+This matters for safety. A rule that skips levels on small amounts must not fire
+on a document whose amount was never populated:
+
+```ts
+{ when: { field: 'amount', operator: '<', value: 5000 }, skipLevels: [2, 3] }
+
+// amount: 4999  -> matches, levels 2 and 3 are skipped
+// amount: null  -> NO match, every level is kept
+// amount: ''    -> NO match, every level is kept
+```
+
+Field paths resolve **own properties only**, so an inherited or polluted
+`Object.prototype` member can never satisfy a condition. A path segment that is
+not an own property — including `__proto__`, `constructor`, and `prototype` —
+resolves to `undefined`, exactly as a genuinely absent field does.
+
 **Register custom operators** at engine level:
 
 ```ts
@@ -312,11 +339,23 @@ engine.registerConditionOperator(
   'contains',
   (actual, expected) => typeof actual === 'string' && actual.includes(String(expected)),
 );
+```
 
-engine.registerConditionOperator(
-  'between',
-  (actual, [min, max]: number[]) => Number(actual) >= min && Number(actual) <= max,
-);
+Custom numeric operators should reuse the same strictness via the exported
+`toComparableNumber` helper, which returns `null` for anything that is not
+unambiguously a number:
+
+```ts
+import { toComparableNumber } from 'hierarchical-approval';
+
+engine.registerConditionOperator('between', (actual, expected) => {
+  const value = toComparableNumber(actual);
+  if (value === null || !Array.isArray(expected) || expected.length !== 2) return false;
+  const min = toComparableNumber(expected[0]);
+  const max = toComparableNumber(expected[1]);
+  if (min === null || max === null) return false;
+  return value >= min && value <= max;
+});
 ```
 
 ---
