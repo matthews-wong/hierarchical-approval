@@ -7,6 +7,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [2.6.0] - 2026-09-04
+
+### Added — escalation ladders
+
+- **`escalationSteps` escalates repeatedly, up a chain.** A single `escalation`
+  could only ever fire once, so a request that stalled past its second deadline
+  had nowhere further to go — the usual "chase the manager, then the director,
+  then the VP" pattern had to be built outside the engine, on top of the events.
+
+  ```ts
+  escalationSteps: [
+    { afterDays: 2, escalateTo: { type: 'user', userId: 'director' } },
+    { afterDays: 4, escalateTo: { type: 'user', userId: 'vp' } },
+    { afterDays: 7, escalateTo: { type: 'role', role: 'exec' } },
+  ]
+  ```
+
+  Rungs are sorted by delay and fire in order, each **adding** an approver rather
+  than replacing one: escalation widens the pool, it does not hand the work over.
+
+- **Delays are measured from when the level opened, not from the previous
+  escalation**, so a ladder reads the way it is written. The level's opening
+  time is recovered from its `submitted` / `level_advanced` audit entry.
+
+- Rungs accept `afterHours` as well as `afterDays`, counted through the
+  working-hours calendar from 2.5.0 when one is configured. A per-level
+  `escalationAfterDays`/`escalationAfterHours` still decides *when* the first
+  rung fires — it is the more specific statement about that level — while the
+  ladder supplies *who*.
+
+- Templates carrying only the single-step `escalation` behave exactly as before;
+  the ladder takes precedence when both are set. Levels track progress in
+  `escalationStep`, and the ladder is captured in the template snapshot, so an
+  in-flight approval keeps the ladder it was submitted under.
+
+  New exports: `EscalationStep`. `ApprovalTemplateConfig` gains
+  `escalationSteps`; levels gain `escalationStep`.
+
 ## [2.5.0] - 2026-09-04
 
 ### Added — deadlines in working hours

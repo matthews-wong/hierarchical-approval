@@ -468,6 +468,33 @@ The sweep is **not atomic**: it reports per-instance failures rather than rollin
 back. A partial transfer is the useful outcome — the approvals that can move
 should move, and the ones that cannot are named so a human can look at them.
 
+### Escalation ladders
+
+A single `escalation` fires once, so a request that stalls past its second
+deadline has nowhere further to go. `escalationSteps` is a ladder:
+
+```ts
+escalationSteps: [
+  { afterDays: 2, escalateTo: { type: 'user', userId: 'director' } },
+  { afterDays: 4, escalateTo: { type: 'user', userId: 'vp' } },
+  { afterDays: 7, escalateTo: { type: 'role', role: 'exec' } },
+]
+```
+
+Rungs are sorted by delay and fire in order, each **adding** an approver without
+removing anyone already assigned — escalation widens the pool rather than
+handing the work over.
+
+Every delay is measured **from the moment the level opened**, not from the
+previous escalation, so the ladder reads the way it is written: late at day 2,
+later at day 4, latest at day 7. Rungs accept `afterHours` too, counted through
+the working-hours calendar if one is configured.
+
+A per-level `escalationAfterDays`/`escalationAfterHours` still wins for *when*
+the first rung fires — it is the more specific statement about that level — while
+the ladder supplies *who*. Templates with only the single-step `escalation`
+behave exactly as before.
+
 ### SLAs in working hours
 
 Deadlines were whole days, so "respond within four working hours" could only be

@@ -139,6 +139,16 @@ export interface EscalationConfig {
   escalateTo: ApproverConfig;
 }
 
+/** One rung of an escalation ladder. See {@link ApprovalTemplateConfig.escalationSteps}. */
+export interface EscalationStep {
+  /** Delay from the level opening, in calendar or business days. */
+  afterDays?: number;
+  /** Delay from the level opening, in working hours. Mutually exclusive with {@link afterDays}. */
+  afterHours?: number;
+  /** Who is added to the level when this rung fires. */
+  escalateTo: ApproverConfig;
+}
+
 export interface ApprovalTemplateConfig {
   name: string;
   /**
@@ -160,6 +170,19 @@ export interface ApprovalTemplateConfig {
   levels: ApprovalLevelConfig[];
   conditions?: ConditionRule[];
   escalation?: EscalationConfig;
+  /**
+   * An escalation ladder: successive rungs, each measured from the moment the
+   * level opened, each adding another approver.
+   *
+   * A single {@link escalation} could only ever fire once, so a request that
+   * stalled past its second deadline had nowhere further to go — the usual
+   * "chase the manager, then the director, then the VP" pattern had to be built
+   * outside the engine. Steps are sorted by delay and fire in order; each adds
+   * its approver to the level without removing anyone already there.
+   *
+   * Takes precedence over {@link escalation} when both are set.
+   */
+  escalationSteps?: EscalationStep[];
   /** Overall SLA for the entire workflow in days. Emits approval:sla_breached when elapsed. */
   slaDeadlineDays?: number;
   /**

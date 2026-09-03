@@ -12,6 +12,7 @@ import type {
   ApprovalTemplateConfig,
   ApprovalInstance,
   ApprovalLevelInstance,
+  EscalationStep,
   Attachment,
   AuditEntry,
   AuditContext,
@@ -803,7 +804,10 @@ export class ApprovalEngine {
         weights: cfg.weights,
         escalationAfterDays: cfg.escalationAfterDays,
         escalationAfterHours: cfg.escalationAfterHours,
-        escalationDueAt: inFirstGroup ? this.levelEscalationDue(now, cfg) : undefined,
+        escalationStep: 0,
+        escalationDueAt: inFirstGroup
+          ? this.levelEscalationDue(now, cfg, this.firstRungOf(template.escalationSteps))
+          : undefined,
         subWorkflowTemplate: cfg.subWorkflow?.templateName,
         reminderAfterDays: cfg.reminderAfterDays,
         reminderEveryDays: cfg.reminderEveryDays,
@@ -873,6 +877,7 @@ export class ApprovalEngine {
       slaDeadlineAt,
       templateSnapshot: {
         escalation: template.escalation,
+        escalationSteps: template.escalationSteps,
         slaDeadlineDays: template.slaDeadlineDays,
         slaDeadlineHours: template.slaDeadlineHours,
         allowOverride: template.allowOverride,
@@ -2375,6 +2380,7 @@ export class ApprovalEngine {
       slaDeadlineAt,
       templateSnapshot: {
         escalation: template.escalation,
+        escalationSteps: template.escalationSteps,
         slaDeadlineDays: template.slaDeadlineDays,
         slaDeadlineHours: template.slaDeadlineHours,
         allowOverride: template.allowOverride,
@@ -3299,13 +3305,25 @@ export class ApprovalEngine {
     return this.withOptimisticRetry(instanceId, async (instance) => {
       if (instance.status !== 'pending') return instance;
 
-      const escalationConfig =
-        instance.templateSnapshot?.escalation ??
-        (await this.registry.get(instance.templateName)).escalation;
-      if (!escalationConfig) return instance;
+      const ladder = await this.escalationLadder(instance);
+      const targetLevel =
+        levelNumber === undefined
+          ? this.currentLevelInstance(instance)
+          : (instance.levels.find((l) => l.level === levelNumber) ??
+            this.currentLevelInstance(instance));
+      const rungIndex = targetLevel.escalationStep ?? 0;
+      const rung = ladder[rungIndex];
+
+      const escalateTo =
+        rung?.escalateTo ??
+        (
+          instance.templateSnapshot?.escalation ??
+          (await this.registry.get(instance.templateName)).escalation
+        )?.escalateTo;
+      if (!escalateTo) return instance;
 
       const newApprovers = await this.resolver.resolveApprovers(
-        [escalationConfig.escalateTo],
+        [escalateTo],
         instance.submittedBy,
         instance.data,
         this.opts.orgProvider,
@@ -3327,15 +3345,18 @@ export class ApprovalEngine {
 
       // A parallel group has several open branches, each with its own deadline;
       // escalating "the current level" would leave the others stuck forever.
-      const level =
-        levelNumber === undefined
-          ? this.currentLevelInstance(instance)
-          : (instance.levels.find((l) => l.level === levelNumber) ??
-            this.currentLevelInstance(instance));
+      const level = targetLevel;
       level.approverIds = [...new Set([...level.approverIds, ...filteredApprovers])];
-      level.escalationDueAt = undefined;
 
       const now = this.clock.now();
+
+      // Arm the next rung, if the ladder has one. Rung delays are measured from
+      // when the level opened, not from the previous escalation, so a ladder
+      // reads the way it is written: "2 days, then 4 days, then 7".
+      level.escalationStep = rungIndex + 1;
+      const nextRung = ladder[rungIndex + 1];
+      const levelOpenedAt = this.levelOpenedAt(instance, level, now);
+      level.escalationDueAt = nextRung ? this.stepDueAt(levelOpenedAt, nextRung) : undefined;
       const escalatedTo = filteredApprovers[0] ?? 'unknown';
       const auditEntry: AuditEntry = {
         action: 'escalated',
@@ -3561,9 +3582,72 @@ export class ApprovalEngine {
   private levelEscalationDue(
     from: Date,
     level: { escalationAfterDays?: number; escalationAfterHours?: number },
+    firstRung?: EscalationStep,
   ): Date | undefined {
+    // An explicit per-level delay wins: it is the more specific statement of
+    // when this particular level is late.
     if (level.escalationAfterHours) return this.deadlineFromHours(from, level.escalationAfterHours);
     if (level.escalationAfterDays) return this.deadlineFrom(from, level.escalationAfterDays);
+    return firstRung ? this.stepDueAt(from, firstRung) : undefined;
+  }
+
+  /** First rung of a ladder, sorted by delay, or undefined when there is none. */
+  private firstRungOf(steps: EscalationStep[] | undefined): EscalationStep | undefined {
+    if (!steps || steps.length === 0) return undefined;
+    return [...steps].sort(
+      (a, b) =>
+        (a.afterHours ?? (a.afterDays ?? 0) * 24) - (b.afterHours ?? (b.afterDays ?? 0) * 24),
+    )[0];
+  }
+
+  /**
+   * The escalation ladder for an instance, sorted by delay.
+   *
+   * Read from the instance's template snapshot so an in-flight approval keeps
+   * the ladder it was submitted under, exactly as the single-step
+   * {@link EscalationConfig} already did.
+   */
+  private async escalationLadder(instance: ApprovalInstance): Promise<EscalationStep[]> {
+    const snapshot = instance.templateSnapshot;
+    const steps =
+      snapshot?.escalationSteps ??
+      (await this.registry.get(instance.templateName)).escalationSteps ??
+      [];
+    return [...steps].sort(
+      (a, b) =>
+        (a.afterHours ?? (a.afterDays ?? 0) * 24) - (b.afterHours ?? (b.afterDays ?? 0) * 24),
+    );
+  }
+
+  /**
+   * When a level started collecting decisions.
+   *
+   * Escalation rungs are measured from this, not from the previous rung, so a
+   * ladder reads the way it is written. Recovered from the audit trail — the
+   * `submitted` entry for the opening level, the `level_advanced` entry
+   * otherwise — and falls back to `now` when no entry exists, which only leaves
+   * the ladder no worse off than the single-step behaviour it replaces.
+   */
+  private levelOpenedAt(
+    instance: ApprovalInstance,
+    level: ApprovalLevelInstance,
+    fallback: Date,
+  ): Date {
+    for (let i = instance.auditLog.length - 1; i >= 0; i--) {
+      const entry = instance.auditLog[i];
+      if (!entry) continue;
+      const opensThisLevel =
+        (entry.action === 'level_advanced' || entry.action === 'submitted') &&
+        entry.level === level.level;
+      if (opensThisLevel) return new Date(entry.timestamp);
+    }
+    return fallback;
+  }
+
+  /** Deadline for one rung, measured from when the level opened. */
+  private stepDueAt(from: Date, step: EscalationStep): Date | undefined {
+    if (step.afterHours) return this.deadlineFromHours(from, step.afterHours);
+    if (step.afterDays) return this.deadlineFrom(from, step.afterDays);
     return undefined;
   }
 
@@ -3685,6 +3769,7 @@ export class ApprovalEngine {
     group: ApprovalLevelInstance[],
     now: Date,
   ): Promise<void> {
+    const firstRung = this.firstRungOf(instance.templateSnapshot?.escalationSteps);
     for (const lvl of group) {
       if (lvl.subWorkflowTemplate) {
         // Nobody approves this level directly — a child approval decides it.
@@ -3699,7 +3784,8 @@ export class ApprovalEngine {
           now,
         );
       }
-      lvl.escalationDueAt = this.levelEscalationDue(now, lvl);
+      lvl.escalationDueAt = this.levelEscalationDue(now, lvl, firstRung);
+      lvl.escalationStep = 0;
       this.scheduleReminder(lvl, now);
       lvl.status = 'pending';
     }

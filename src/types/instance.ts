@@ -1,4 +1,4 @@
-import type { ApprovalMode, EscalationConfig } from './template.js';
+import type { ApprovalMode, EscalationConfig, EscalationStep } from './template.js';
 import type { ApproverConfig } from './approver.js';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired';
@@ -74,6 +74,8 @@ export interface ApprovalLevelInstance {
   escalationDueAt?: Date;
   escalationAfterDays?: number;
   escalationAfterHours?: number;
+  /** How many escalation rungs have fired on this level. */
+  escalationStep?: number;
   /** When the next reminder for this level is due; cleared when the level closes. */
   reminderDueAt?: Date;
   /** How many reminders have already been sent for this level. */
@@ -130,6 +132,7 @@ export interface InfoRequest {
 /** Snapshot of template configuration captured at submit time to insulate in-flight instances from template updates. */
 export interface TemplateSnapshot {
   escalation?: EscalationConfig;
+  escalationSteps?: EscalationStep[];
   slaDeadlineDays?: number;
   slaDeadlineHours?: number;
   allowOverride?: boolean;
