@@ -73,9 +73,26 @@ export function registerConditionOperator(name: string, fn: ConditionOperatorFn)
   operatorRegistry.set(name, fn);
 }
 
+/**
+ * Resolve a dot-separated path against the context data, reading **own**
+ * properties only.
+ *
+ * The `in` operator this previously used walks the prototype chain, so a
+ * condition on `isFastTrack` would be satisfied by an inherited
+ * `Object.prototype.isFastTrack` that no document ever declared. Prototype
+ * pollution is a common enough hazard in a JavaScript dependency tree that an
+ * approval engine must not let it decide whether a level is skipped — so a path
+ * segment that is not an own property resolves to `undefined`, exactly as a
+ * genuinely absent field does. This also blocks `__proto__`, `constructor`, and
+ * `prototype`, none of which are own properties of a data object.
+ *
+ * @param data - The instance context data the condition is evaluated against.
+ * @param path - Dot-separated field path, e.g. `'vendor.country'`.
+ * @returns The value at the path, or `undefined` if any segment is absent.
+ */
 function getField(data: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((obj, key) => {
-    if (obj !== null && typeof obj === 'object' && key in obj) {
+    if (obj !== null && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, key)) {
       return (obj as Record<string, unknown>)[key];
     }
     return undefined;

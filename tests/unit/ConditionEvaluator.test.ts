@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   evaluateConditions,
   registerConditionOperator,
@@ -319,6 +319,74 @@ describe('ConditionEvaluator', () => {
       ]) {
         expect(toComparableNumber(value)).toBeNull();
       }
+    });
+  });
+  describe('dot-path resolution reads own properties only', () => {
+    // Regression guard: `key in obj` walked the prototype chain, so a polluted
+    // Object.prototype could satisfy a condition and skip approval levels.
+    const POLLUTED_KEY = 'isFastTrack';
+
+    afterEach(() => {
+      delete (Object.prototype as Record<string, unknown>)[POLLUTED_KEY];
+    });
+
+    it('does not let a polluted Object.prototype skip approval levels', () => {
+      (Object.prototype as Record<string, unknown>)[POLLUTED_KEY] = true;
+      const rules: ConditionRule[] = [
+        { when: { field: POLLUTED_KEY, operator: '==', value: true }, skipLevels: [2, 3] },
+      ];
+      expect(evaluateConditions(rules, { amount: 1 }).skipLevels.size).toBe(0);
+      // An own property of the same name is still honoured.
+      expect(evaluateConditions(rules, { [POLLUTED_KEY]: true }).skipLevels.size).toBe(2);
+    });
+
+    it('does not let a polluted Object.prototype add approval levels', () => {
+      (Object.prototype as Record<string, unknown>)[POLLUTED_KEY] = true;
+      const rules: ConditionRule[] = [
+        { when: { field: POLLUTED_KEY, operator: '==', value: true }, addLevels: [extraLevel] },
+      ];
+      expect(evaluateConditions(rules, {}).addLevels).toHaveLength(0);
+    });
+
+    it('does not resolve inherited members through a nested segment', () => {
+      (Object.prototype as Record<string, unknown>)[POLLUTED_KEY] = true;
+      const rules: ConditionRule[] = [
+        {
+          when: { field: `vendor.${POLLUTED_KEY}`, operator: '==', value: true },
+          addLevels: [extraLevel],
+        },
+      ];
+      expect(evaluateConditions(rules, { vendor: { country: 'US' } }).addLevels).toHaveLength(0);
+    });
+
+    it('does not expose __proto__, constructor, prototype or toString', () => {
+      for (const field of ['__proto__', 'constructor', 'prototype', 'toString']) {
+        const rules: ConditionRule[] = [
+          { when: { field, operator: '==', value: undefined }, addLevels: [extraLevel] },
+        ];
+        // `== undefined` matches only when the path resolved to nothing, so a match
+        // proves the segment was never read off the prototype chain.
+        expect(evaluateConditions(rules, {}).addLevels).toHaveLength(1);
+      }
+    });
+
+    it('still resolves own properties, array indices and null-prototype objects', () => {
+      const nested: ConditionRule[] = [
+        { when: { field: 'vendor.country', operator: '==', value: 'US' }, addLevels: [extraLevel] },
+      ];
+      expect(evaluateConditions(nested, { vendor: { country: 'US' } }).addLevels).toHaveLength(1);
+
+      const indexed: ConditionRule[] = [
+        { when: { field: 'lines.0.sku', operator: '==', value: 'A-1' }, addLevels: [extraLevel] },
+      ];
+      expect(evaluateConditions(indexed, { lines: [{ sku: 'A-1' }] }).addLevels).toHaveLength(1);
+
+      const bare = Object.create(null) as Record<string, unknown>;
+      bare['amount'] = 9000;
+      const onBare: ConditionRule[] = [
+        { when: { field: 'amount', operator: '>', value: 5000 }, addLevels: [extraLevel] },
+      ];
+      expect(evaluateConditions(onBare, bare).addLevels).toHaveLength(1);
     });
   });
 });
