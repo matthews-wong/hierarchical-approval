@@ -58,6 +58,18 @@ export class LevelResolver {
     this.approverTypes.set(typeName, fn);
   }
 
+  /**
+   * Copy every custom resolver and approver type onto another resolver.
+   *
+   * Used when the engine builds a throwaway copy of itself for a simulation: a
+   * simulation that could not resolve the caller's own `dynamic` approvers
+   * would answer a different question from the one asked.
+   */
+  copyRegistrationsTo(target: LevelResolver): void {
+    for (const [name, fn] of this.resolvers) target.register(name, fn);
+    for (const [name, fn] of this.approverTypes) target.registerApproverType(name, fn);
+  }
+
   async resolveApprovers(
     approvers: ApproverConfig[],
     submittedBy: string,

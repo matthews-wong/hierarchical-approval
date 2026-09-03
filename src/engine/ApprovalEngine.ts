@@ -13,6 +13,8 @@ import type {
   ApprovalLevelConfig,
   ApprovalInstance,
   ApprovalLevelInstance,
+  ApprovalStatus,
+  LevelStatus,
   Comment,
   EscalationStep,
   Attachment,
@@ -57,6 +59,7 @@ import {
   type TransferApprovalsOptions,
   type ProvideInfoOptions,
 } from '../utils/validate.js';
+import { MemoryAdapter } from '../adapters/MemoryAdapter.js';
 import { EventBus } from '../utils/EventBus.js';
 import type { Logger } from '../utils/Logger.js';
 import { noopLogger } from '../utils/Logger.js';
@@ -208,6 +211,37 @@ export interface ChainExplanation {
   levels: ExplainedLevel[];
   skipped: ExplainedSkip[];
   rules: ExplainedRule[];
+}
+
+/** One scripted decision in a {@link ApprovalEngine.simulate} run. */
+export type SimulatedDecision =
+  | { approve: string; level?: number; comment?: string }
+  | { reject: string; level?: number; reason?: string };
+
+/** What one scripted decision did. */
+export interface SimulationStep {
+  /** 1-based position in the script. */
+  step: number;
+  action: 'approve' | 'reject';
+  actorId: string;
+  /** The level the decision landed on, when it was accepted. */
+  level?: number;
+  /** Instance status after the decision. */
+  status: ApprovalStatus;
+  /** Why the decision was refused, when it was. The run stops at the first refusal. */
+  error?: string;
+}
+
+/** Outcome of a {@link ApprovalEngine.simulate} run. */
+export interface SimulationResult {
+  finalStatus: ApprovalStatus;
+  /** The chain the document would get, in order. */
+  levels: Array<{ level: number; name: string; status: LevelStatus; approvers: string[] }>;
+  transcript: SimulationStep[];
+  /** Levels never reached because the run ended first. */
+  unreachedLevels: number[];
+  /** True when the script ran out before the approval finished. */
+  incomplete: boolean;
 }
 
 export interface BulkResult {
@@ -2683,6 +2717,128 @@ export class ApprovalEngine {
       .sort((a, b) => a.level - b.level);
 
     return { templateName: template.name, levels, skipped, rules };
+  }
+
+  /**
+   * Run a document through a template against scripted decisions, without
+   * persisting anything.
+   *
+   * `explainChain()` says what the chain will be; this says what happens to it —
+   * "if the CFO rejects at level 3, does it go back to the submitter or die?" —
+   * which previously meant submitting a real approval into a real store and
+   * cleaning it up afterwards, or reasoning about the state machine by hand.
+   *
+   * The run executes against a private in-memory store seeded with a copy of
+   * the template, so the caller's storage is untouched and no events reach the
+   * caller's notification adapters. Custom resolvers and approver types are
+   * copied across, because a simulation that could not resolve the caller's own
+   * `dynamic` approvers would answer a different question from the one asked.
+   *
+   * A refused decision — wrong approver, wrong level, already acted — stops the
+   * run and is reported in the transcript rather than thrown: the refusal is
+   * usually the answer the caller was looking for.
+   *
+   * @param opts - Template, document data, submitter and the decisions to play.
+   */
+  async simulate(opts: {
+    templateName: string;
+    data: Record<string, unknown>;
+    submittedBy: string;
+    decisions?: SimulatedDecision[];
+  }): Promise<SimulationResult> {
+    const template = await this.registry.get(opts.templateName);
+
+    const scratch = new ApprovalEngine({
+      ...this.opts,
+      adapter: new MemoryAdapter(),
+      // A simulation must not page anybody, write anybody's audit log, or move
+      // anybody's metrics.
+      notificationAdapter: undefined,
+      auditAdapter: undefined,
+      metricsAdapter: undefined,
+      authorizationPolicy: undefined,
+      middleware: undefined,
+      escalationPollIntervalMs: undefined,
+    });
+    this.resolver.copyRegistrationsTo(scratch.resolver);
+
+    try {
+      const {
+        id: _id,
+        tenantId: _t,
+        createdAt: _c,
+        version: _v,
+        previousVersionId: _p,
+        ...config
+      } = template;
+      await scratch.registry.define(config);
+
+      const instance = await scratch.submit({
+        templateName: opts.templateName,
+        documentId: `simulation-${opts.templateName}`,
+        documentType: template.documentType,
+        submittedBy: opts.submittedBy,
+        data: opts.data,
+        metadata: {},
+      });
+
+      const transcript: SimulationStep[] = [];
+      let current = instance;
+
+      for (const [i, decision] of (opts.decisions ?? []).entries()) {
+        const isApprove = 'approve' in decision;
+        const actorId = isApprove ? decision.approve : decision.reject;
+        try {
+          current = isApprove
+            ? await scratch.approve(current.id, {
+                approverId: actorId,
+                level: decision.level,
+                comment: decision.comment,
+              })
+            : await scratch.reject(current.id, {
+                approverId: actorId,
+                level: decision.level,
+                reason: decision.reason ?? 'simulated rejection',
+              });
+          transcript.push({
+            step: i + 1,
+            action: isApprove ? 'approve' : 'reject',
+            actorId,
+            level: decision.level,
+            status: current.status,
+          });
+        } catch (err) {
+          transcript.push({
+            step: i + 1,
+            action: isApprove ? 'approve' : 'reject',
+            actorId,
+            level: decision.level,
+            status: current.status,
+            error: (err as Error).message,
+          });
+          break;
+        }
+        if (TERMINAL_STATUSES.has(current.status)) break;
+      }
+
+      const finalInstance = await scratch.getInstance(current.id);
+      return {
+        finalStatus: finalInstance.status,
+        levels: finalInstance.levels.map((l) => ({
+          level: l.level,
+          name: l.name,
+          status: l.status,
+          approvers: l.approverIds,
+        })),
+        transcript,
+        unreachedLevels: finalInstance.levels
+          .filter((l) => l.status === 'waiting')
+          .map((l) => l.level),
+        incomplete: finalInstance.status === 'pending',
+      };
+    } finally {
+      await scratch.shutdown();
+    }
   }
 
   async canApprove(instanceId: string, userId: string): Promise<CanApproveResult> {

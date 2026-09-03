@@ -35,7 +35,7 @@ major boundaries where a breaking change is expected anyway.
 | 2.6.0 ✅ | Escalation ladders — multi-step escalation | Engine |
 | 2.7.0 ✅ | explainChain() — per-level and per-rule provenance | Engine |
 | 2.8.0 ✅ | Comment threads + MemoryAdapter date-revival fix | Engine + adapters |
-| 2.9.0 | To be planned | — |
+| 2.9.0 ✅ | simulate() — dry-run a workflow against scripted decisions | Engine |
 
 Versions past 2.0.0 stay deliberately unplanned: the adapter break will
 reshape what is cheap to build next, and committing now would be guesswork.
@@ -46,6 +46,12 @@ reshape what is cheap to build next, and committing now would be guesswork.
   but `cancel()` already covered withdraw and `updateData()` (0.9.0) covered
   amend, so building it would have been padding. Out-of-office cover was pulled
   forward from 1.7.0 instead, per the no-padding rule below.
+
+## Series complete
+
+0.7.0 through 2.9.0 shipped, each gated on green CI before publish. Four
+releases were re-planned rather than padded (1.3.0, 1.4.0, 1.6.0, 1.8.0), and
+five carried fixes for defects found while building the feature beside them.
 
 ## Rules for the series
 

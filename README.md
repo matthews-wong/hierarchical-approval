@@ -495,6 +495,35 @@ the current approvers: a remark aimed at somebody should reach them, and one
 aimed at nobody should not page the whole level. Comments are still written to
 the audit trail, since the record of who said what belongs there.
 
+### Dry-running a workflow
+
+`explainChain()` says what the chain will be; `simulate()` says what happens to
+it — "if the CFO rejects at level 3, does it go back to the submitter or die?":
+
+```ts
+const result = await engine.simulate({
+  templateName: 'purchase-order',
+  data: { amount: 20000 },
+  submittedBy: 'buyer-1',
+  decisions: [
+    { approve: 'mgr-1' },
+    { approve: 'fin-1' },
+    { reject: 'cfo', reason: 'over budget' },
+  ],
+});
+// { finalStatus: 'rejected', levels: [...], transcript: [...], unreachedLevels: [], incomplete: false }
+```
+
+The run executes against a **private in-memory store** seeded with a copy of the
+template, so your storage is untouched and no events reach your notification
+adapters. Custom resolvers and approver types are copied across — a simulation
+that couldn't resolve your own `dynamic` approvers would answer a different
+question from the one you asked.
+
+A refused decision (wrong approver, wrong level, already acted) stops the run
+and appears in the transcript with its reason rather than throwing: the refusal
+is usually the answer you were looking for.
+
 ### Why does this chain look like this?
 
 `previewApprovalChain()` answers *what* the chain will be. `explainChain()`

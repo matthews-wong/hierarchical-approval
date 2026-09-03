@@ -7,6 +7,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [2.9.0] - 2026-09-04
+
+### Added — `simulate()`
+
+- **Dry-runs a document through a template against scripted decisions.**
+  `explainChain()` (2.7.0) says what the chain will be; nothing said what
+  happens *to* it. Answering "if the CFO rejects at level 3, does it go back to
+  the submitter or die?" meant submitting a real approval into real storage and
+  cleaning it up afterwards, or reasoning about the state machine by hand.
+
+  ```ts
+  await engine.simulate({
+    templateName: 'purchase-order',
+    data: { amount: 20000 },
+    submittedBy: 'buyer-1',
+    decisions: [{ approve: 'mgr-1' }, { reject: 'cfo', reason: 'over budget' }],
+  });
+  // { finalStatus, levels, transcript, unreachedLevels, incomplete }
+  ```
+
+- **Nothing escapes the simulation.** It runs against a private in-memory store
+  seeded with a copy of the template, with the notification, audit and metrics
+  adapters and the authorization policy detached — so a dry run cannot page an
+  approver, write somebody's audit log, or move a counter.
+
+- **Custom resolvers and approver types are copied across.** A simulation that
+  could not resolve the caller's own `dynamic` approvers would answer a
+  different question from the one asked.
+
+- **A refused decision stops the run and is reported, not thrown** — wrong
+  approver, wrong level, already acted. The refusal is usually the answer the
+  caller was looking for, and throwing would discard the transcript that
+  explains how the run got there.
+
+  New exports: `SimulationResult`, `SimulationStep`, `SimulatedDecision`.
+
 ## [2.8.0] - 2026-09-04
 
 ### Added — comment threads
