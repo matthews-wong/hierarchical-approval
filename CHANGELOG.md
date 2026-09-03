@@ -7,6 +7,50 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [2.8.0] - 2026-09-04
+
+### Added — comment threads
+
+- **Comments are addressable objects rather than audit entries alone.** There
+  was no id to point at, so no way to reply to a comment, and no way to tell
+  somebody a remark was aimed at them — discussion moved to email, where the
+  approval record could not see it.
+
+  ```ts
+  await engine.addComment(id, { actorId: 'mgr-1', comment: 'Need the quote.' });
+  const [question] = await engine.getComments(id);
+  await engine.addComment(id, {
+    actorId: 'buyer-1',
+    comment: 'Attached now.',
+    parentCommentId: question.id,
+    mentions: ['mgr-1'],
+  });
+  ```
+
+- **`approval:commented` is addressed to the people the comment mentions**, not
+  to the current approvers. A remark aimed at somebody should reach them, and
+  one aimed at nobody should not page the whole level.
+
+- **`getComments()` returns a flat list carrying `parentCommentId`**, oldest
+  first, rather than a nested tree: a UI that wants threads can build them, and
+  one that wants a chronological feed does not have to flatten a structure it
+  never wanted. Replying to a comment that is not on the approval is rejected.
+
+  Comments are still written to the audit trail — the record of who said what
+  belongs there. `addComment()` keeps its `Promise<void>` signature, so nothing
+  calling it needs to change.
+
+  New exports: `Comment`, `CommentedEvent`. `ApprovalInstance` gains `comments`.
+
+### Fixed — MemoryAdapter left some timestamps as strings
+
+- **`attachments[].addedAt`, `infoRequest.askedAt` and `levels[].reminderDueAt`
+  read back as strings, not `Date`s.** `MemoryAdapter` clones through JSON and
+  revives date fields by an explicit list, which these were missing from —
+  while `PostgresAdapter` revived them correctly. The two adapters therefore
+  disagreed, and any code trusting the declared `Date` type broke under one of
+  them only. Affected `addedAt` since 1.7.0 and `askedAt` since 1.5.0.
+
 ## [2.7.0] - 2026-09-04
 
 ### Added — `explainChain()`

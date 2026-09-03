@@ -468,6 +468,33 @@ The sweep is **not atomic**: it reports per-instance failures rather than rollin
 back. A partial transfer is the useful outcome — the approvals that can move
 should move, and the ones that cannot are named so a human can look at them.
 
+### Comment threads
+
+Comments are addressable objects, so approvers can reply to each other and name
+the person a remark is aimed at:
+
+```ts
+await engine.addComment(id, { actorId: 'mgr-1', comment: 'Need the quote.' });
+const [question] = await engine.getComments(id);
+
+await engine.addComment(id, {
+  actorId: 'buyer-1',
+  comment: 'Attached now, @mgr-1.',
+  parentCommentId: question.id,
+  mentions: ['mgr-1'],
+});
+```
+
+`getComments()` returns a flat list carrying `parentCommentId`, oldest first — a
+UI that wants threads can build them, and one that wants a chronological feed
+(what most approval screens show) does not have to flatten a structure it never
+wanted.
+
+`approval:commented` is addressed to the people the comment **mentions**, not to
+the current approvers: a remark aimed at somebody should reach them, and one
+aimed at nobody should not page the whole level. Comments are still written to
+the audit trail, since the record of who said what belongs there.
+
 ### Why does this chain look like this?
 
 `previewApprovalChain()` answers *what* the chain will be. `explainChain()`

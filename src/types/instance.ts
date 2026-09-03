@@ -92,6 +92,27 @@ export interface ApprovalLevelInstance {
 }
 
 /**
+ * A comment on an approval, optionally replying to another.
+ *
+ * Comments were audit entries and nothing else, so there was no way to reply to
+ * one, no id to point at, and no way to tell somebody a remark was aimed at
+ * them. They are still written to the audit trail — the record of who said what
+ * belongs there — but they are now addressable in their own right.
+ */
+export interface Comment {
+  id: string;
+  authorId: string;
+  body: string;
+  createdAt: Date;
+  /** The level in play when it was written. */
+  level?: number;
+  /** The comment this replies to, forming a thread. */
+  parentCommentId?: string;
+  /** Users named in the comment, notified when it is posted. */
+  mentions?: string[];
+}
+
+/**
  * A pointer to supporting evidence for an approval — a quote PDF, a signed
  * contract, a screenshot of a system of record.
  *
@@ -182,4 +203,6 @@ export interface ApprovalInstance {
   infoRequest?: InfoRequest;
   /** Supporting evidence attached to this approval. References only, never bytes. */
   attachments?: Attachment[];
+  /** Comment threads on this approval. */
+  comments?: Comment[];
 }

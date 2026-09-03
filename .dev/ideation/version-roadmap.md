@@ -34,7 +34,8 @@ major boundaries where a breaking change is expected anyway.
 | 2.5.0 ✅ | Deadlines in working hours + businessHoursCalendar | Engine + utils |
 | 2.6.0 ✅ | Escalation ladders — multi-step escalation | Engine |
 | 2.7.0 ✅ | explainChain() — per-level and per-rule provenance | Engine |
-| 2.8.x+ | To be planned | — |
+| 2.8.0 ✅ | Comment threads + MemoryAdapter date-revival fix | Engine + adapters |
+| 2.9.0 | To be planned | — |
 
 Versions past 2.0.0 stay deliberately unplanned: the adapter break will
 reshape what is cheap to build next, and committing now would be guesswork.

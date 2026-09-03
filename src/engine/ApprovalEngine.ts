@@ -13,6 +13,7 @@ import type {
   ApprovalLevelConfig,
   ApprovalInstance,
   ApprovalLevelInstance,
+  Comment,
   EscalationStep,
   Attachment,
   AuditEntry,
@@ -2289,13 +2290,35 @@ export class ApprovalEngine {
       input: opts,
     });
 
+    if (opts.parentCommentId) {
+      const parent = (instance.comments ?? []).find((c) => c.id === opts.parentCommentId);
+      if (!parent) {
+        throw new ApprovalError(
+          `Comment "${opts.parentCommentId}" is not on this approval, so there is nothing to reply to.`,
+          'COMMENT_NOT_FOUND',
+        );
+      }
+    }
+
     const now = this.clock.now();
+    const comment: Comment = {
+      id: this.generateId('cmt'),
+      authorId: opts.actorId,
+      body: opts.comment,
+      createdAt: now,
+      level: instance.currentLevel,
+      parentCommentId: opts.parentCommentId,
+      mentions: opts.mentions,
+    };
+    instance.comments = [...(instance.comments ?? []), comment];
+
     const auditEntry: AuditEntry = {
       action: 'commented',
       actorId: opts.actorId,
       level: instance.currentLevel,
       timestamp: now,
       comment: opts.comment,
+      newValue: { commentId: comment.id, parentCommentId: opts.parentCommentId },
       ...auditCtx,
     };
 
@@ -2305,6 +2328,25 @@ export class ApprovalEngine {
     await this.opts.adapter.updateInstance(instance, instance.version);
     await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
     await this.runExternalAudit(instance, auditEntry);
+
+    // Recipients are the people named, not the current approvers: a remark
+    // aimed at somebody should reach them, and one aimed at nobody should not
+    // page the whole level.
+    const payload = {
+      instanceId,
+      documentId: instance.documentId,
+      documentType: instance.documentType,
+      timestamp: now,
+      commentId: comment.id,
+      authorId: opts.actorId,
+      body: opts.comment,
+      level: comment.level,
+      parentCommentId: opts.parentCommentId,
+      recipients: opts.mentions ?? [],
+    };
+    this.bus.emit('approval:commented', payload);
+    await this.notifyAdapters('approval:commented', instance, payload);
+
     await this.runMiddlewareAfter({
       operation: 'addComment',
       instanceId,
@@ -2312,6 +2354,21 @@ export class ApprovalEngine {
       tenantId: this.tenantId,
       input: opts,
     });
+  }
+
+  /**
+   * Comments on an approval, oldest first.
+   *
+   * Returns a flat list carrying `parentCommentId`, rather than a nested tree:
+   * a UI that wants threads can build them, and one that wants a chronological
+   * feed — which is what most approval screens actually show — does not have to
+   * flatten a structure it never wanted.
+   */
+  async getComments(instanceId: string): Promise<Comment[]> {
+    const instance = await this.requireInstance(instanceId);
+    return [...(instance.comments ?? [])].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
   }
 
   /** Resubmit a rejected instance, creating a new linked instance from level 1. */

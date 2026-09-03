@@ -139,6 +139,17 @@ export interface SubWorkflowEvent extends ApprovalEvent {
   outcome?: 'approved' | 'rejected' | 'cancelled' | 'expired';
 }
 
+/** Emitted when a comment is posted. Recipients are the users it mentions. */
+export interface CommentedEvent extends ApprovalEvent {
+  commentId: string;
+  authorId: string;
+  body: string;
+  level?: number;
+  parentCommentId?: string;
+  /** Users named in the comment. */
+  recipients: string[];
+}
+
 export interface ApprovalEventMap {
   'approval:submitted': SubmittedEvent;
   'approval:approved': ApprovedEvent;
@@ -161,6 +172,7 @@ export interface ApprovalEventMap {
   'approval:attachment_removed': AttachmentEvent;
   'approval:subworkflow_started': SubWorkflowEvent;
   'approval:subworkflow_completed': SubWorkflowEvent;
+  'approval:commented': CommentedEvent;
 }
 
 export type ApprovalEventName = keyof ApprovalEventMap;

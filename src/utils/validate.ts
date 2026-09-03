@@ -68,6 +68,10 @@ export const ResubmitOptionsSchema = z.object({
 export const AddCommentOptionsSchema = z.object({
   actorId: z.string().min(1),
   comment: z.string().min(1),
+  /** The comment being replied to, forming a thread. */
+  parentCommentId: z.string().optional(),
+  /** Users named in the comment; they are notified when it is posted. */
+  mentions: z.array(z.string().min(1)).optional(),
 });
 
 export const OverrideOptionsSchema = z.object({

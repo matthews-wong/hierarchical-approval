@@ -13,6 +13,15 @@ function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/**
+ * Restore every `Date` the JSON clone flattened to a string.
+ *
+ * Every date-bearing field must be listed here. Missing one leaves a value the
+ * type says is a `Date` holding a string, which `PostgresAdapter` revives
+ * correctly — so the two adapters disagree and the bug only shows up under one
+ * of them. That is how `attachments[].addedAt` and `infoRequest.askedAt` came
+ * to read back as strings.
+ */
 function reviveDates(instance: ApprovalInstance): ApprovalInstance {
   return {
     ...instance,
@@ -22,10 +31,20 @@ function reviveDates(instance: ApprovalInstance): ApprovalInstance {
     slaDeadlineAt: instance.slaDeadlineAt ? new Date(instance.slaDeadlineAt) : undefined,
     slaBreachedAt: instance.slaBreachedAt ? new Date(instance.slaBreachedAt) : undefined,
     auditLog: instance.auditLog.map((e) => ({ ...e, timestamp: new Date(e.timestamp) })),
+    infoRequest: instance.infoRequest
+      ? { ...instance.infoRequest, askedAt: new Date(instance.infoRequest.askedAt) }
+      : undefined,
+    attachments: instance.attachments
+      ? instance.attachments.map((a) => ({ ...a, addedAt: new Date(a.addedAt) }))
+      : undefined,
+    comments: instance.comments
+      ? instance.comments.map((c) => ({ ...c, createdAt: new Date(c.createdAt) }))
+      : undefined,
     levels: instance.levels.map((l) => {
       const level: typeof l = { ...l };
       if (l.escalationDueAt) level.escalationDueAt = new Date(l.escalationDueAt);
       if (l.delegatedUntil) level.delegatedUntil = new Date(l.delegatedUntil);
+      if (l.reminderDueAt) level.reminderDueAt = new Date(l.reminderDueAt);
       return level;
     }),
   };
