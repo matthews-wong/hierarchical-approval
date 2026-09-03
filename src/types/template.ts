@@ -53,6 +53,12 @@ export interface ApprovalLevelConfig {
   subWorkflow?: SubWorkflowConfig;
   escalationAfterDays?: number;
   /**
+   * Escalate this level after this many **working hours**, for SLAs quoted in
+   * hours rather than days. Mutually exclusive with
+   * {@link escalationAfterDays}.
+   */
+  escalationAfterHours?: number;
+  /**
    * Send a reminder to this level's pending approvers this many days after the
    * level opens. Escalation reassigns work; a reminder only nudges, which is
    * usually what an overdue-but-not-yet-critical approval needs.
@@ -156,6 +162,11 @@ export interface ApprovalTemplateConfig {
   escalation?: EscalationConfig;
   /** Overall SLA for the entire workflow in days. Emits approval:sla_breached when elapsed. */
   slaDeadlineDays?: number;
+  /**
+   * Overall SLA in **working hours**. Mutually exclusive with
+   * {@link slaDeadlineDays}.
+   */
+  slaDeadlineHours?: number;
   /** Allow emergency override (bypass remaining levels). Must be true to use engine.override(). */
   allowOverride?: boolean;
 }

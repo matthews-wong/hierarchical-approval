@@ -7,6 +7,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [2.5.0] - 2026-09-04
+
+### Added — deadlines in working hours
+
+- **`escalationAfterHours` on a level and `slaDeadlineHours` on a template.**
+  Deadlines were whole days, but ERP SLAs are quoted in hours far more often —
+  "respond within four working hours" — and approximating that as a fraction of
+  a day counted evenings and weekends, so a request submitted at 16:00 on a
+  Friday was overdue before anybody could have looked at it.
+
+- **`businessHoursCalendar({ workdayStartHour, workdayEndHour, weekendDays,
+  holidays })`** advances the clock only through the configured working window.
+  A `from` outside working hours is first moved to the next working moment, so a
+  deadline never starts counting from a time nobody was at work.
+
+  ```ts
+  const engine = new ApprovalEngine({
+    adapter,
+    calendar: businessHoursCalendar({ workdayStartHour: 9, workdayEndHour: 17 }),
+  });
+  // Friday 16:00 + 4 working hours -> Monday 12:00
+  ```
+
+- **`BusinessCalendar.addBusinessHours` is optional.** `weekendCalendar` knows
+  whole days only; given an hour-based deadline the engine falls back to elapsed
+  clock time rather than quietly pretending the calendar was applied. A custom
+  calendar opts in by implementing the method.
+
+- `validateTemplate()` rejects setting both units on the same level or template,
+  and non-positive hour values.
+
+  New exports: `businessHoursCalendar`, `BusinessHoursCalendarOptions`.
+
 ## [2.4.0] - 2026-09-04
 
 ### Added — `DigestNotificationAdapter`

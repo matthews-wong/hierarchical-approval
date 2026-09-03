@@ -468,6 +468,33 @@ The sweep is **not atomic**: it reports per-instance failures rather than rollin
 back. A partial transfer is the useful outcome — the approvals that can move
 should move, and the ones that cannot are named so a human can look at them.
 
+### SLAs in working hours
+
+Deadlines were whole days, so "respond within four working hours" could only be
+approximated. Levels take `escalationAfterHours` and templates take
+`slaDeadlineHours`, counted through a working-hours calendar:
+
+```ts
+import { businessHoursCalendar } from 'hierarchical-approval';
+
+const engine = new ApprovalEngine({
+  adapter,
+  calendar: businessHoursCalendar({ workdayStartHour: 9, workdayEndHour: 17 }),
+});
+
+// Submitted Friday 16:00, escalationAfterHours: 4  ->  due Monday 12:00
+```
+
+Evenings, weekends and holidays are skipped, and a request arriving outside
+working hours starts counting from the next working moment — so one submitted at
+20:00 is not already overdue by morning.
+
+`weekendCalendar` knows whole days only. Give it an hour-based deadline and the
+engine falls back to **elapsed clock time**, rather than quietly pretending the
+calendar applied; use `businessHoursCalendar` when hours should skip
+non-working time. Days and hours are mutually exclusive on the same level or
+template, and `validateTemplate()` rejects setting both.
+
 ### Retention
 
 Approval tables only grow, and data-minimisation rules eventually require old

@@ -1,6 +1,6 @@
 {
   "name": "hierarchical-approval",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "TypeScript-first hierarchical approval engine for ERP developers",
   "keywords": [
     "approval",

@@ -43,8 +43,12 @@ export type { IMetricsAdapter, MetricName } from './adapters/IMetricsAdapter.js'
 export type { ISchedulerAdapter } from './adapters/ISchedulerAdapter.js';
 export type { Clock } from './utils/Clock.js';
 export { systemClock } from './utils/Clock.js';
-export type { BusinessCalendar, WeekendCalendarOptions } from './utils/BusinessCalendar.js';
-export { weekendCalendar } from './utils/BusinessCalendar.js';
+export type {
+  BusinessCalendar,
+  WeekendCalendarOptions,
+  BusinessHoursCalendarOptions,
+} from './utils/BusinessCalendar.js';
+export { weekendCalendar, businessHoursCalendar } from './utils/BusinessCalendar.js';
 export type { IdGeneratorFn } from './utils/IdGenerator.js';
 export { defaultIdGenerator } from './utils/IdGenerator.js';
 export type { Logger } from './utils/Logger.js';

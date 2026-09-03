@@ -556,6 +556,18 @@ export class ApprovalEngine {
             message: `Level ${l.level} sets reminderEveryDays without reminderAfterDays, so no reminder would ever be sent.`,
           });
         }
+        if (l.escalationAfterHours !== undefined && l.escalationAfterHours <= 0) {
+          errors.push({
+            field: `levels[${i}].escalationAfterHours`,
+            message: `Level ${l.level} escalationAfterHours must be a positive number.`,
+          });
+        }
+        if (l.escalationAfterDays !== undefined && l.escalationAfterHours !== undefined) {
+          errors.push({
+            field: `levels[${i}].escalationAfterHours`,
+            message: `Level ${l.level} sets both escalationAfterDays and escalationAfterHours; pick one so the deadline is unambiguous.`,
+          });
+        }
         if (l.escalationAfterDays !== undefined && l.escalationAfterDays <= 0) {
           errors.push({
             field: `levels[${i}].escalationAfterDays`,
@@ -629,6 +641,20 @@ export class ApprovalEngine {
           seenGroups.add(key);
           previousGroup = key;
         }
+      });
+    }
+
+    if (config.slaDeadlineDays !== undefined && config.slaDeadlineHours !== undefined) {
+      errors.push({
+        field: 'slaDeadlineHours',
+        message:
+          'Template sets both slaDeadlineDays and slaDeadlineHours; pick one so the SLA is unambiguous.',
+      });
+    }
+    if (config.slaDeadlineHours !== undefined && config.slaDeadlineHours <= 0) {
+      errors.push({
+        field: 'slaDeadlineHours',
+        message: 'slaDeadlineHours must be a positive number.',
       });
     }
 
@@ -776,10 +802,8 @@ export class ApprovalEngine {
         threshold: cfg.threshold,
         weights: cfg.weights,
         escalationAfterDays: cfg.escalationAfterDays,
-        escalationDueAt:
-          inFirstGroup && cfg.escalationAfterDays
-            ? this.deadlineFrom(now, cfg.escalationAfterDays)
-            : undefined,
+        escalationAfterHours: cfg.escalationAfterHours,
+        escalationDueAt: inFirstGroup ? this.levelEscalationDue(now, cfg) : undefined,
         subWorkflowTemplate: cfg.subWorkflow?.templateName,
         reminderAfterDays: cfg.reminderAfterDays,
         reminderEveryDays: cfg.reminderEveryDays,
@@ -817,9 +841,11 @@ export class ApprovalEngine {
       ...auditCtx,
     };
 
-    const slaDeadlineAt = template.slaDeadlineDays
-      ? this.deadlineFrom(now, template.slaDeadlineDays)
-      : undefined;
+    const slaDeadlineAt = template.slaDeadlineHours
+      ? this.deadlineFromHours(now, template.slaDeadlineHours)
+      : template.slaDeadlineDays
+        ? this.deadlineFrom(now, template.slaDeadlineDays)
+        : undefined;
 
     const instance: ApprovalInstance = {
       id: instanceId,
@@ -848,6 +874,7 @@ export class ApprovalEngine {
       templateSnapshot: {
         escalation: template.escalation,
         slaDeadlineDays: template.slaDeadlineDays,
+        slaDeadlineHours: template.slaDeadlineHours,
         allowOverride: template.allowOverride,
       },
     };
@@ -2321,9 +2348,11 @@ export class ApprovalEngine {
       ...auditCtx,
     };
 
-    const slaDeadlineAt = template.slaDeadlineDays
-      ? this.deadlineFrom(now, template.slaDeadlineDays)
-      : undefined;
+    const slaDeadlineAt = template.slaDeadlineHours
+      ? this.deadlineFromHours(now, template.slaDeadlineHours)
+      : template.slaDeadlineDays
+        ? this.deadlineFrom(now, template.slaDeadlineDays)
+        : undefined;
 
     const newInstance: ApprovalInstance = {
       id: newInstanceId,
@@ -2347,6 +2376,7 @@ export class ApprovalEngine {
       templateSnapshot: {
         escalation: template.escalation,
         slaDeadlineDays: template.slaDeadlineDays,
+        slaDeadlineHours: template.slaDeadlineHours,
         allowOverride: template.allowOverride,
       },
     };
@@ -3514,6 +3544,29 @@ export class ApprovalEngine {
       : new Date(from.getTime() + days * 86_400_000);
   }
 
+  /**
+   * Resolve an hour-based deadline.
+   *
+   * A calendar that only knows whole days — `weekendCalendar`, say — has no
+   * `addBusinessHours`, and this falls back to elapsed clock time rather than
+   * quietly pretending the calendar was applied. Configure
+   * `businessHoursCalendar` to have hours skip evenings and weekends.
+   */
+  private deadlineFromHours(from: Date, hours: number): Date {
+    const addHours = this.calendar?.addBusinessHours?.bind(this.calendar);
+    return addHours ? addHours(from, hours) : new Date(from.getTime() + hours * 3_600_000);
+  }
+
+  /** Level deadline from whichever of days/hours the template configured. */
+  private levelEscalationDue(
+    from: Date,
+    level: { escalationAfterDays?: number; escalationAfterHours?: number },
+  ): Date | undefined {
+    if (level.escalationAfterHours) return this.deadlineFromHours(from, level.escalationAfterHours);
+    if (level.escalationAfterDays) return this.deadlineFrom(from, level.escalationAfterDays);
+    return undefined;
+  }
+
   private async requireInstance(id: string): Promise<ApprovalInstance> {
     const instance = await this.opts.adapter.getInstance(this.tenantId, id);
     if (!instance) throw new ApprovalNotFoundError('Instance', id);
@@ -3646,9 +3699,7 @@ export class ApprovalEngine {
           now,
         );
       }
-      if (lvl.escalationAfterDays) {
-        lvl.escalationDueAt = this.deadlineFrom(now, lvl.escalationAfterDays);
-      }
+      lvl.escalationDueAt = this.levelEscalationDue(now, lvl);
       this.scheduleReminder(lvl, now);
       lvl.status = 'pending';
     }

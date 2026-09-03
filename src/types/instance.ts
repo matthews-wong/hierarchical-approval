@@ -73,6 +73,7 @@ export interface ApprovalLevelInstance {
   weights?: Record<string, number>;
   escalationDueAt?: Date;
   escalationAfterDays?: number;
+  escalationAfterHours?: number;
   /** When the next reminder for this level is due; cleared when the level closes. */
   reminderDueAt?: Date;
   /** How many reminders have already been sent for this level. */
@@ -130,6 +131,7 @@ export interface InfoRequest {
 export interface TemplateSnapshot {
   escalation?: EscalationConfig;
   slaDeadlineDays?: number;
+  slaDeadlineHours?: number;
   allowOverride?: boolean;
 }
 
