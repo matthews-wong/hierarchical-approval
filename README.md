@@ -399,6 +399,40 @@ engine.registerConditionOperator('between', (actual, expected) => {
 });
 ```
 
+### Parallel branch groups
+
+Give levels the same `group` name and they activate together, joining before
+the chain moves on — "Finance and Legal review concurrently, then it goes to the
+CEO":
+
+```ts
+levels: [
+  { level: 1, name: 'Manager', approvers: [{ type: 'user', userId: 'mgr' }], mode: 'any' },
+  { level: 2, name: 'Finance', group: 'review', approvers: [{ type: 'role', role: 'finance' }], mode: 'any' },
+  { level: 3, name: 'Legal',   group: 'review', approvers: [{ type: 'role', role: 'legal' }],   mode: 'any' },
+  { level: 4, name: 'CEO',     approvers: [{ type: 'user', userId: 'ceo' }], mode: 'any' },
+]
+```
+
+Both branches open at once when the group is reached, decisions can arrive in
+either order, and level 4 stays `waiting` until every branch is approved.
+Rejecting any branch rejects the instance. A group may also lead the chain, in
+which case it opens at submit.
+
+`getCurrentApprovers()` returns the union across every open branch. A level
+without a `group` is its own group of one, so existing sequential templates
+behave exactly as before.
+
+**When one person sits on two open branches**, `approve()` refuses to guess and
+throws — pass `level` to say which branch the decision is for:
+
+```ts
+await engine.approve(id, { approverId: 'cfo', level: 2 });
+```
+
+A group's levels must occupy a contiguous run of level numbers;
+`validateTemplate()` rejects an interleaved group.
+
 ### Editing a document mid-flight
 
 Documents change after submission — a line item is corrected, a vendor

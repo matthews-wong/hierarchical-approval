@@ -25,6 +25,17 @@ export interface ApprovalLevelConfig {
   name: string;
   approvers: ApproverConfig[];
   mode: ApprovalMode;
+  /**
+   * Name of a parallel branch group. Levels sharing a group activate at the
+   * same time and the instance advances past them only once every one is
+   * resolved — modelling "Finance and Legal review concurrently, then it goes
+   * to the CEO". Levels in a group must occupy a contiguous run of level
+   * numbers.
+   *
+   * Omit it for the ordinary sequential behaviour: an ungrouped level is its
+   * own group of one.
+   */
+  group?: string;
   escalationAfterDays?: number;
   /**
    * Required when mode is 'quorum'. The minimum number of approvals needed to

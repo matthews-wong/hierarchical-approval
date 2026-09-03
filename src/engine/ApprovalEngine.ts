@@ -450,6 +450,32 @@ export class ApprovalEngine {
       });
     }
 
+    // A group's levels must form one unbroken run, so that "advance past the
+    // group" and "advance past a level" cannot disagree about what comes next.
+    // An interleaved group would otherwise activate a level from outside it.
+    if (config.levels && config.levels.length > 0) {
+      const ordered = [...config.levels].sort((a, b) => a.level - b.level);
+      const seenGroups = new Set<string>();
+      let previousGroup: string | null = null;
+      ordered.forEach((l) => {
+        const key = l.group;
+        if (key === undefined) {
+          previousGroup = null;
+          return;
+        }
+        if (key !== previousGroup) {
+          if (seenGroups.has(key)) {
+            errors.push({
+              field: 'levels',
+              message: `Parallel group "${key}" is not contiguous — its levels must occupy consecutive level numbers with no other level in between.`,
+            });
+          }
+          seenGroups.add(key);
+          previousGroup = key;
+        }
+      });
+    }
+
     if (config.conditions) {
       config.conditions.forEach((rule, ruleIdx) => {
         errors.push(...validateConditionExpression(rule.when, `conditions[${ruleIdx}].when`));
@@ -558,30 +584,37 @@ export class ApprovalEngine {
     const now = this.clock.now();
     const instanceId = this.generateId('inst');
 
-    const levels: ApprovalLevelInstance[] = allLevelCfgs.map((cfg, idx) => ({
-      level: cfg.level,
-      name: cfg.name,
-      mode: cfg.mode,
-      approverConfigs: cfg.approvers,
-      approverIds: [],
-      approvedBy: [],
-      rejectedBy: [],
-      status: idx === 0 ? 'pending' : 'waiting',
-      minApprovals: cfg.minApprovals,
-      threshold: cfg.threshold,
-      weights: cfg.weights,
-      escalationAfterDays: cfg.escalationAfterDays,
-      escalationDueAt:
-        idx === 0 && cfg.escalationAfterDays
-          ? this.deadlineFrom(now, cfg.escalationAfterDays)
-          : undefined,
-    }));
-
+    // The opening step is a whole group, not a single level: every branch of a
+    // leading parallel group starts collecting decisions at once.
     const firstCfg = allLevelCfgs[0];
-    const firstLevel = levels[0];
-    if (firstCfg && firstLevel) {
-      firstLevel.approverIds = await this.resolver.resolveApprovers(
-        firstCfg.approvers,
+    const firstGroupKey = firstCfg ? ApprovalEngine.groupKeyOf(firstCfg) : null;
+
+    const levels: ApprovalLevelInstance[] = allLevelCfgs.map((cfg) => {
+      const inFirstGroup = ApprovalEngine.groupKeyOf(cfg) === firstGroupKey;
+      return {
+        level: cfg.level,
+        name: cfg.name,
+        group: cfg.group,
+        mode: cfg.mode,
+        approverConfigs: cfg.approvers,
+        approverIds: [],
+        approvedBy: [],
+        rejectedBy: [],
+        status: inFirstGroup ? ('pending' as const) : ('waiting' as const),
+        minApprovals: cfg.minApprovals,
+        threshold: cfg.threshold,
+        weights: cfg.weights,
+        escalationAfterDays: cfg.escalationAfterDays,
+        escalationDueAt:
+          inFirstGroup && cfg.escalationAfterDays
+            ? this.deadlineFrom(now, cfg.escalationAfterDays)
+            : undefined,
+      };
+    });
+
+    for (const lvl of levels.filter((l) => l.status === 'pending')) {
+      lvl.approverIds = await this.resolver.resolveApprovers(
+        lvl.approverConfigs,
         opts.submittedBy,
         opts.data,
         this.opts.orgProvider,
@@ -659,7 +692,10 @@ export class ApprovalEngine {
       documentType: instance.documentType,
       timestamp: now,
       submittedBy: opts.submittedBy,
-      currentApprovers: firstLevel?.approverIds ?? [],
+      // Union across the opening group — a parallel group has several open branches.
+      currentApprovers: [
+        ...new Set(levels.filter((l) => l.status === 'pending').flatMap((l) => l.approverIds)),
+      ],
     };
     this.bus.emit('approval:submitted', eventPayload);
     await this.notifyAdapters('approval:submitted', instance, eventPayload);
@@ -688,7 +724,7 @@ export class ApprovalEngine {
         );
       }
 
-      const level = this.currentLevelInstance(instance);
+      const level = this.resolveActorLevel(instance, opts.approverId, opts.level);
       await this.runAuthorizationPolicy({
         operation: 'approve',
         actorId: opts.approverId,
@@ -731,7 +767,52 @@ export class ApprovalEngine {
 
       if (isLevelApproved(level)) {
         level.status = 'approved';
-        const nextLevel = this.findNextLevel(instance);
+
+        // Inside a parallel group the instance holds until every branch resolves;
+        // a single branch finishing is not progress the rest of the chain can see.
+        const siblingsStillOpen = this.groupMembers(instance, level).some(
+          (l) => l.status === 'pending' || l.status === 'waiting',
+        );
+        const nextGroup = siblingsStillOpen ? [] : this.findNextGroup(instance);
+        const nextLevel = nextGroup[0] ?? null;
+
+        if (siblingsStillOpen) {
+          await this.opts.adapter.updateInstance(instance, instance.version);
+          await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
+          await this.runExternalAudit(instance, auditEntry);
+          this.opts.metricsAdapter?.increment('approval.approved', {
+            tenantId: this.tenantId,
+            isFinal: 'false',
+          });
+          this.opts.metricsAdapter?.timing(
+            'approval.operation_duration_ms',
+            this.clock.now().getTime() - startMs,
+            { operation: 'approve' },
+          );
+          const p = {
+            instanceId,
+            documentId: instance.documentId,
+            documentType: instance.documentType,
+            timestamp: now,
+            approverId: opts.approverId,
+            level: level.level,
+            comment: opts.comment,
+            isFinal: false,
+          };
+          this.bus.emit('approval:approved', p);
+          await this.notifyAdapters('approval:approved', instance, p);
+          await this.runMiddlewareAfter(
+            {
+              operation: 'approve',
+              instanceId,
+              actorId: opts.approverId,
+              tenantId: this.tenantId,
+              input: opts,
+            },
+            instance,
+          );
+          return instance;
+        }
 
         if (!nextLevel) {
           instance.status = 'approved';
@@ -778,17 +859,7 @@ export class ApprovalEngine {
           return instance;
         }
 
-        nextLevel.approverIds = await this.resolver.resolveApprovers(
-          nextLevel.approverConfigs,
-          instance.submittedBy,
-          instance.data,
-          this.opts.orgProvider,
-        );
-        if (nextLevel.escalationAfterDays) {
-          nextLevel.escalationDueAt = this.deadlineFrom(now, nextLevel.escalationAfterDays);
-        }
-        nextLevel.status = 'pending';
-        instance.currentLevel = nextLevel.level;
+        await this.activateGroup(instance, nextGroup, now);
 
         await this.opts.adapter.updateInstance(instance, instance.version);
         await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
@@ -887,7 +958,7 @@ export class ApprovalEngine {
         );
       }
 
-      const level = this.currentLevelInstance(instance);
+      const level = this.resolveActorLevel(instance, opts.approverId, opts.level);
       await this.runAuthorizationPolicy({
         operation: 'reject',
         actorId: opts.approverId,
@@ -1740,7 +1811,8 @@ export class ApprovalEngine {
       return { eligible: false, reason: 'self_approval' };
     }
 
-    const level = this.currentLevelInstance(instance);
+    const openForUser = this.pendingLevels(instance).find((l) => l.approverIds.includes(userId));
+    const level = openForUser ?? this.currentLevelInstance(instance);
 
     if (!level.approverIds.includes(userId)) {
       const hasDelegated = instance.auditLog.some(
@@ -1932,7 +2004,9 @@ export class ApprovalEngine {
   async getCurrentApprovers(instanceId: string): Promise<string[]> {
     const instance = await this.requireInstance(instanceId);
     if (instance.status !== 'pending') return [];
-    return this.currentLevelInstance(instance).approverIds;
+    // Union across every open branch: inside a parallel group more than one
+    // level is collecting decisions at the same time.
+    return [...new Set(this.pendingLevels(instance).flatMap((l) => l.approverIds))];
   }
 
   /** Check adapter connectivity and escalation scheduler health. */
@@ -2423,8 +2497,88 @@ export class ApprovalEngine {
     return instance;
   }
 
+  /**
+   * Identity of the parallel branch group a level belongs to.
+   *
+   * An ungrouped level is its own group of one, keyed by its level number, so
+   * sequential and parallel levels can be handled by the same code paths. The
+   * `#` prefix keeps a synthetic key from ever colliding with a real group
+   * name a template author chose.
+   */
+  private static groupKeyOf(level: { level: number; group?: string }): string {
+    return level.group ?? `#${level.level}`;
+  }
+
+  /** Every level currently collecting decisions — more than one inside a parallel group. */
+  private pendingLevels(instance: ApprovalInstance): ApprovalLevelInstance[] {
+    return instance.levels.filter((l) => l.status === 'pending');
+  }
+
+  /** All levels sharing a group with the given level, including it. */
+  private groupMembers(
+    instance: ApprovalInstance,
+    level: ApprovalLevelInstance,
+  ): ApprovalLevelInstance[] {
+    const key = ApprovalEngine.groupKeyOf(level);
+    return instance.levels.filter((l) => ApprovalEngine.groupKeyOf(l) === key);
+  }
+
+  /**
+   * Pick which pending level an actor is operating on.
+   *
+   * With sequential levels there is only ever one candidate. Inside a parallel
+   * group an approver may sit on several branches at once, and guessing which
+   * one they meant would silently record the decision against the wrong branch —
+   * so that case demands an explicit `level`.
+   */
+  private resolveActorLevel(
+    instance: ApprovalInstance,
+    actorId: string,
+    explicitLevel?: number,
+  ): ApprovalLevelInstance {
+    const pending = this.pendingLevels(instance);
+    if (pending.length === 0) {
+      throw new ApprovalError(
+        `Instance has no level awaiting a decision (status: ${instance.status}).`,
+        'INVALID_LEVEL',
+      );
+    }
+
+    if (explicitLevel !== undefined) {
+      const chosen = pending.find((l) => l.level === explicitLevel);
+      if (!chosen) {
+        const open = pending.map((l) => l.level).join(', ');
+        throw new ApprovalError(
+          `Level ${explicitLevel} is not awaiting a decision (open levels: ${open}).`,
+          'INVALID_LEVEL',
+        );
+      }
+      return chosen;
+    }
+
+    if (pending.length === 1) return pending[0] as ApprovalLevelInstance;
+
+    const candidates = pending.filter((l) => l.approverIds.includes(actorId));
+    if (candidates.length === 1) return candidates[0] as ApprovalLevelInstance;
+    if (candidates.length > 1) {
+      const open = candidates.map((l) => `${l.level} ("${l.name}")`).join(', ');
+      throw new ApprovalValidationError(
+        `Approver "${actorId}" is assigned to more than one open parallel level (${open}). Pass an explicit "level" to say which one this decision is for.`,
+      );
+    }
+    // Not an approver anywhere; hand back the lowest open level so the caller's
+    // own membership check produces the usual "not an approver" error.
+    return pending[0] as ApprovalLevelInstance;
+  }
+
   private currentLevelInstance(instance: ApprovalInstance): ApprovalLevelInstance {
-    const level = instance.levels.find((l) => l.level === instance.currentLevel);
+    const pending = this.pendingLevels(instance);
+    const lowestPending = pending.reduce<ApprovalLevelInstance | null>(
+      (acc, l) => (acc === null || l.level < acc.level ? l : acc),
+      null,
+    );
+    const level =
+      instance.levels.find((l) => l.level === instance.currentLevel) ?? lowestPending ?? null;
     if (!level) {
       const available = instance.levels.map((l) => l.level).join(', ');
       throw new ApprovalError(
@@ -2433,6 +2587,41 @@ export class ApprovalEngine {
       );
     }
     return level;
+  }
+
+  /**
+   * The next group of levels to activate: every level sharing the group of the
+   * lowest-numbered waiting level.
+   */
+  private findNextGroup(instance: ApprovalInstance): ApprovalLevelInstance[] {
+    const waiting = instance.levels
+      .filter((l) => l.status === 'waiting')
+      .sort((a, b) => a.level - b.level);
+    const head = waiting[0];
+    if (!head) return [];
+    const key = ApprovalEngine.groupKeyOf(head);
+    return waiting.filter((l) => ApprovalEngine.groupKeyOf(l) === key);
+  }
+
+  /** Resolve approvers for a group, set its deadlines, and mark it pending. */
+  private async activateGroup(
+    instance: ApprovalInstance,
+    group: ApprovalLevelInstance[],
+    now: Date,
+  ): Promise<void> {
+    for (const lvl of group) {
+      lvl.approverIds = await this.resolver.resolveApprovers(
+        lvl.approverConfigs,
+        instance.submittedBy,
+        instance.data,
+        this.opts.orgProvider,
+      );
+      if (lvl.escalationAfterDays) {
+        lvl.escalationDueAt = this.deadlineFrom(now, lvl.escalationAfterDays);
+      }
+      lvl.status = 'pending';
+    }
+    instance.currentLevel = group.reduce((min, l) => Math.min(min, l.level), Infinity);
   }
 
   private findNextLevel(instance: ApprovalInstance): ApprovalLevelInstance | null {

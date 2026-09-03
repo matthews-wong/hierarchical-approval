@@ -13,9 +13,9 @@ major boundaries where a breaking change is expected anyway.
 
 | Version | Change | Scope |
 |---|---|---|
-| 0.8.0 | Boolean condition expressions — `all` / `any` / `not`, nestable | ConditionEvaluator + validation |
-| 0.9.0 | `updateData()` — re-evaluate the chain when document data changes mid-flight | Engine |
-| 1.0.0 | Parallel branch groups — concurrent levels that join before advancing | Engine (flagship) |
+| 0.8.0 ✅ | Boolean condition expressions — `all` / `any` / `not`, nestable | ConditionEvaluator + validation |
+| 0.9.0 ✅ | `updateData()` — re-evaluate the chain when document data changes mid-flight | Engine |
+| 1.0.0 ✅ | Parallel branch groups — concurrent levels that join before advancing | Engine (flagship) |
 | 1.1.0 | Approval reminders — recurring nudges before escalation | Scheduler plugin |
 | 1.2.0 | Template inheritance — `extends` with level overrides | TemplateRegistry |
 | 1.3.0 | Withdraw + amend flow for submitters | Engine |

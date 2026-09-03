@@ -46,6 +46,8 @@ export interface AuditContext {
 export interface ApprovalLevelInstance {
   level: number;
   name: string;
+  /** Parallel branch group this level belongs to; absent for sequential levels. */
+  group?: string;
   mode: ApprovalMode;
   approverConfigs: ApproverConfig[];
   approverIds: string[];

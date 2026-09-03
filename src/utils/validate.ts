@@ -14,12 +14,19 @@ export const SubmitOptionsSchema = z.object({
 export const ApproveOptionsSchema = z.object({
   approverId: z.string().min(1),
   comment: z.string().optional(),
+  /**
+   * Which open level this decision is for. Only needed inside a parallel group
+   * when the approver sits on more than one open branch.
+   */
+  level: z.number().int().optional(),
 });
 
 export const RejectOptionsSchema = z.object({
   approverId: z.string().min(1),
   reason: z.string().min(1),
   returnTo: z.enum(['originator', 'previous']).optional(),
+  /** Which open level this decision is for; see {@link ApproveOptionsSchema}. */
+  level: z.number().int().optional(),
 });
 
 export const DelegateOptionsSchema = z.object({

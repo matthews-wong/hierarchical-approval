@@ -7,6 +7,48 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [1.0.0] - 2026-09-04
+
+First stable release. The public API is now considered settled: breaking changes
+from here get a major version.
+
+### Added — parallel branch groups
+
+- **Levels sharing a `group` name activate together and join before the chain
+  advances.** Approvals were strictly sequential, so "Finance and Legal review
+  concurrently, then it goes to the CEO" could only be modelled by picking an
+  arbitrary order and making one wait on the other — inflating cycle time for no
+  business reason. This was the last item on the roadmap in `IMPROVEMENTS.md`.
+
+  ```ts
+  levels: [
+    { level: 1, name: 'Manager', ... },
+    { level: 2, name: 'Finance', group: 'review', ... },
+    { level: 3, name: 'Legal',   group: 'review', ... },
+    { level: 4, name: 'CEO', ... },
+  ]
+  ```
+
+  Both branches open at once, decisions arrive in any order, and level 4 stays
+  `waiting` until every branch is approved. Rejecting any branch rejects the
+  instance, as a rejection always has. A group may also lead the chain, in which
+  case it opens at submit.
+
+- **`approve()` and `reject()` take an optional `level`.** Inside a parallel
+  group one person can sit on several open branches; recording their decision
+  against a guessed branch would be silently wrong, so the engine throws and
+  asks which branch is meant. Sequential templates never see this.
+
+- **`getCurrentApprovers()` returns the union across every open branch.**
+  `canApprove()` likewise considers any open branch the user is assigned to.
+
+- **`validateTemplate()` rejects a non-contiguous group** — a group's levels must
+  occupy consecutive level numbers, so that "advance past the group" and
+  "advance past a level" cannot disagree about what comes next.
+
+**Backward compatible.** A level without a `group` is its own group of one, and
+all 673 pre-existing tests pass unchanged against the new engine.
+
 ## [0.9.0] - 2026-09-04
 
 ### Added — `updateData()`: edit a pending document and recompute its chain
