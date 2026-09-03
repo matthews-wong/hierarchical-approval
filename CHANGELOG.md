@@ -7,6 +7,46 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [1.2.0] - 2026-09-04
+
+### Added — template inheritance
+
+- **`extends` derives one template from another.** ERP tenants run many
+  near-identical workflows — one per region, legal entity or document class —
+  that share a spine and differ in a level or two. Each had to be written out in
+  full, so a change to the shared part meant editing every copy and hoping none
+  were missed.
+
+  ```ts
+  await engine.defineTemplate({
+    name: 'PO-EU',
+    extends: 'PO-base',
+    documentType: 'purchase_order',
+    removeLevels: [2],
+    levels: [{ level: 3, approvers: [{ type: 'user', userId: 'eu-fin' }] }],
+  });
+  ```
+
+  Levels are keyed by number: a child level overrides the base level *field by
+  field* (so a derived template can swap just the approvers and inherit name,
+  mode and deadlines), child-only levels are appended, and `removeLevels` drops
+  inherited ones. `conditions` are replaced wholesale when supplied — merging
+  two rule lists would produce a chain neither author intended. `escalation`,
+  `slaDeadlineDays` and `allowOverride` are inherited unless the child sets them.
+
+- **Resolution happens once, at define time, and the flattened result is what
+  gets stored.** Resolving lazily on read would mean editing a base silently
+  reshapes every derived template — and every in-flight instance running against
+  one — which is exactly the surprise `templateSnapshot` exists to prevent
+  elsewhere in the engine. A base that itself extends something is already
+  flattened, so chains resolve naturally and cycles cannot form.
+
+- **Validation runs on the flattened template**, not the fragment: a derived
+  config carrying no levels of its own is valid (it inherits the chain), while
+  one whose `removeLevels` strips the chain entirely is rejected at definition
+  time. `extends` and `removeLevels` are directives for the call and are not
+  persisted.
+
 ## [1.1.0] - 2026-09-04
 
 ### Added — approval reminders

@@ -107,6 +107,21 @@ export interface EscalationConfig {
 
 export interface ApprovalTemplateConfig {
   name: string;
+  /**
+   * Name of a template to inherit from. The base's levels, conditions,
+   * escalation, SLA and override flag are copied in, then this config's own
+   * fields are applied on top.
+   *
+   * Resolution happens once, when the template is defined: what gets stored is
+   * the flattened result, so editing the base later never silently reshapes a
+   * derived template or an instance already running against it.
+   */
+  extends?: string;
+  /**
+   * Level numbers to drop from the inherited chain. Only meaningful with
+   * {@link extends}.
+   */
+  removeLevels?: number[];
   documentType: string;
   levels: ApprovalLevelConfig[];
   conditions?: ConditionRule[];

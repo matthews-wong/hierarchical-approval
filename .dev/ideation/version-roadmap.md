@@ -17,7 +17,7 @@ major boundaries where a breaking change is expected anyway.
 | 0.9.0 ✅ | `updateData()` — re-evaluate the chain when document data changes mid-flight | Engine |
 | 1.0.0 ✅ | Parallel branch groups — concurrent levels that join before advancing | Engine (flagship) |
 | 1.1.0 ✅ | Approval reminders — recurring nudges before escalation | Scheduler plugin |
-| 1.2.0 | Template inheritance — `extends` with level overrides | TemplateRegistry |
+| 1.2.0 ✅ | Template inheritance — `extends` with level overrides | TemplateRegistry |
 | 1.3.0 | Withdraw + amend flow for submitters | Engine |
 | 1.4.0 | Approval policies as reusable named rule sets | Engine |
 | 1.5.0 | Instance search — full filter grammar over data fields | Adapters |

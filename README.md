@@ -399,6 +399,40 @@ engine.registerConditionOperator('between', (actual, expected) => {
 });
 ```
 
+### Template inheritance
+
+ERP tenants run many near-identical workflows — one per region, entity or
+document class — that share a spine and differ in a level or two. `extends`
+derives one template from another:
+
+```ts
+await engine.defineTemplate({
+  name: 'PO-EU',
+  extends: 'PO-base',
+  documentType: 'purchase_order',
+  removeLevels: [2],                       // drop an inherited level
+  levels: [
+    { level: 3, approvers: [{ type: 'user', userId: 'eu-fin' }] },  // override just the approvers
+    { level: 4, name: 'EU Compliance', approvers: [...], mode: 'any' }, // add a new level
+  ],
+});
+```
+
+| Field | Merge rule |
+|---|---|
+| `levels` | Keyed by level number: a child level overrides the base level *field by field*, child-only levels are appended, `removeLevels` drops inherited ones |
+| `conditions` | Replaced wholesale when the child supplies them |
+| `escalation`, `slaDeadlineDays`, `allowOverride` | Child value if set, otherwise inherited |
+
+**Resolution happens once, at define time, and the flattened result is stored.**
+Editing a base later never silently reshapes a derived template or an instance
+already running against one — the same insulation `templateSnapshot` gives
+in-flight instances. A base that itself extends something is already flattened,
+so chains resolve naturally and cycles cannot form.
+
+Validation runs on the *flattened* template, so a derived config that strips its
+whole chain is rejected at definition time.
+
 ### Reminders
 
 Escalation reassigns work; a reminder only nudges, which is usually what an

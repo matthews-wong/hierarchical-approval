@@ -386,9 +386,14 @@ export class ApprovalEngine {
   validateTemplate(config: ApprovalTemplateConfig): ValidationResult {
     const errors: Array<{ field: string; message: string }> = [];
 
-    if (!config.levels || config.levels.length === 0) {
+    // A config that declares `extends` may legitimately carry no levels of its
+    // own — the chain comes from the base. defineTemplate validates the
+    // flattened result, which is what instances actually run against.
+    const hasOwnLevels = Boolean(config.levels && config.levels.length > 0);
+    if (!hasOwnLevels && config.extends === undefined) {
       errors.push({ field: 'levels', message: 'Template must have at least one level.' });
-    } else {
+    }
+    if (hasOwnLevels) {
       const levelNums = new Set<number>();
       config.levels.forEach((l, i) => {
         if (levelNums.has(l.level)) {
@@ -535,26 +540,31 @@ export class ApprovalEngine {
   }
 
   async defineTemplate(config: ApprovalTemplateConfig): Promise<string> {
-    const validation = this.validateTemplate(config);
+    // Validate the RESOLVED template: a derived config is often invalid on its
+    // own (it may declare no levels at all, inheriting the whole chain), and it
+    // is the flattened result that instances actually run against.
+    const resolved = await this.registry.resolveInheritance(config);
+    const validation = this.validateTemplate(resolved);
     if (!validation.valid) {
       const first = validation.errors[0];
       throw new ApprovalValidationError(
         `Invalid template configuration: ${first?.message ?? 'unknown error'}`,
       );
     }
-    return this.registry.define(config);
+    return this.registry.define(resolved);
   }
 
   /** Update an existing template, incrementing its version. In-flight instances are protected by their templateSnapshot. */
   async updateTemplate(config: ApprovalTemplateConfig): Promise<string> {
-    const validation = this.validateTemplate(config);
+    const resolved = await this.registry.resolveInheritance(config);
+    const validation = this.validateTemplate(resolved);
     if (!validation.valid) {
       const first = validation.errors[0];
       throw new ApprovalValidationError(
         `Invalid template configuration: ${first?.message ?? 'unknown error'}`,
       );
     }
-    return this.registry.update(config);
+    return this.registry.update(resolved);
   }
 
   async getTemplate(name: string): Promise<ApprovalTemplate> {
