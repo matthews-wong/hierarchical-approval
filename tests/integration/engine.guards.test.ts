@@ -167,6 +167,43 @@ describe('P1 Guard 2 — duplicate level numbers after condition merge', () => {
   });
 });
 
+// ─── validateTemplate: addLevels vs. static levels and skipLevels ────────────
+
+describe('validateTemplate — addLevels conflicts', () => {
+  it('rejects a condition addLevels level that conflicts with a static level', async () => {
+    const engine = makeEngine();
+    await expect(
+      engine.defineTemplate({
+        name: 'ConflictsWithStatic',
+        documentType: 'doc',
+        levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'u1' }], mode: 'any' }],
+        conditions: [{
+          when: { field: 'flag', operator: '==', value: true },
+          addLevels: [{ level: 1, name: 'L1-dup', approvers: [{ type: 'user', userId: 'u2' }], mode: 'any' }],
+        }],
+      }),
+    ).rejects.toThrow(/conflicts with an existing static level/);
+    await engine.shutdown();
+  });
+
+  it('rejects a level that appears in both addLevels and skipLevels of the same condition', async () => {
+    const engine = makeEngine();
+    await expect(
+      engine.defineTemplate({
+        name: 'AddAndSkipSameLevel',
+        documentType: 'doc',
+        levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'u1' }], mode: 'any' }],
+        conditions: [{
+          when: { field: 'flag', operator: '==', value: true },
+          addLevels: [{ level: 2, name: 'L2', approvers: [{ type: 'user', userId: 'u2' }], mode: 'any' }],
+          skipLevels: [2],
+        }],
+      }),
+    ).rejects.toThrow(/appears in both addLevels and skipLevels/);
+    await engine.shutdown();
+  });
+});
+
 // ─── P1 Guard 3: returnTo='previous' at level 1 throws ───────────────────────
 
 describe('P1 Guard 3 — returnTo=previous at first level', () => {
