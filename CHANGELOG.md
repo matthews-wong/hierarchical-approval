@@ -7,6 +7,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [2.7.0] - 2026-09-04
+
+### Added — `explainChain()`
+
+- **Explains why a chain resolves the way it does.** `previewApprovalChain()`
+  answers *what* the chain will be; nothing answered *why*, so "why does this
+  purchase order have a CFO level?" meant reading the template and
+  re-evaluating its conditions by hand — the most common support question about
+  an approval engine, and the one it was worst at answering.
+
+  ```ts
+  await engine.explainChain('purchase-order', data, 'buyer-1');
+  // levels:  [{ level: 3, name: 'CFO', source: 'condition', addedByRule: 0, … }]
+  // skipped: [{ level: 2, name: 'Finance', skippedByRule: 1 }]
+  // rules:   [{ index: 0, matched: true, addsLevels: [3], skipsLevels: [] }, …]
+  ```
+
+- **Every rule is reported, matched or not**, along with what it *would* add or
+  skip — which is how you find the rule that was supposed to fire and didn't,
+  not just the ones that did.
+
+- **Failures are described rather than thrown.** A level whose approvers cannot
+  be resolved is still listed, carrying `resolutionError`; a rule that throws —
+  an unregistered operator, a malformed group — is reported against that rule
+  and the rest of the explanation still returns. A diagnostic is least useful at
+  exactly the moment a broken rule would make it throw.
+
+- Reads nothing and writes nothing, so it is safe to expose to a support UI.
+  Sub-workflow levels are marked with their child template and skip approver
+  resolution, since nobody approves them directly.
+
+  New exports: `ChainExplanation`, `ExplainedLevel`, `ExplainedSkip`,
+  `ExplainedRule`.
+
 ## [2.6.0] - 2026-09-04
 
 ### Added — escalation ladders

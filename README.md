@@ -468,6 +468,37 @@ The sweep is **not atomic**: it reports per-instance failures rather than rollin
 back. A partial transfer is the useful outcome — the approvals that can move
 should move, and the ones that cannot are named so a human can look at them.
 
+### Why does this chain look like this?
+
+`previewApprovalChain()` answers *what* the chain will be. `explainChain()`
+answers *why* — the question behind "why does this purchase order have a CFO
+level?":
+
+```ts
+const explanation = await engine.explainChain('purchase-order', data, 'buyer-1');
+// {
+//   templateName: 'purchase-order',
+//   levels: [
+//     { level: 1, name: 'Manager', source: 'template', resolvedApprovers: ['mgr-1'], … },
+//     { level: 3, name: 'CFO', source: 'condition', addedByRule: 0, resolvedApprovers: ['cfo'], … },
+//   ],
+//   skipped: [{ level: 2, name: 'Finance', skippedByRule: 1 }],
+//   rules: [
+//     { index: 0, matched: true,  addsLevels: [3], skipsLevels: [] },
+//     { index: 1, matched: true,  addsLevels: [], skipsLevels: [2] },
+//   ],
+// }
+```
+
+Every rule is reported, matched or not, along with what it *would* do — which is
+usually how you find the rule that was supposed to fire and didn't. A level
+whose approvers cannot be resolved is still listed, with `resolutionError`
+naming the reason; a rule that throws is reported against that rule rather than
+failing the whole explanation, since the explanation is least useful at exactly
+the moment a broken rule would make it throw.
+
+Reads nothing and writes nothing, so it is safe to expose to a support UI.
+
 ### Escalation ladders
 
 A single `escalation` fires once, so a request that stalls past its second

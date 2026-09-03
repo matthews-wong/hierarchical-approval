@@ -10,6 +10,7 @@ import type {
 import type {
   ApprovalTemplate,
   ApprovalTemplateConfig,
+  ApprovalLevelConfig,
   ApprovalInstance,
   ApprovalLevelInstance,
   EscalationStep,
@@ -156,6 +157,56 @@ export interface PreviewResult {
   levels: PreviewChainLevel[];
   /** Indices (0-based) of conditions that fired for this data. */
   conditionsApplied: number[];
+}
+
+/** Where one level in an explained chain came from. */
+export interface ExplainedLevel {
+  level: number;
+  name: string;
+  mode: ApprovalMode;
+  /** `'template'` for a statically declared level, `'condition'` for one a rule added. */
+  source: 'template' | 'condition';
+  /** Index of the condition rule that added it, when `source` is `'condition'`. */
+  addedByRule?: number;
+  resolvedApprovers: string[];
+  /** Why approver resolution failed, when it did. The level is still listed. */
+  resolutionError?: string;
+  /** Set when this level hands off to a child approval. */
+  subWorkflowTemplate?: string;
+}
+
+/** A level the template declares that will not run, and the rule that removed it. */
+export interface ExplainedSkip {
+  level: number;
+  name: string;
+  /** Index of the condition rule whose `skipLevels` removed it. */
+  skippedByRule: number;
+}
+
+/** How one condition rule evaluated against the data. */
+export interface ExplainedRule {
+  index: number;
+  matched: boolean;
+  /** Levels this rule would add. Present whether or not it matched. */
+  addsLevels: number[];
+  /** Levels this rule would skip. Present whether or not it matched. */
+  skipsLevels: number[];
+  /** Why the rule could not be evaluated, e.g. an unregistered operator. */
+  error?: string;
+}
+
+/**
+ * A full account of why a chain looks the way it does.
+ *
+ * `previewApprovalChain()` answers *what* the chain will be; this answers *why*,
+ * which is the question a support engineer actually has when a purchase order
+ * arrives with a level nobody expected.
+ */
+export interface ChainExplanation {
+  templateName: string;
+  levels: ExplainedLevel[];
+  skipped: ExplainedSkip[];
+  rules: ExplainedRule[];
 }
 
 export interface BulkResult {
@@ -2464,6 +2515,119 @@ export class ApprovalEngine {
   }
 
   /** Check whether a user is eligible to approve a specific instance. Never throws. */
+  /**
+   * Explain why a chain resolves the way it does for a given document.
+   *
+   * `previewApprovalChain()` answers *what* the chain will be. This answers
+   * *why*: which rule added a level, which rule removed one, which rules were
+   * evaluated and did not match, and where each level's approvers came from —
+   * the question behind "why does this purchase order have a CFO level?", which
+   * previously meant reading the template and re-evaluating the conditions by
+   * hand.
+   *
+   * A rule that throws — an operator nobody registered, a malformed group — is
+   * reported against that rule rather than failing the whole explanation. The
+   * explanation is a diagnostic tool, and it is least useful at exactly the
+   * moment a broken rule makes it throw.
+   *
+   * Reads nothing and writes nothing; safe to expose to a support UI.
+   *
+   * @param templateName - Template to explain.
+   * @param data - Document data the conditions are evaluated against.
+   * @param submittedBy - Submitter, used for approver resolution.
+   */
+  async explainChain(
+    templateName: string,
+    data: Record<string, unknown>,
+    submittedBy: string,
+  ): Promise<ChainExplanation> {
+    const template = await this.registry.get(templateName);
+    const conditions = template.conditions ?? [];
+
+    const rules: ExplainedRule[] = [];
+    const addedBy = new Map<number, number>();
+    const skippedBy = new Map<number, number>();
+
+    conditions.forEach((rule, index) => {
+      const addsLevels = (rule.addLevels ?? []).map((l) => l.level);
+      const skipsLevels = rule.skipLevels ?? [];
+      try {
+        const outcome = evaluateConditions([rule], data);
+        const matched = outcome.addLevels.length > 0 || outcome.skipLevels.size > 0;
+        rules.push({ index, matched, addsLevels, skipsLevels });
+        if (matched) {
+          for (const l of outcome.addLevels) if (!addedBy.has(l.level)) addedBy.set(l.level, index);
+          for (const l of outcome.skipLevels) if (!skippedBy.has(l)) skippedBy.set(l, index);
+        }
+      } catch (err) {
+        rules.push({
+          index,
+          matched: false,
+          addsLevels,
+          skipsLevels,
+          error: (err as Error).message,
+        });
+      }
+    });
+
+    // Re-evaluate as a whole so the level set matches what submit() would build.
+    let mutations: { addLevels: ApprovalLevelConfig[]; skipLevels: Set<number> };
+    try {
+      mutations = evaluateConditions(conditions, data);
+    } catch {
+      mutations = { addLevels: [], skipLevels: new Set<number>() };
+    }
+
+    const active = [...template.levels, ...mutations.addLevels]
+      .filter((l) => !mutations.skipLevels.has(l.level))
+      .sort((a, b) => a.level - b.level);
+
+    const levels: ExplainedLevel[] = [];
+    for (const cfg of active) {
+      const fromCondition = addedBy.has(cfg.level);
+      const base: ExplainedLevel = {
+        level: cfg.level,
+        name: cfg.name,
+        mode: cfg.mode,
+        source: fromCondition ? 'condition' : 'template',
+        ...(fromCondition ? { addedByRule: addedBy.get(cfg.level) } : {}),
+        resolvedApprovers: [],
+        ...(cfg.subWorkflow ? { subWorkflowTemplate: cfg.subWorkflow.templateName } : {}),
+      };
+
+      if (cfg.subWorkflow) {
+        levels.push(base);
+        continue;
+      }
+
+      try {
+        base.resolvedApprovers = await this.resolver.resolveApprovers(
+          cfg.approvers,
+          submittedBy,
+          data,
+          this.opts.orgProvider,
+          this.opts.outOfOfficeProvider,
+          this.clock.now(),
+        );
+      } catch (err) {
+        // Naming the level with an unresolvable approver is the whole point.
+        base.resolutionError = (err as Error).message;
+      }
+      levels.push(base);
+    }
+
+    const skipped: ExplainedSkip[] = template.levels
+      .filter((l) => mutations.skipLevels.has(l.level))
+      .map((l) => ({
+        level: l.level,
+        name: l.name,
+        skippedByRule: skippedBy.get(l.level) ?? -1,
+      }))
+      .sort((a, b) => a.level - b.level);
+
+    return { templateName: template.name, levels, skipped, rules };
+  }
+
   async canApprove(instanceId: string, userId: string): Promise<CanApproveResult> {
     let instance: ApprovalInstance;
     try {
