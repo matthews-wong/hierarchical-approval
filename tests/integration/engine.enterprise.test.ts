@@ -514,6 +514,14 @@ describe('Custom condition operators', () => {
       engine.submit({ templateName: 'unknown-op-test', documentId: 'd1', documentType: 'req', submittedBy: 'sub1', data: { amount: 150 } }),
     ).rejects.toThrow(ApprovalValidationError);
   });
+
+  it('empty required field on submit throws ApprovalValidationError', async () => {
+    const { engine } = ApprovalTestKit.create();
+    await engine.defineTemplate(basicTemplate);
+    await expect(
+      engine.submit({ templateName: 'enterprise-test', documentId: '', documentType: 'invoice', submittedBy: 'user1', data: {} }),
+    ).rejects.toThrow(ApprovalValidationError);
+  });
 });
 
 // ─── Custom approver types ────────────────────────────────────────────────
