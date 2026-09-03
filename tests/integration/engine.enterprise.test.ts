@@ -425,6 +425,17 @@ describe('IOperationMiddleware', () => {
     ).resolves.toBeDefined();
   });
 
+  it('middleware error in after() does not prevent operation', async () => {
+    const mw: IOperationMiddleware = {
+      after: async () => { throw new Error('middleware failure'); },
+    };
+    const { engine } = ApprovalTestKit.create({ middleware: [mw] });
+    await engine.defineTemplate(basicTemplate);
+    await expect(
+      engine.submit({ templateName: 'enterprise-test', documentId: 'doc-1', documentType: 'invoice', submittedBy: 'user1', data: {} }),
+    ).resolves.toBeDefined();
+  });
+
   it('multiple middleware run in order', async () => {
     const order: string[] = [];
     const mw1: IOperationMiddleware = { before: async () => { order.push('mw1'); } };
