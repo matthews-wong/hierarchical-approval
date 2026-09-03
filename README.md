@@ -468,6 +468,40 @@ The sweep is **not atomic**: it reports per-instance failures rather than rollin
 back. A partial transfer is the useful outcome — the approvals that can move
 should move, and the ones that cannot are named so a human can look at them.
 
+### Sub-workflows
+
+A level can delegate to a whole separate approval instead of to a list of
+approvers — "a capital request over 1M needs its own board approval before this
+purchase order can proceed" — without flattening the board's chain into the
+purchase order's:
+
+```ts
+levels: [
+  { level: 1, name: 'Manager', approvers: [{ type: 'user', userId: 'mgr' }], mode: 'any' },
+  { level: 2, name: 'Board approval', mode: 'any', approvers: [],
+    subWorkflow: { templateName: 'BOARD' } },
+  { level: 3, name: 'CEO', approvers: [{ type: 'user', userId: 'ceo' }], mode: 'any' },
+]
+```
+
+When level 2 opens, a child instance is submitted against `BOARD`, carrying the
+parent's document data so the child's own conditions see the same document. The
+parent level stays open, with no approvers of its own, until the child finishes.
+
+| Child outcome | Parent |
+|---|---|
+| `approved` | Level approved; the chain advances |
+| `rejected`, `cancelled`, `expired` | Parent rejected |
+
+Collapsing the non-approved outcomes into one rejection is deliberate: a parent
+that treated a cancelled child as "carry on" would advance past a gate nobody
+cleared.
+
+Children link back via `parentInstanceId` and `parentLevel`, and the level
+records `childInstanceId`. Nesting is allowed up to five levels deep, and
+`validateTemplate()` rejects a template that would spawn itself. Emits
+`approval:subworkflow_started` / `approval:subworkflow_completed`.
+
 ### Attachments
 
 Attach supporting evidence — a quote PDF, a signed contract, a screenshot of a

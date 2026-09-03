@@ -7,6 +7,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [2.1.0] - 2026-09-04
+
+### Added — sub-workflows
+
+- **A level can delegate to a whole separate approval.** "A capital request over
+  1M needs its own board approval before this purchase order can proceed" could
+  only be modelled by flattening the board's chain into the purchase order's —
+  duplicating it in every template that needed it, and losing the board approval
+  as a thing with its own identity, audit trail and lifecycle.
+
+  ```ts
+  { level: 2, name: 'Board approval', mode: 'any', approvers: [],
+    subWorkflow: { templateName: 'BOARD' } }
+  ```
+
+  When the level opens, a child instance is submitted against the named
+  template, carrying the parent's document data so the child's own conditions
+  see the same document. The parent level stays open, with no approvers of its
+  own, until the child finishes.
+
+- **An approved child advances the parent; any other terminal outcome rejects
+  it.** Rejected, cancelled and expired all collapse into one rejection
+  deliberately: a parent that treated a cancelled child as "carry on" would
+  advance past a gate nobody cleared.
+
+- **Children are spawned outside the parent's optimistic write.** The child's own
+  `submit()` reads and writes; nesting that inside the parent's compare-and-set
+  would turn a slow child template into spurious version conflicts on the
+  decision the user just made. The same applies in reverse when a child returns
+  its outcome.
+
+- **Nesting is capped at five levels**, and `validateTemplate()` rejects a
+  template that would spawn itself, sets both `approvers` and `subWorkflow`
+  (whose approvers would never be asked), or names no child template. A
+  sub-workflow level is exempt from the "must have at least one approver" rule,
+  since its child decides it.
+
+  New exports: `SubWorkflowConfig`, `SubWorkflowEvent`. `ApprovalInstance` gains
+  `parentLevel` and `subWorkflowDepth`; levels gain `childInstanceId` and
+  `subWorkflowTemplate`.
+
 ## [2.0.0] - 2026-09-04
 
 ### BREAKING — `IStorageAdapter` requires `countInstances`

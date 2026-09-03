@@ -22,6 +22,8 @@ export type AuditAction =
   | 'info_provided'
   | 'attachment_added'
   | 'attachment_removed'
+  | 'subworkflow_started'
+  | 'subworkflow_completed'
   | 'expired';
 
 export interface AuditEntry {
@@ -53,6 +55,10 @@ export interface ApprovalLevelInstance {
   name: string;
   /** Parallel branch group this level belongs to; absent for sequential levels. */
   group?: string;
+  /** Id of the child instance this level is waiting on, when it delegates to a sub-workflow. */
+  childInstanceId?: string;
+  /** Template the child was submitted against; kept for display and diagnostics. */
+  subWorkflowTemplate?: string;
   mode: ApprovalMode;
   approverConfigs: ApproverConfig[];
   approverIds: string[];
@@ -147,8 +153,15 @@ export interface ApprovalInstance {
   updatedAt: Date;
   /** Snapshot of template config at submit time — prevents template changes from affecting in-flight instances. */
   templateSnapshot?: TemplateSnapshot;
-  /** ID of the rejected instance this was resubmitted from. */
+  /**
+   * ID of the parent instance — set both when this was resubmitted from a
+   * rejected instance and when it is a sub-workflow child.
+   */
   parentInstanceId?: string;
+  /** Parent level this instance was spawned for, when it is a sub-workflow child. */
+  parentLevel?: number;
+  /** How many sub-workflow hops deep this instance sits. 0 for a top-level approval. */
+  subWorkflowDepth?: number;
   /** Auto-cancel or auto-reject if not resolved by this time. */
   expiresAt?: Date;
   /** What happens when expiresAt is reached (default: 'cancel'). */

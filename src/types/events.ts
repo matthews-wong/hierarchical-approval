@@ -130,6 +130,15 @@ export interface AttachmentEvent extends ApprovalEvent {
   level?: number;
 }
 
+/** Emitted when a level hands off to a child approval, and when that child returns. */
+export interface SubWorkflowEvent extends ApprovalEvent {
+  level: number;
+  childInstanceId: string;
+  childTemplateName: string;
+  /** Set on completion: the outcome the child returned. */
+  outcome?: 'approved' | 'rejected' | 'cancelled' | 'expired';
+}
+
 export interface ApprovalEventMap {
   'approval:submitted': SubmittedEvent;
   'approval:approved': ApprovedEvent;
@@ -150,6 +159,8 @@ export interface ApprovalEventMap {
   'approval:info_provided': InfoProvidedEvent;
   'approval:attachment_added': AttachmentEvent;
   'approval:attachment_removed': AttachmentEvent;
+  'approval:subworkflow_started': SubWorkflowEvent;
+  'approval:subworkflow_completed': SubWorkflowEvent;
 }
 
 export type ApprovalEventName = keyof ApprovalEventMap;

@@ -36,6 +36,21 @@ export interface ApprovalLevelConfig {
    * own group of one.
    */
   group?: string;
+  /**
+   * Delegate this level to a whole separate approval, rather than to a list of
+   * approvers.
+   *
+   * When the level opens, a child instance is submitted against
+   * {@link SubWorkflowConfig.templateName}. The parent level stays open until
+   * that child finishes, then takes its outcome: approved advances the parent,
+   * rejected rejects it. Models "a capital request over 1M needs its own board
+   * approval before this purchase order can proceed" without flattening the
+   * board's chain into the purchase order's.
+   *
+   * A level with `subWorkflow` needs no `approvers` — nobody approves it
+   * directly; the child does.
+   */
+  subWorkflow?: SubWorkflowConfig;
   escalationAfterDays?: number;
   /**
    * Send a reminder to this level's pending approvers this many days after the
@@ -89,6 +104,19 @@ export type ConditionGroup =
  * explicit combinator.
  */
 export type ConditionExpression = Condition | ConditionExpression[] | ConditionGroup;
+
+/** How a level hands off to a child approval. See {@link ApprovalLevelConfig.subWorkflow}. */
+export interface SubWorkflowConfig {
+  /** Template the child instance is submitted against. */
+  templateName: string;
+  /**
+   * Copy the parent's document data into the child (default `true`), so the
+   * child's own conditions can be evaluated against the same document.
+   */
+  carryData?: boolean;
+  /** Document type for the child; defaults to the child template's own. */
+  documentType?: string;
+}
 
 export interface ConditionRule {
   /**

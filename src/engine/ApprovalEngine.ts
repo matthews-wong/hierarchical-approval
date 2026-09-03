@@ -108,6 +108,8 @@ export {
 } from '../errors.js';
 
 /** Reminders sent for one level before the engine stops nudging, absent an explicit cap. */
+/** How deep sub-workflows may nest before the engine refuses, so a template cycle terminates. */
+const MAX_SUBWORKFLOW_DEPTH = 5;
 const DEFAULT_MAX_REMINDERS = 3;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_BASE_DELAY_MS = 50;
@@ -459,11 +461,34 @@ export class ApprovalEngine {
         }
         levelNums.add(l.level);
 
-        if (!l.approvers || l.approvers.length === 0) {
+        // A sub-workflow level is decided by its child approval, so it needs no
+        // approvers of its own — requiring them would force template authors to
+        // invent a placeholder nobody ever asks.
+        if (!l.subWorkflow && (!l.approvers || l.approvers.length === 0)) {
           errors.push({
             field: `levels[${i}].approvers`,
             message: `Level ${l.level} must have at least one approver.`,
           });
+        }
+        if (l.subWorkflow) {
+          if (!l.subWorkflow.templateName) {
+            errors.push({
+              field: `levels[${i}].subWorkflow.templateName`,
+              message: `Level ${l.level} declares a subWorkflow without a templateName.`,
+            });
+          }
+          if (l.subWorkflow.templateName === config.name) {
+            errors.push({
+              field: `levels[${i}].subWorkflow.templateName`,
+              message: `Level ${l.level} would spawn a sub-workflow of its own template ("${config.name}"), which cannot terminate.`,
+            });
+          }
+          if (l.approvers && l.approvers.length > 0) {
+            errors.push({
+              field: `levels[${i}].approvers`,
+              message: `Level ${l.level} sets both approvers and subWorkflow; a sub-workflow level is decided by its child approval, so its approvers would never be asked.`,
+            });
+          }
         }
         if (l.reminderAfterDays !== undefined && l.reminderAfterDays <= 0) {
           errors.push({
@@ -632,7 +657,17 @@ export class ApprovalEngine {
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
 
-  async submit(raw: SubmitOptions, auditCtx?: AuditContext): Promise<ApprovalInstance> {
+  async submit(
+    raw: SubmitOptions,
+    auditCtx?: AuditContext,
+    /**
+     * @internal Set only when the engine spawns a sub-workflow child. Passed at
+     * creation rather than stamped afterwards, because the child spawns its own
+     * children before any post-submit update could reach it — which is how a
+     * grandchild ended up recorded at depth 1.
+     */
+    link?: { parentInstanceId: string; parentLevel: number; depth: number },
+  ): Promise<ApprovalInstance> {
     const opts = parseOrThrow(() => SubmitOptionsSchema.parse(raw));
     const startMs = this.clock.now().getTime();
     const template = await this.registry.get(opts.templateName);
@@ -706,6 +741,7 @@ export class ApprovalEngine {
           inFirstGroup && cfg.escalationAfterDays
             ? this.deadlineFrom(now, cfg.escalationAfterDays)
             : undefined,
+        subWorkflowTemplate: cfg.subWorkflow?.templateName,
         reminderAfterDays: cfg.reminderAfterDays,
         reminderEveryDays: cfg.reminderEveryDays,
         maxReminders: cfg.maxReminders,
@@ -718,6 +754,12 @@ export class ApprovalEngine {
     });
 
     for (const lvl of levels.filter((l) => l.status === 'pending')) {
+      // A sub-workflow level has no approvers of its own — a child approval
+      // decides it — so resolving here would fail on an empty approver list.
+      if (lvl.subWorkflowTemplate) {
+        lvl.approverIds = [];
+        continue;
+      }
       lvl.approverIds = await this.resolver.resolveApprovers(
         lvl.approverConfigs,
         opts.submittedBy,
@@ -743,6 +785,9 @@ export class ApprovalEngine {
     const instance: ApprovalInstance = {
       id: instanceId,
       tenantId: this.tenantId,
+      parentInstanceId: link?.parentInstanceId,
+      parentLevel: link?.parentLevel,
+      subWorkflowDepth: link?.depth,
       templateId: template.id,
       templateName: template.name,
       documentId: opts.documentId,
@@ -812,6 +857,12 @@ export class ApprovalEngine {
       instance,
     );
 
+    // Done after the parent is persisted, never inside its optimistic write:
+    // the child's own submit reads and writes, and nesting that under the
+    // parent's compare-and-set would turn a slow child template into spurious
+    // version conflicts on the parent.
+    await this.startSubWorkflows(instance);
+
     return instance;
   }
 
@@ -822,7 +873,7 @@ export class ApprovalEngine {
   ): Promise<ApprovalInstance> {
     const opts = parseOrThrow(() => ApproveOptionsSchema.parse(raw));
     const startMs = this.clock.now().getTime();
-    return this.withOptimisticRetry(instanceId, async (instance) => {
+    const decided = await this.withOptimisticRetry(instanceId, async (instance) => {
       assertStatus(instance, 'pending');
 
       if (opts.approverId === instance.submittedBy) {
@@ -1049,6 +1100,9 @@ export class ApprovalEngine {
 
       return instance;
     });
+
+    await this.afterDecision(decided);
+    return decided;
   }
 
   async reject(
@@ -1057,7 +1111,7 @@ export class ApprovalEngine {
     auditCtx?: AuditContext,
   ): Promise<ApprovalInstance> {
     const opts = parseOrThrow(() => RejectOptionsSchema.parse(raw));
-    return this.withOptimisticRetry(instanceId, async (instance) => {
+    const decided = await this.withOptimisticRetry(instanceId, async (instance) => {
       assertStatus(instance, 'pending');
 
       if (opts.approverId === instance.submittedBy) {
@@ -1185,6 +1239,9 @@ export class ApprovalEngine {
 
       return instance;
     });
+
+    await this.afterDecision(decided);
+    return decided;
   }
 
   async delegate(instanceId: string, raw: DelegateOptions, auditCtx?: AuditContext): Promise<void> {
@@ -1388,7 +1445,8 @@ export class ApprovalEngine {
     auditCtx?: AuditContext,
   ): Promise<ApprovalInstance> {
     const opts = parseOrThrow(() => CancelOptionsSchema.parse(raw));
-    return this.withOptimisticRetry(instanceId, async (instance) => {
+    let cancelled: ApprovalInstance | null = null;
+    const result = await this.withOptimisticRetry(instanceId, async (instance) => {
       if (instance.status === 'approved' || instance.status === 'rejected') {
         throw new ApprovalError(`Cannot cancel a "${instance.status}" approval.`, 'CANNOT_CANCEL');
       }
@@ -1446,8 +1504,14 @@ export class ApprovalEngine {
         },
         instance,
       );
+      cancelled = instance;
       return instance;
     });
+
+    // A cancelled child still owes its parent an outcome: the approval the
+    // parent was waiting on will now never happen.
+    if (cancelled) await this.propagateToParent(cancelled);
+    return result;
   }
 
   async escalate(
@@ -3301,14 +3365,19 @@ export class ApprovalEngine {
     now: Date,
   ): Promise<void> {
     for (const lvl of group) {
-      lvl.approverIds = await this.resolver.resolveApprovers(
-        lvl.approverConfigs,
-        instance.submittedBy,
-        instance.data,
-        this.opts.orgProvider,
-        this.opts.outOfOfficeProvider,
-        now,
-      );
+      if (lvl.subWorkflowTemplate) {
+        // Nobody approves this level directly — a child approval decides it.
+        lvl.approverIds = [];
+      } else {
+        lvl.approverIds = await this.resolver.resolveApprovers(
+          lvl.approverConfigs,
+          instance.submittedBy,
+          instance.data,
+          this.opts.orgProvider,
+          this.opts.outOfOfficeProvider,
+          now,
+        );
+      }
       if (lvl.escalationAfterDays) {
         lvl.escalationDueAt = this.deadlineFrom(now, lvl.escalationAfterDays);
       }
@@ -3407,6 +3476,261 @@ export class ApprovalEngine {
     } catch (err) {
       this.logger.error('reminder: failed to send', err, { tenantId: this.tenantId, instanceId });
     }
+  }
+
+  /**
+   * Start child approvals for any open level that delegates to a sub-workflow.
+   *
+   * Run after the parent has been persisted, never inside the same optimistic
+   * write: the child's own `submit()` performs its own reads and writes, and
+   * nesting them under the parent's compare-and-set would make a slow child
+   * template a source of spurious version conflicts on the parent.
+   */
+  private async startSubWorkflows(instance: ApprovalInstance): Promise<void> {
+    const pendingSubs = instance.levels.filter(
+      (l) => l.status === 'pending' && l.subWorkflowTemplate && !l.childInstanceId,
+    );
+    if (pendingSubs.length === 0) return;
+
+    const depth = (instance.subWorkflowDepth ?? 0) + 1;
+    if (depth > MAX_SUBWORKFLOW_DEPTH) {
+      throw new ApprovalValidationError(
+        `Sub-workflow nesting exceeded ${MAX_SUBWORKFLOW_DEPTH} levels at template "${instance.templateName}". Check for a template that reaches itself.`,
+      );
+    }
+
+    for (const level of pendingSubs) {
+      const templateName = level.subWorkflowTemplate as string;
+      const childTemplate = await this.registry.get(templateName);
+
+      const child = await this.submit(
+        {
+          templateName,
+          // Unique per parent level, so a resubmitted parent does not collide
+          // with the child it spawned last time.
+          documentId: `${instance.documentId}#L${level.level}`,
+          documentType: childTemplate.documentType,
+          submittedBy: instance.submittedBy,
+          data: instance.data,
+          metadata: { ...instance.metadata, parentInstanceId: instance.id },
+        },
+        undefined,
+        { parentInstanceId: instance.id, parentLevel: level.level, depth },
+      );
+
+      await this.withOptimisticRetry(instance.id, async (parent) => {
+        const lvl = parent.levels.find((l) => l.level === level.level);
+        if (!lvl || lvl.childInstanceId) return parent;
+        lvl.childInstanceId = child.id;
+        parent.updatedAt = this.clock.now();
+        await this.opts.adapter.updateInstance(parent, parent.version);
+        return parent;
+      });
+
+      const payload = {
+        instanceId: instance.id,
+        documentId: instance.documentId,
+        documentType: instance.documentType,
+        timestamp: this.clock.now(),
+        level: level.level,
+        childInstanceId: child.id,
+        childTemplateName: templateName,
+      };
+      this.bus.emit('approval:subworkflow_started', payload);
+      await this.notifyAdapters('approval:subworkflow_started', instance, payload);
+      this.logger.info('subWorkflow: child approval started', {
+        tenantId: this.tenantId,
+        instanceId: instance.id,
+        level: level.level,
+        childInstanceId: child.id,
+      });
+    }
+  }
+
+  /**
+   * Return a finished child's outcome to the parent level that is waiting on it.
+   *
+   * An approved child approves its parent level and lets the chain advance; any
+   * other terminal outcome — rejected, cancelled, expired — rejects the parent,
+   * because the approval the parent was waiting for did not happen. Collapsing
+   * those into one rejection is deliberate: a parent that treated a cancelled
+   * child as "carry on" would advance past a gate nobody cleared.
+   */
+  private async propagateToParent(child: ApprovalInstance): Promise<void> {
+    if (!child.parentInstanceId || child.parentLevel === undefined) return;
+
+    const outcome = child.status;
+    const parentId = child.parentInstanceId;
+    const parentLevelNumber = child.parentLevel;
+
+    try {
+      const parent = await this.opts.adapter.getInstance(this.tenantId, parentId);
+      if (!parent || parent.status !== 'pending') return;
+
+      const payload = {
+        instanceId: parentId,
+        documentId: parent.documentId,
+        documentType: parent.documentType,
+        timestamp: this.clock.now(),
+        level: parentLevelNumber,
+        childInstanceId: child.id,
+        childTemplateName: child.templateName,
+        outcome: outcome as 'approved' | 'rejected' | 'cancelled' | 'expired',
+      };
+
+      if (outcome === 'approved') {
+        await this.completeSubWorkflowLevel(parentId, parentLevelNumber, child);
+      } else {
+        await this.rejectFromSubWorkflow(parentId, parentLevelNumber, child);
+      }
+
+      const refreshed = await this.opts.adapter.getInstance(this.tenantId, parentId);
+      this.bus.emit('approval:subworkflow_completed', payload);
+      if (refreshed) {
+        await this.notifyAdapters('approval:subworkflow_completed', refreshed, payload);
+      }
+    } catch (err) {
+      // A parent that cannot be advanced must not fail the child's own decision,
+      // which is already recorded. Surface it loudly instead.
+      this.logger.error('subWorkflow: failed to propagate outcome to parent', err, {
+        tenantId: this.tenantId,
+        childInstanceId: child.id,
+        parentInstanceId: parentId,
+      });
+    }
+  }
+
+  /** Mark a sub-workflow level approved and advance the parent chain. */
+  private async completeSubWorkflowLevel(
+    parentId: string,
+    levelNumber: number,
+    child: ApprovalInstance,
+  ): Promise<void> {
+    let advanced: ApprovalInstance | null = null;
+
+    await this.withOptimisticRetry(parentId, async (parent) => {
+      const level = parent.levels.find((l) => l.level === levelNumber);
+      if (!level || level.status !== 'pending') return parent;
+
+      const now = this.clock.now();
+      level.status = 'approved';
+      level.reminderDueAt = undefined;
+      level.escalationDueAt = undefined;
+
+      const auditEntry: AuditEntry = {
+        action: 'subworkflow_completed',
+        actorId: 'system',
+        level: levelNumber,
+        timestamp: now,
+        newValue: { childInstanceId: child.id, outcome: 'approved' },
+      };
+      parent.auditLog.push(auditEntry);
+      parent.updatedAt = now;
+
+      // The whole group must be done before the chain moves on, exactly as for
+      // an ordinary level inside a parallel group.
+      const siblingsOpen = this.groupMembers(parent, level).some(
+        (l) => l.status === 'pending' || l.status === 'waiting',
+      );
+      if (!siblingsOpen) {
+        const nextGroup = this.findNextGroup(parent);
+        if (nextGroup.length === 0) {
+          parent.status = 'approved';
+        } else {
+          await this.activateGroup(parent, nextGroup, now);
+        }
+      }
+
+      await this.opts.adapter.updateInstance(parent, parent.version);
+      await this.opts.adapter.appendAuditEntry(this.tenantId, parentId, auditEntry);
+      await this.runExternalAudit(parent, auditEntry);
+      advanced = parent;
+      return parent;
+    });
+
+    if (advanced) {
+      const parent = advanced as ApprovalInstance;
+      if (parent.status === 'approved') {
+        this.bus.emit('approval:completed', parent);
+        await this.notifyAdapters('approval:completed', parent, parent);
+        await this.propagateToParent(parent);
+      } else {
+        // A newly opened group may itself contain sub-workflow levels.
+        await this.startSubWorkflows(parent);
+      }
+    }
+  }
+
+  /** Reject a parent because the child approval it was waiting on did not succeed. */
+  private async rejectFromSubWorkflow(
+    parentId: string,
+    levelNumber: number,
+    child: ApprovalInstance,
+  ): Promise<void> {
+    let rejected: ApprovalInstance | null = null;
+
+    await this.withOptimisticRetry(parentId, async (parent) => {
+      const level = parent.levels.find((l) => l.level === levelNumber);
+      if (!level || level.status !== 'pending') return parent;
+
+      const now = this.clock.now();
+      level.status = 'rejected';
+      level.reminderDueAt = undefined;
+      level.escalationDueAt = undefined;
+      parent.status = 'rejected';
+      parent.updatedAt = now;
+
+      const auditEntry: AuditEntry = {
+        action: 'subworkflow_completed',
+        actorId: 'system',
+        level: levelNumber,
+        timestamp: now,
+        reason: `Child approval ${child.id} ended as "${child.status}".`,
+        newValue: { childInstanceId: child.id, outcome: child.status },
+      };
+      parent.auditLog.push(auditEntry);
+
+      await this.opts.adapter.updateInstance(parent, parent.version);
+      await this.opts.adapter.appendAuditEntry(this.tenantId, parentId, auditEntry);
+      await this.runExternalAudit(parent, auditEntry);
+      rejected = parent;
+      return parent;
+    });
+
+    if (rejected) {
+      const parent = rejected as ApprovalInstance;
+      const payload = {
+        instanceId: parent.id,
+        documentId: parent.documentId,
+        documentType: parent.documentType,
+        timestamp: this.clock.now(),
+        approverId: 'system',
+        level: levelNumber,
+        reason: `Child approval ${child.id} ended as "${child.status}".`,
+        returnTo: null,
+      };
+      this.bus.emit('approval:rejected', payload);
+      await this.notifyAdapters('approval:rejected', parent, payload);
+      await this.propagateToParent(parent);
+    }
+  }
+
+  /**
+   * Work that must happen after a decision is durably recorded, not inside it.
+   *
+   * Both branches touch other instances — a newly opened level may spawn a
+   * child approval, and a finished instance may be a child that owes its
+   * outcome to a parent. Doing either inside the deciding instance's
+   * compare-and-set would nest writes under a version guard that knows nothing
+   * about them, so a slow child template would surface as a spurious conflict
+   * on the decision the user just made.
+   */
+  private async afterDecision(instance: ApprovalInstance): Promise<void> {
+    if (TERMINAL_STATUSES.has(instance.status)) {
+      await this.propagateToParent(instance);
+      return;
+    }
+    await this.startSubWorkflows(instance);
   }
 
   private findNextLevel(instance: ApprovalInstance): ApprovalLevelInstance | null {
