@@ -120,21 +120,48 @@ describe('MemoryAdapter', () => {
     expect((await adapter.getInstancesByFilter('t1', {})).items).toHaveLength(3);
   });
 
-  it('getInstancesByApprover returns only pending instances on the approver current level', async () => {
+  it('getInstancesByApprover returns pending instances on any open level', async () => {
     const adapter = new MemoryAdapter();
     await adapter.saveInstance(makeInstance({ id: 'i1', status: 'pending' }));
     await adapter.saveInstance(makeInstance({ id: 'i2', status: 'approved' }));
+    // Bob's level is closed and the open one belongs to carol, so bob is done here.
     await adapter.saveInstance(
       makeInstance({
         id: 'i3',
         status: 'pending',
         currentLevel: 2,
-        levels: [makeLevel({ level: 1 }), makeLevel({ level: 2, approverIds: ['carol'] })],
+        levels: [
+          makeLevel({ level: 1, status: 'approved', approvedBy: ['bob'] }),
+          makeLevel({ level: 2, approverIds: ['carol'] }),
+        ],
       }),
     );
     const result = await adapter.getInstancesByApprover('t1', 'bob');
     expect(result.items.map((i) => i.id)).toEqual(['i1']);
     expect(result.total).toBe(1);
+  });
+
+  it('getInstancesByApprover finds an approver on an upper parallel branch', async () => {
+    // currentLevel names one level, so matching against it alone hid every
+    // branch of a parallel group above the lowest — an approver assigned there
+    // saw an empty inbox. PostgresAdapter already matched any open level.
+    const adapter = new MemoryAdapter();
+    await adapter.saveInstance(
+      makeInstance({
+        id: 'par',
+        status: 'pending',
+        currentLevel: 1,
+        levels: [
+          makeLevel({ level: 1, group: 'review', approverIds: ['bob'] }),
+          makeLevel({ level: 2, group: 'review', approverIds: ['carol'] }),
+        ],
+      }),
+    );
+
+    await expect(adapter.getInstancesByApprover('t1', 'carol')).resolves.toMatchObject({
+      total: 1,
+    });
+    await expect(adapter.getInstancesByApprover('t1', 'bob')).resolves.toMatchObject({ total: 1 });
   });
 
   it('getIdempotentInstance finds only the matching tenant/key pair', async () => {

@@ -7,6 +7,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [3.3.0] - 2026-09-04
+
+### Fixed — an approver on an upper parallel branch had an empty inbox
+
+**Affects `MemoryAdapter` only; `PostgresAdapter` was already correct**, so the
+same deployment behaved differently depending on which adapter was in use.
+
+- **`getInstancesByApprover` matched only the level equal to
+  `instance.currentLevel`.** That names a single level, so inside a parallel
+  group it identifies just the lowest branch. An approver assigned to any branch
+  above it was invisible:
+
+  - **`getPendingFor()` returned nothing for them** — their own queue was empty
+    while they held open work, so they had no way to know it was theirs.
+  - **`transferApprovals()` scanned nothing for them**, silently leaving a
+    departing colleague's upper-branch approvals behind. That is exactly the
+    "missing one leaves an approval that can never complete" failure the sweep
+    was built to prevent.
+
+  It now matches any open level, as `PostgresAdapter` always did.
+
+  This is the third place `currentLevel` was used as though it named the whole
+  open frontier — after escalation in 1.1.0 and `delegate`/`reassign` in 1.8.0.
+
 ## [3.2.0] - 2026-09-04
 
 ### Fixed — `getStatistics().overdue` ignored most of its filter

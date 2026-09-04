@@ -366,3 +366,60 @@ describe('delegate and reassign reach the right branch', () => {
     expect(after.levels[1]?.approverIds).toEqual(['deputy']);
   });
 });
+
+describe('an approver on an upper branch is visible everywhere', () => {
+  // Regression guard: MemoryAdapter.getInstancesByApprover matched only the
+  // level equal to instance.currentLevel, which names one level of a group. An
+  // approver on any branch above the lowest got an empty inbox, and
+  // transferApprovals scanned nothing for them — precisely the "missing one
+  // leaves an approval that can never complete" failure it exists to prevent.
+  const forked = async (engine: ApprovalEngine) => {
+    await engine.defineTemplate({
+      name: 'PAR',
+      documentType: 'contract',
+      levels: [lvl(1, 'Finance', 'fin', 'review'), lvl(2, 'Legal', 'legal', 'review')],
+    });
+    return engine.submit({
+      templateName: 'PAR',
+      documentId: `c-${Math.random()}`,
+      documentType: 'contract',
+      submittedBy: 'buyer',
+      data: {},
+    });
+  };
+
+  it('appears in the upper-branch approver own queue', async () => {
+    const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+    const i = await forked(engine);
+
+    expect((await engine.getPendingFor('fin')).items.map((x) => x.id)).toEqual([i.id]);
+    expect((await engine.getPendingFor('legal')).items.map((x) => x.id)).toEqual([i.id]);
+  });
+
+  it('is picked up when transferring that person queue', async () => {
+    const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+    const i = await forked(engine);
+
+    const result = await engine.transferApprovals({
+      fromApprover: 'legal',
+      toApprover: 'legal-2',
+      transferredBy: 'admin',
+      reason: 'left the company',
+    });
+
+    expect(result.scanned).toBe(1);
+    expect(result.transferred.map((t) => t.level)).toEqual([2]);
+    const after = await engine.getInstance(i.id);
+    expect(after.levels[0]?.approverIds).toEqual(['fin']);
+    expect(after.levels[1]?.approverIds).toEqual(['legal-2']);
+  });
+
+  it('drops out of the queue once that branch is decided', async () => {
+    const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+    const i = await forked(engine);
+    await engine.approve(i.id, { approverId: 'legal' });
+
+    expect((await engine.getPendingFor('legal')).items).toEqual([]);
+    expect((await engine.getPendingFor('fin')).items.map((x) => x.id)).toEqual([i.id]);
+  });
+});

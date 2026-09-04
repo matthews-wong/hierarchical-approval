@@ -154,9 +154,12 @@ export class MemoryAdapter implements IStorageAdapter {
   ): Promise<PaginatedResult<ApprovalInstance>> {
     const all = [...this.instances.values()].filter((i) => {
       if (i.tenantId !== tenantId || i.status !== 'pending') return false;
-      // Use .find() by level number, not array index (level numbers may not be consecutive)
-      const currentLevel = i.levels.find((l) => l.level === i.currentLevel);
-      return currentLevel?.approverIds.includes(approverId) ?? false;
+      // Any level that is open, not just the one matching i.currentLevel.
+      // currentLevel names a single level, so inside a parallel group it
+      // identifies only the lowest branch — an approver assigned to an upper
+      // branch got an empty inbox, and transferApprovals left their work
+      // behind. PostgresAdapter already matched every pending level.
+      return i.levels.some((l) => l.status === 'pending' && l.approverIds.includes(approverId));
     });
     return paginate(
       all.map((i) => reviveDates(deepClone(i))),
