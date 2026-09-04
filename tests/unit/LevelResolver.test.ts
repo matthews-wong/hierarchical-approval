@@ -99,4 +99,19 @@ describe('LevelResolver', () => {
       resolver.resolveApprovers(approvers, 'submitter', {}, orgProvider),
     ).rejects.toThrow(/No approvers resolved for this level/);
   });
+
+  it('defaults the out-of-office resolution time to now when none is given', async () => {
+    const resolver = new LevelResolver();
+    const seen: Date[] = [];
+    const approvers: ApproverConfig[] = [{ type: 'user', userId: 'mgr' }];
+    const before = Date.now();
+    await resolver.resolveApprovers(approvers, 'submitter', {}, undefined, {
+      getDelegateFor: (_userId, at) => {
+        seen.push(at);
+        return null;
+      },
+    });
+    expect(seen[0]?.getTime()).toBeGreaterThanOrEqual(before);
+    expect(seen[0]?.getTime()).toBeLessThanOrEqual(Date.now());
+  });
 });
