@@ -526,6 +526,19 @@ describe('RedactingAuditAdapter', () => {
     await adapter.append('t', 'i', original, INST);
     expect(seen[0]!.entry).not.toBe(original);
   });
+
+  it('a circular-reference entry fails redaction and is forwarded unmodified, logged', async () => {
+    const logger = spyLogger();
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner, freeTextFields: ['comment'], logger });
+    const cyclic = makeEntry({ comment: 'secret' }) as unknown as Record<string, unknown>;
+    cyclic.newValue = {};
+    (cyclic.newValue as Record<string, unknown>).back = cyclic;
+    await expect(adapter.append('t', 'i', cyclic as never, INST)).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalled();
+    // Forwarded unredacted since redaction itself failed.
+    expect(seen[0]!.entry.comment).toBe('secret');
+  });
 });
 
 describe('CompositeAuditAdapter', () => {
