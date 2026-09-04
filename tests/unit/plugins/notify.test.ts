@@ -251,6 +251,46 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect(transport).toHaveBeenCalledTimes(1);
   });
 
+  it('a failed delivery whose store.update() also fails is logged, and drain still reports failure', async () => {
+    const logger = spyLogger();
+    const clock = new ManualClock(0);
+    const record: OutboxRecord = {
+      id: 'rec-2',
+      partitionKey: 'tenant-1:inst-1',
+      tenantId: 'tenant-1',
+      event: makeEvent(),
+      status: 'pending',
+      attempts: 0,
+      nextAttemptAt: 0,
+      enqueuedAt: 0,
+    };
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [record],
+      update: async () => {
+        throw new Error('update fail');
+      },
+      remove: async () => {},
+      pending: async () => [],
+      deadLettered: async () => [],
+    };
+    const adapter = new OutboxNotificationAdapter({
+      transport: () => {
+        throw new Error('transport fail');
+      },
+      store,
+      logger,
+      clock,
+      maxAttempts: 3,
+    });
+    expect(await adapter.drain()).toBe(0);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('failed to persist record state'),
+      expect.any(Error),
+      expect.objectContaining({ id: 'rec-2' }),
+    );
+  });
+
   it('drain on an empty outbox returns 0 and does not throw', async () => {
     const adapter = new OutboxNotificationAdapter({ transport: () => {}, clock: new ManualClock(0) });
     expect(await adapter.drain()).toBe(0);
