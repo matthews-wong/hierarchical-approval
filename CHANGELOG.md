@@ -7,6 +7,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [3.1.0] - 2026-09-04
+
+### Fixed — escalation ladders drifted on parallel branches
+
+- **Two identically configured branches of one parallel group escalated on
+  different schedules.** Rung delays are documented as measured from when the
+  level opened, and the open time was inferred by scanning the audit trail for
+  that level's `level_advanced` or `submitted` entry. But a `level_advanced`
+  entry carries only the group's *lowest* level number, so an upper branch never
+  found one, fell back to "now", and measured each rung from the previous
+  escalation instead.
+
+  With a `[2 days, 4 days]` ladder, the lower branch scheduled its second rung
+  for day 4 as documented while the upper branch scheduled it for day 6.
+
+### Added — `ApprovalLevelInstance.openedAt`
+
+- **A level now records when it started collecting decisions**, and escalation
+  reads that instead of reconstructing it. Recording the fact beats inferring it:
+  the audit trail was never designed to identify one branch of a group, and the
+  inference failed silently when it could not.
+
+  Instances submitted before 3.1.0 and still in flight have no `openedAt`, so
+  the audit scan is kept as a fallback for them. New instances never use it.
+
 ## [3.0.0] - 2026-09-04
 
 Three defects found by auditing the interactions between features added across

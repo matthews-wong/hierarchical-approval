@@ -45,6 +45,7 @@ function reviveDates(instance: ApprovalInstance): ApprovalInstance {
       if (l.escalationDueAt) level.escalationDueAt = new Date(l.escalationDueAt);
       if (l.delegatedUntil) level.delegatedUntil = new Date(l.delegatedUntil);
       if (l.reminderDueAt) level.reminderDueAt = new Date(l.reminderDueAt);
+      if (l.openedAt) level.openedAt = new Date(l.openedAt);
       return level;
     }),
   };

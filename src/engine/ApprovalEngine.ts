@@ -3975,6 +3975,7 @@ export class ApprovalEngine {
     };
 
     if (opts.open) {
+      level.openedAt = opts.now;
       level.escalationDueAt = this.levelEscalationDue(opts.now, cfg, opts.firstRung);
       this.scheduleReminder(level, opts.now);
     }
@@ -4036,6 +4037,10 @@ export class ApprovalEngine {
     level: ApprovalLevelInstance,
     fallback: Date,
   ): Date {
+    // Recorded on the level since 3.1.0. The audit scan below remains for
+    // instances submitted before that and still in flight.
+    if (level.openedAt) return new Date(level.openedAt);
+
     for (let i = instance.auditLog.length - 1; i >= 0; i--) {
       const entry = instance.auditLog[i];
       if (!entry) continue;
@@ -4187,6 +4192,7 @@ export class ApprovalEngine {
           now,
         );
       }
+      lvl.openedAt = now;
       lvl.escalationDueAt = this.levelEscalationDue(now, lvl, firstRung);
       lvl.escalationStep = 0;
       this.scheduleReminder(lvl, now);

@@ -228,3 +228,118 @@ describe('escalation ladders', () => {
     expect(escalations.map((e) => e.delegateTo)).toEqual(['director', 'vp']);
   });
 });
+
+describe('rungs are measured from when each branch opened', () => {
+  // Regression guard: the open time was inferred from the audit trail, and a
+  // level_advanced entry carries only the group's lowest level number. An upper
+  // branch of a parallel group therefore found no entry, fell back to "now",
+  // and measured its rungs from the previous escalation — so two identically
+  // configured branches of one group escalated on different schedules.
+  const DAY_MS = 86_400_000;
+
+  it('gives both branches of a group the same next-rung deadline', async () => {
+    const clock = new TestClock();
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({ adapter, clock });
+    const scheduler = new EscalationScheduler({
+      adapter,
+      tenantId: 'default',
+      clock,
+      onEscalate: async (id, levelNumber) => {
+        await (
+          engine as unknown as {
+            escalateInternal: (i: string, b: string, c: undefined, l?: number) => Promise<unknown>;
+          }
+        ).escalateInternal(id, 'system', undefined, levelNumber);
+      },
+    });
+
+    await engine.defineTemplate({
+      name: 'PAR',
+      documentType: 'contract',
+      levels: [
+        {
+          level: 1,
+          name: 'Finance',
+          group: 'rev',
+          approvers: [{ type: 'user', userId: 'fin' }],
+          mode: 'any',
+        },
+        {
+          level: 2,
+          name: 'Legal',
+          group: 'rev',
+          approvers: [{ type: 'user', userId: 'legal' }],
+          mode: 'any',
+        },
+      ],
+      escalationSteps: [
+        { afterDays: 2, escalateTo: { type: 'user', userId: 'director' } },
+        { afterDays: 4, escalateTo: { type: 'user', userId: 'vp' } },
+      ],
+    });
+
+    const i = await engine.submit({
+      templateName: 'PAR',
+      documentId: 'c-1',
+      documentType: 'contract',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    const openedAt = clock.now().getTime();
+
+    clock.advanceDays(2);
+    await scheduler.tick();
+
+    const after = await engine.getInstance(i.id);
+    const daysFromOpen = (l?: { escalationDueAt?: Date }) =>
+      ((l?.escalationDueAt?.getTime() ?? 0) - openedAt) / DAY_MS;
+
+    expect(daysFromOpen(after.levels.find((l) => l.level === 1))).toBe(4);
+    expect(daysFromOpen(after.levels.find((l) => l.level === 2))).toBe(4);
+  });
+
+  it('records openedAt when a level activates', async () => {
+    const clock = new TestClock();
+    const engine = new ApprovalEngine({ adapter: new MemoryAdapter(), clock });
+    await engine.defineTemplate({
+      name: 'SEQ',
+      documentType: 'seq',
+      levels: [
+        { level: 1, name: 'One', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' },
+        { level: 2, name: 'Two', approvers: [{ type: 'user', userId: 'b' }], mode: 'any' },
+      ],
+    });
+    const i = await engine.submit({
+      templateName: 'SEQ',
+      documentId: 's-1',
+      documentType: 'seq',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    expect(i.levels[0]?.openedAt).toBeInstanceOf(Date);
+    expect(i.levels[1]?.openedAt).toBeUndefined();
+
+    clock.advanceDays(3);
+    const after = await engine.approve(i.id, { approverId: 'a' });
+    // The second level opened three days after the first, and says so.
+    expect(after.levels[1]?.openedAt?.getTime()).toBe(clock.now().getTime());
+  });
+
+  it('survives a storage round trip as a Date', async () => {
+    const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+    await engine.defineTemplate({
+      name: 'RT',
+      documentType: 'rt',
+      levels: [{ level: 1, name: 'One', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' }],
+    });
+    const i = await engine.submit({
+      templateName: 'RT',
+      documentId: 'rt-1',
+      documentType: 'rt',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    expect((await engine.getInstance(i.id)).levels[0]?.openedAt).toBeInstanceOf(Date);
+  });
+});

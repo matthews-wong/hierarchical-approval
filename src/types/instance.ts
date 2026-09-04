@@ -74,6 +74,16 @@ export interface ApprovalLevelInstance {
   escalationDueAt?: Date;
   escalationAfterDays?: number;
   escalationAfterHours?: number;
+  /**
+   * When this level started collecting decisions.
+   *
+   * Escalation rungs are measured from here. Recorded on the level rather than
+   * inferred from the audit trail, because a `level_advanced` entry carries only
+   * the group's lowest level number — so an upper branch of a parallel group had
+   * no entry to find, and its rungs were measured from the previous escalation
+   * instead.
+   */
+  openedAt?: Date;
   /** How many escalation rungs have fired on this level. */
   escalationStep?: number;
   /** When the next reminder for this level is due; cleared when the level closes. */
