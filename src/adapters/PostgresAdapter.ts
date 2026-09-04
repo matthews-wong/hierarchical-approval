@@ -153,6 +153,7 @@ export class PostgresAdapter implements IStorageAdapter {
         info_request        JSONB,
         attachments         JSONB NOT NULL DEFAULT '[]',
         comments            JSONB NOT NULL DEFAULT '[]',
+        open_levels         JSONB NOT NULL DEFAULT '[]',
         created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (tenant_id, id),
@@ -198,6 +199,7 @@ export class PostgresAdapter implements IStorageAdapter {
       ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS info_request JSONB;
       ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]';
       ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS comments JSONB NOT NULL DEFAULT '[]';
+      ALTER TABLE IF EXISTS ${this.p}_instances ADD COLUMN IF NOT EXISTS open_levels JSONB NOT NULL DEFAULT '[]';
     `);
   }
 
@@ -265,8 +267,8 @@ export class PostgresAdapter implements IStorageAdapter {
           data, metadata, levels,
           parent_instance_id, expires_at, deadline_action,
           sla_deadline_at, sla_breached_at, template_snapshot, info_request, attachments, comments,
-          created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+          open_levels, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
        ON CONFLICT (tenant_id, id) DO NOTHING`,
       [
         instance.id,
@@ -292,6 +294,7 @@ export class PostgresAdapter implements IStorageAdapter {
         instance.infoRequest ? JSON.stringify(instance.infoRequest) : null,
         JSON.stringify(instance.attachments ?? []),
         JSON.stringify(instance.comments ?? []),
+        JSON.stringify(instance.openLevels ?? []),
         instance.createdAt.toISOString(),
         instance.updatedAt.toISOString(),
       ],
@@ -320,7 +323,8 @@ export class PostgresAdapter implements IStorageAdapter {
          template_snapshot = $15,
          info_request      = $16,
          attachments       = $17,
-         comments          = $18
+         comments          = $18,
+         open_levels       = $19
        WHERE tenant_id = $1 AND id = $2 AND version = $3
        RETURNING id`,
       [
@@ -342,6 +346,7 @@ export class PostgresAdapter implements IStorageAdapter {
         instance.infoRequest ? JSON.stringify(instance.infoRequest) : null,
         JSON.stringify(instance.attachments ?? []),
         JSON.stringify(instance.comments ?? []),
+        JSON.stringify(instance.openLevels ?? []),
       ],
     );
     if (result.rowCount === 0) throw new ApprovalConflictError(instance.id);
@@ -716,6 +721,7 @@ export class PostgresAdapter implements IStorageAdapter {
       submittedBy: row['submitted_by'] as string,
       status: row['status'] as ApprovalInstance['status'],
       currentLevel: row['current_level'] as number,
+      openLevels: (row['open_levels'] as number[] | null) ?? [],
       version: row['version'] as number,
       idempotencyKey: (row['idempotency_key'] as string | null) ?? undefined,
       data: row['data'] as Record<string, unknown>,

@@ -60,6 +60,7 @@ export function makeInstance(over: Partial<ApprovalInstance> = {}): ApprovalInst
     submittedBy: 'user-1',
     status: 'pending',
     currentLevel: 0,
+    openLevels: [],
     version: 1,
     levels: [],
     auditLog: [],

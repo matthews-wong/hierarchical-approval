@@ -7,6 +7,52 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [4.0.0] - 2026-09-04
+
+Six defects fixed across 3.x shared one root cause: `currentLevel` is a single
+number, and it cannot describe the approval frontier once a parallel group has
+several levels open at once. Each fix corrected one more reader of it. This
+release fixes the model instead.
+
+### BREAKING — the frontier is explicit
+
+- **`ApprovalInstance.openLevels: number[]`** lists every level currently
+  collecting decisions, ascending — one entry for a sequential chain, several
+  inside a parallel group, empty once the instance is terminal. It is the
+  supported way to ask what an instance is waiting on, and
+  `engine.getOpenLevels(id)` returns it without fetching the whole instance.
+
+- **`currentLevel` is now derived**, defined as the lowest open level and
+  recomputed by the engine on every write. It remains for display and for the
+  audit trail, and a terminal instance keeps its last value so the record still
+  shows where the request stopped.
+
+  **Migrating:** anything using `currentLevel` to decide who may act, what to
+  notify, or what is overdue should read `openLevels`. On a sequential template
+  the two agree, so most callers need no change.
+
+- **Custom `IStorageAdapter` implementations must round-trip `openLevels`**, as
+  they already must for `levels`. The bundled adapters do; `PostgresAdapter`
+  adds an `open_levels` column via `migrate()`.
+
+  `ApprovalInstance` now requires the field, so a hand-built instance (a test
+  fixture, say) will not compile until it supplies one.
+
+### Fixed — returning past a rejected group
+
+- **`returnTo: 'previous'` from inside a parallel group went back into that same
+  group.** It stepped back from `currentLevel`, which — now that the frontier
+  moves as branches close — could be another branch of the group being rejected.
+  It now steps back past the whole group, which is what "return to the previous
+  step" means when the step has several branches.
+
+### Internal
+
+- Every instance write goes through one path that recomputes the frontier first,
+  so a future operation cannot persist levels without updating `openLevels`.
+  This is the same discipline applied to level construction in 3.0.0 and to the
+  PostgreSQL column list in 1.6.0, both of which drifted for the same reason.
+
 ## [3.9.0] - 2026-09-04
 
 ### Fixed — replacing an approver on a weighted level bricked the approval

@@ -878,6 +878,27 @@ never change who can approve or when the level escalates.
 
 Requires the escalation scheduler to be running (it is by default).
 
+### Reading the approval frontier
+
+`instance.openLevels` lists every level currently collecting decisions —
+one entry for a sequential chain, several inside a parallel group, none once the
+instance is terminal:
+
+```ts
+const { openLevels, currentLevel } = await engine.getInstance(id);
+// sequential:      openLevels [2],    currentLevel 2
+// parallel group:  openLevels [2, 3], currentLevel 2
+await engine.getOpenLevels(id);   // same list, without the whole instance
+```
+
+**`currentLevel` names only the lowest open level.** That is the whole frontier
+for a sequential chain and one branch of a parallel group, so use `openLevels`
+to decide who may act, what to notify, or what is overdue. Reading `currentLevel`
+as the frontier was the root cause of six defects fixed across 3.x.
+
+Both are maintained by the engine; `currentLevel` is derived from `openLevels`
+and recomputed on every write.
+
 ### Parallel branch groups
 
 Give levels the same `group` name and they activate together, joining before

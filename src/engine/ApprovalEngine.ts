@@ -938,6 +938,7 @@ export class ApprovalEngine {
       submittedBy: opts.submittedBy,
       status: 'pending',
       currentLevel: allLevelCfgs[0]?.level ?? 1,
+      openLevels: levels.filter((l) => l.status === 'pending').map((l) => l.level),
       version: 1,
       idempotencyKey,
       levels,
@@ -1081,7 +1082,7 @@ export class ApprovalEngine {
         const nextLevel = nextGroup[0] ?? null;
 
         if (siblingsStillOpen) {
-          await this.opts.adapter.updateInstance(instance, instance.version);
+          await this.persistInstance(instance, instance.version);
           await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
           await this.runExternalAudit(instance, auditEntry);
           this.opts.metricsAdapter?.increment('approval.approved', {
@@ -1125,7 +1126,7 @@ export class ApprovalEngine {
           // rather than record an approval nobody gave.
           this.assertFullyApproved(instance);
           instance.status = 'approved';
-          await this.opts.adapter.updateInstance(instance, instance.version);
+          await this.persistInstance(instance, instance.version);
           await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
           await this.runExternalAudit(instance, auditEntry);
           this.logger.info('approve: instance fully approved', {
@@ -1170,7 +1171,7 @@ export class ApprovalEngine {
 
         await this.activateGroup(instance, nextGroup, now);
 
-        await this.opts.adapter.updateInstance(instance, instance.version);
+        await this.persistInstance(instance, instance.version);
         await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
         await this.runExternalAudit(instance, auditEntry);
         this.opts.metricsAdapter?.increment('approval.approved', {
@@ -1215,7 +1216,7 @@ export class ApprovalEngine {
           instance,
         );
       } else {
-        await this.opts.adapter.updateInstance(instance, instance.version);
+        await this.persistInstance(instance, instance.version);
         await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
         await this.runExternalAudit(instance, auditEntry);
         this.opts.metricsAdapter?.increment('approval.approved', { tenantId: this.tenantId });
@@ -1315,7 +1316,7 @@ export class ApprovalEngine {
         level.status = 'rejected';
 
         if (opts.returnTo === 'previous') {
-          const prevLevel = this.findPreviousLevel(instance);
+          const prevLevel = this.findPreviousLevel(instance, level);
           if (!prevLevel) {
             throw new ApprovalValidationError(
               `Cannot return to previous level: instance "${instanceId}" is already at the first level (${level.level}). Remove returnTo: 'previous' or use returnTo: 'originator' to fully reject.`,
@@ -1332,7 +1333,7 @@ export class ApprovalEngine {
           prevLevel.rejectedBy = [];
           prevLevel.openedAt = now;
           instance.currentLevel = prevLevel.level;
-          await this.opts.adapter.updateInstance(instance, instance.version);
+          await this.persistInstance(instance, instance.version);
           await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
           await this.runExternalAudit(instance, auditEntry);
           const p = {
@@ -1361,7 +1362,7 @@ export class ApprovalEngine {
         }
 
         instance.status = 'rejected';
-        await this.opts.adapter.updateInstance(instance, instance.version);
+        await this.persistInstance(instance, instance.version);
         await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
         await this.runExternalAudit(instance, auditEntry);
         this.opts.metricsAdapter?.increment('approval.rejected', { tenantId: this.tenantId });
@@ -1389,7 +1390,7 @@ export class ApprovalEngine {
           instance,
         );
       } else {
-        await this.opts.adapter.updateInstance(instance, instance.version);
+        await this.persistInstance(instance, instance.version);
         await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
         await this.runExternalAudit(instance, auditEntry);
       }
@@ -1456,7 +1457,7 @@ export class ApprovalEngine {
       instance.auditLog.push(auditEntry);
       instance.updatedAt = now;
 
-      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.persistInstance(instance, instance.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
       const p = {
@@ -1561,7 +1562,7 @@ export class ApprovalEngine {
       instance.auditLog.push(auditEntry);
       instance.updatedAt = now;
 
-      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.persistInstance(instance, instance.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
       this.opts.metricsAdapter?.increment('approval.reassigned', { tenantId: this.tenantId });
@@ -1638,7 +1639,7 @@ export class ApprovalEngine {
       };
       instance.auditLog.push(auditEntry);
 
-      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.persistInstance(instance, instance.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
       this.opts.metricsAdapter?.increment('approval.cancelled', { tenantId: this.tenantId });
@@ -1774,7 +1775,7 @@ export class ApprovalEngine {
       };
       instance.auditLog.push(auditEntry);
 
-      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.persistInstance(instance, instance.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
       this.opts.metricsAdapter?.increment('approval.data_updated', { tenantId: this.tenantId });
@@ -1946,7 +1947,7 @@ export class ApprovalEngine {
       };
       instance.auditLog.push(auditEntry);
 
-      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.persistInstance(instance, instance.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
       this.opts.metricsAdapter?.increment('approval.info_requested', { tenantId: this.tenantId });
@@ -2041,7 +2042,7 @@ export class ApprovalEngine {
       };
       instance.auditLog.push(auditEntry);
 
-      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.persistInstance(instance, instance.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
       this.opts.metricsAdapter?.increment('approval.info_provided', { tenantId: this.tenantId });
@@ -2167,7 +2168,7 @@ export class ApprovalEngine {
       };
       instance.auditLog.push(auditEntry);
 
-      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.persistInstance(instance, instance.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
       this.opts.metricsAdapter?.increment('approval.attachment_added', {
@@ -2261,7 +2262,7 @@ export class ApprovalEngine {
       };
       instance.auditLog.push(auditEntry);
 
-      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.persistInstance(instance, instance.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
       this.opts.metricsAdapter?.increment('approval.attachment_removed', {
@@ -2353,7 +2354,7 @@ export class ApprovalEngine {
     instance.auditLog.push(auditEntry);
     instance.updatedAt = now;
 
-    await this.opts.adapter.updateInstance(instance, instance.version);
+    await this.persistInstance(instance, instance.version);
     await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
     await this.runExternalAudit(instance, auditEntry);
 
@@ -2508,6 +2509,7 @@ export class ApprovalEngine {
       submittedBy: opts.resubmittedBy,
       status: 'pending',
       currentLevel: allLevelCfgs[0]?.level ?? 1,
+      openLevels: levels.filter((l) => l.status === 'pending').map((l) => l.level),
       version: 1,
       parentInstanceId: instanceId,
       levels,
@@ -2922,7 +2924,7 @@ export class ApprovalEngine {
       };
       instance.auditLog.push(auditEntry);
 
-      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.persistInstance(instance, instance.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
       this.opts.metricsAdapter?.increment('approval.overridden', { tenantId: this.tenantId });
@@ -3151,6 +3153,21 @@ export class ApprovalEngine {
   async getHistory(instanceId: string): Promise<AuditEntry[]> {
     const instance = await this.requireInstance(instanceId);
     return instance.auditLog;
+  }
+
+  /**
+   * The levels currently collecting decisions, ascending.
+   *
+   * The supported way to ask what an instance is waiting on.
+   * {@link ApprovalInstance.currentLevel} names only the lowest of these, which
+   * is the whole frontier for a sequential chain and one branch of it inside a
+   * parallel group.
+   *
+   * Empty once the instance is terminal.
+   */
+  async getOpenLevels(instanceId: string): Promise<number[]> {
+    const instance = await this.requireInstance(instanceId);
+    return [...instance.openLevels];
   }
 
   async getCurrentApprovers(instanceId: string): Promise<string[]> {
@@ -3761,7 +3778,7 @@ export class ApprovalEngine {
       instance.auditLog.push(auditEntry);
       instance.updatedAt = now;
 
-      await this.opts.adapter.updateInstance(instance, instance.version);
+      await this.persistInstance(instance, instance.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
       await this.runExternalAudit(instance, auditEntry);
       this.opts.metricsAdapter?.increment('approval.escalated', { tenantId: this.tenantId });
@@ -3805,7 +3822,7 @@ export class ApprovalEngine {
         };
         instance.auditLog.push(auditEntry);
 
-        await this.opts.adapter.updateInstance(instance, instance.version);
+        await this.persistInstance(instance, instance.version);
         await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
         await this.runExternalAudit(instance, auditEntry);
         this.opts.metricsAdapter?.increment('approval.expired', { tenantId: this.tenantId });
@@ -3849,7 +3866,7 @@ export class ApprovalEngine {
         instance.slaBreachedAt = now;
         instance.updatedAt = now;
 
-        await this.opts.adapter.updateInstance(instance, instance.version);
+        await this.persistInstance(instance, instance.version);
         this.opts.metricsAdapter?.increment('approval.sla_breached', { tenantId: this.tenantId });
 
         this.logger.warn('markSlaBreached: SLA breached', { tenantId: this.tenantId, instanceId });
@@ -3900,7 +3917,7 @@ export class ApprovalEngine {
         const now = this.clock.now();
         instance.updatedAt = now;
 
-        await this.opts.adapter.updateInstance(instance, instance.version);
+        await this.persistInstance(instance, instance.version);
 
         this.logger.info('revertDelegation: delegation expired and reverted', {
           tenantId: this.tenantId,
@@ -4053,6 +4070,50 @@ export class ApprovalEngine {
     for (const [original, standIn] of substitutions) {
       this.inheritWeight(level, original, standIn);
     }
+  }
+
+  /**
+   * Recompute the approval frontier from the levels themselves.
+   *
+   * `openLevels` is every level currently collecting decisions, and
+   * `currentLevel` is the lowest of them. Deriving both from one place means
+   * they cannot drift out of step with the levels — the failure behind six
+   * defects fixed across 3.x, each of which read `currentLevel` as though it
+   * named the whole frontier.
+   *
+   * A terminal instance has no open levels; `currentLevel` keeps its last value
+   * so the audit trail and any UI still show where it finished.
+   */
+  private syncFrontier(instance: ApprovalInstance): void {
+    // A terminal instance collects no decisions, whatever its levels still say.
+    // Cancellation and expiry deliberately leave level statuses alone so the
+    // record shows where the request stood when it stopped, but nobody can act
+    // on them any more, so the frontier is empty.
+    if (TERMINAL_STATUSES.has(instance.status)) {
+      instance.openLevels = [];
+      return;
+    }
+    const open = instance.levels
+      .filter((l) => l.status === 'pending')
+      .map((l) => l.level)
+      .sort((a, b) => a - b);
+    instance.openLevels = open;
+    if (open.length > 0) instance.currentLevel = open[0] as number;
+  }
+
+  /**
+   * The single write path for an instance.
+   *
+   * Every mutation goes through here so the frontier is recomputed before the
+   * instance is stored. Writing through the adapter directly would let a new
+   * operation persist levels without updating `openLevels`.
+   */
+  private async persistInstance(
+    instance: ApprovalInstance,
+    expectedVersion: number,
+  ): Promise<void> {
+    this.syncFrontier(instance);
+    await this.opts.adapter.updateInstance(instance, expectedVersion);
   }
 
   /** Level deadline from whichever of days/hours the template configured. */
@@ -4310,7 +4371,7 @@ export class ApprovalEngine {
         const cap = level.maxReminders ?? DEFAULT_MAX_REMINDERS;
         if (sentSoFar >= cap) {
           level.reminderDueAt = undefined;
-          await this.opts.adapter.updateInstance(instance, instance.version);
+          await this.persistInstance(instance, instance.version);
           return instance;
         }
 
@@ -4338,7 +4399,7 @@ export class ApprovalEngine {
         instance.auditLog.push(auditEntry);
         instance.updatedAt = now;
 
-        await this.opts.adapter.updateInstance(instance, instance.version);
+        await this.persistInstance(instance, instance.version);
         await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
         await this.runExternalAudit(instance, auditEntry);
         this.opts.metricsAdapter?.increment('approval.reminded', { tenantId: this.tenantId });
@@ -4413,7 +4474,7 @@ export class ApprovalEngine {
         if (!lvl || lvl.childInstanceId) return parent;
         lvl.childInstanceId = child.id;
         parent.updatedAt = this.clock.now();
-        await this.opts.adapter.updateInstance(parent, parent.version);
+        await this.persistInstance(parent, parent.version);
         return parent;
       });
 
@@ -4532,7 +4593,7 @@ export class ApprovalEngine {
         }
       }
 
-      await this.opts.adapter.updateInstance(parent, parent.version);
+      await this.persistInstance(parent, parent.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, parentId, auditEntry);
       await this.runExternalAudit(parent, auditEntry);
       advanced = parent;
@@ -4581,7 +4642,7 @@ export class ApprovalEngine {
       };
       parent.auditLog.push(auditEntry);
 
-      await this.opts.adapter.updateInstance(parent, parent.version);
+      await this.persistInstance(parent, parent.version);
       await this.opts.adapter.appendAuditEntry(this.tenantId, parentId, auditEntry);
       await this.runExternalAudit(parent, auditEntry);
       rejected = parent;
@@ -4752,11 +4813,23 @@ export class ApprovalEngine {
     );
   }
 
-  private findPreviousLevel(instance: ApprovalInstance): ApprovalLevelInstance | null {
+  /**
+   * The level to send an instance back to, given the level being rejected.
+   *
+   * Sends the chain back past the **whole group** the rejection came from, not
+   * merely one level. Returning into a sibling branch of the same group would
+   * put the instance back inside the step it was just rejected at.
+   */
+  private findPreviousLevel(
+    instance: ApprovalInstance,
+    from?: ApprovalLevelInstance,
+  ): ApprovalLevelInstance | null {
+    const boundary = from
+      ? Math.min(...this.groupMembers(instance, from).map((l) => l.level))
+      : instance.currentLevel;
     return (
-      [...instance.levels]
-        .filter((l) => l.level < instance.currentLevel)
-        .sort((a, b) => b.level - a.level)[0] ?? null
+      [...instance.levels].filter((l) => l.level < boundary).sort((a, b) => b.level - a.level)[0] ??
+      null
     );
   }
 

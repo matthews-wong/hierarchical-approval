@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { ApprovalEngine } from '../../src/engine/ApprovalEngine.js';
 import { MemoryAdapter } from '../../src/adapters/MemoryAdapter.js';
 import type { OutOfOfficeProvider } from '../../src/engine/LevelResolver.js';

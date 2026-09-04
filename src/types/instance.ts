@@ -178,7 +178,24 @@ export interface ApprovalInstance {
   documentType: string;
   submittedBy: string;
   status: ApprovalStatus;
+  /**
+   * The lowest open level. **Derived** from {@link openLevels}; the engine
+   * recomputes it on every write.
+   *
+   * It names one level, which is enough for a sequential chain and not enough
+   * for a parallel group — where several levels are open at once and this
+   * identifies only the lowest. Use {@link openLevels} to decide who may act,
+   * what to notify, or what is overdue. Treating this as "the level being
+   * decided" was the root cause of six separate defects fixed across 3.x.
+   */
   currentLevel: number;
+  /**
+   * Every level currently collecting decisions, ascending.
+   *
+   * The authoritative approval frontier. One entry for a sequential chain,
+   * several inside a parallel group, and empty once the instance is terminal.
+   */
+  openLevels: number[];
   version: number;
   idempotencyKey?: string;
   levels: ApprovalLevelInstance[];
