@@ -7,6 +7,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [3.5.0] - 2026-09-04
+
+### Fixed — an approval could complete with a branch rejected and another never decided
+
+**The most serious defect found in this audit. Upgrade if you use
+`returnTo: 'previous'` with parallel branch groups.**
+
+Rejecting one branch of a parallel group with `returnTo: 'previous'` sent the
+chain back a level but left the rest of the group as it was — the rejected
+branch still `rejected`, its sibling still `pending`. Neither was `waiting`, and
+the engine treats "no waiting level" as "nothing left to do". So when the
+earlier level was approved again, the instance was marked **`approved`**:
+
+- with one branch **rejected**, and
+- with another branch **nobody had ever decided**.
+
+A document could therefore reach fully-approved without Finance ever approving
+it and over Legal's explicit rejection.
+
+Two independent fixes, because one of them should never have been needed:
+
+- **Returning to a previous level now resets every level above it** to a clean
+  `waiting` state, clearing decisions, approvers and deadlines so the chain
+  replays properly. A branch that had already approved must decide again — its
+  approval was for a version that was sent back.
+
+- **Completion now requires that every level actually be `approved` or
+  `skipped`.** "No next group" alone is not enough. If the two ever disagree the
+  engine throws `INCOMPLETE_CHAIN` naming the offending levels, rather than
+  recording an approval nobody gave. This is a tripwire that should be
+  unreachable — it exists because the state it catches was reachable.
+
+  `override()` is unaffected: bypassing the remaining levels is exactly what an
+  administrative override is for.
+
 ## [3.4.0] - 2026-09-04
 
 ### Fixed — notifications went to the wrong people

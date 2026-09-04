@@ -1107,6 +1107,11 @@ export class ApprovalEngine {
         }
 
         if (!nextLevel) {
+          // "Nothing waiting" is not the same as "everything approved". A level
+          // left in a stale state is neither, and completing on that alone once
+          // marked instances approved with a branch still undecided. Fail loudly
+          // rather than record an approval nobody gave.
+          this.assertFullyApproved(instance);
           instance.status = 'approved';
           await this.opts.adapter.updateInstance(instance, instance.version);
           await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
@@ -1304,9 +1309,16 @@ export class ApprovalEngine {
               `Cannot return to previous level: instance "${instanceId}" is already at the first level (${level.level}). Remove returnTo: 'previous' or use returnTo: 'originator' to fully reject.`,
             );
           }
+          // Reset every level after the one we return to, so the chain replays
+          // cleanly. Leaving them as they were stranded the rejected branch and
+          // any still-open sibling of its group: neither was `waiting`, so
+          // findNextGroup saw nothing left to do and completed the instance —
+          // approved, with one branch rejected and another never decided.
+          this.resetLevelsAfter(instance, prevLevel.level, now);
           prevLevel.status = 'pending';
           prevLevel.approvedBy = [];
           prevLevel.rejectedBy = [];
+          prevLevel.openedAt = now;
           instance.currentLevel = prevLevel.level;
           await this.opts.adapter.updateInstance(instance, instance.version);
           await this.opts.adapter.appendAuditEntry(this.tenantId, instanceId, auditEntry);
@@ -4449,6 +4461,7 @@ export class ApprovalEngine {
       if (!siblingsOpen) {
         const nextGroup = this.findNextGroup(parent);
         if (nextGroup.length === 0) {
+          this.assertFullyApproved(parent);
           parent.status = 'approved';
         } else {
           await this.activateGroup(parent, nextGroup, now);
@@ -4613,6 +4626,60 @@ export class ApprovalEngine {
       return;
     }
     await this.startSubWorkflows(instance);
+  }
+
+  /**
+   * Return every level above `levelNumber` to a clean `waiting` state.
+   *
+   * Used when a rejection sends the chain back: a level that keeps a stale
+   * `approved`/`rejected` status is neither open nor replayable, and the engine
+   * treats "nothing waiting" as "nothing left to do".
+   */
+  private resetLevelsAfter(instance: ApprovalInstance, levelNumber: number, now: Date): void {
+    for (const level of instance.levels) {
+      if (level.level <= levelNumber) continue;
+      level.status = 'waiting';
+      level.approvedBy = [];
+      level.rejectedBy = [];
+      level.approverIds = [];
+      level.escalationDueAt = undefined;
+      level.reminderDueAt = undefined;
+      level.remindersSent = 0;
+      level.escalationStep = 0;
+      level.openedAt = undefined;
+      void now;
+    }
+  }
+
+  /**
+   * Whether an instance has genuinely finished approving.
+   *
+   * "No next group" is not the same as "every level approved": a level left in
+   * a stale state is neither open nor waiting, and treating that as completion
+   * marked instances approved with a branch still undecided. Completion now
+   * requires that every level actually reached a positive terminal state.
+   */
+  private isFullyApproved(instance: ApprovalInstance): boolean {
+    return instance.levels.every((l) => l.status === 'approved' || l.status === 'skipped');
+  }
+
+  /**
+   * Refuse to complete an instance that has not actually been approved throughout.
+   *
+   * A tripwire, not a routine check: it should be unreachable, and it exists
+   * because the state it catches was reachable and silently produced an
+   * approved document that one branch had rejected and another had never seen.
+   */
+  private assertFullyApproved(instance: ApprovalInstance): void {
+    if (this.isFullyApproved(instance)) return;
+    const unfinished = instance.levels
+      .filter((l) => l.status !== 'approved' && l.status !== 'skipped')
+      .map((l) => `${l.level} ("${l.name}": ${l.status})`)
+      .join(', ');
+    throw new ApprovalError(
+      `Refusing to complete instance "${instance.id}": no level is waiting, but these are not approved: ${unfinished}. This indicates an inconsistent chain rather than a finished approval.`,
+      'INCOMPLETE_CHAIN',
+    );
   }
 
   private findNextLevel(instance: ApprovalInstance): ApprovalLevelInstance | null {
