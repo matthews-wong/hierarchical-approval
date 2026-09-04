@@ -396,6 +396,29 @@ describe('IAuthorizationPolicy', () => {
     const instance = await engine.submit({ templateName: 'enterprise-test', documentId: 'doc-1', documentType: 'invoice', submittedBy: 'user1', data: {} });
     await expect(engine.approve(instance.id, { approverId: 'evil' })).rejects.toThrow(ApprovalForbiddenError);
   });
+
+  it('an unexpected throw from authorize is logged and still propagates, unwrapped', async () => {
+    const authorizationPolicy: IAuthorizationPolicy = {
+      authorize: () => {
+        throw new Error('policy backend unreachable');
+      },
+    };
+    const errors: unknown[] = [];
+    const logger = {
+      info: () => {},
+      warn: () => {},
+      error: (...args: unknown[]) => errors.push(args),
+      fatal: () => {},
+      debug: () => {},
+    };
+    const { engine } = ApprovalTestKit.create({ authorizationPolicy, logger });
+    await engine.defineTemplate(basicTemplate);
+    const instance = await engine.submit({ templateName: 'enterprise-test', documentId: 'doc-1', documentType: 'invoice', submittedBy: 'user1', data: {} });
+    await expect(engine.approve(instance.id, { approverId: 'mgr1' })).rejects.toThrow(
+      'policy backend unreachable',
+    );
+    expect(errors[0]?.[0]).toMatch(/authorizationPolicy\.authorize threw unexpectedly/);
+  });
 });
 
 // ─── IOperationMiddleware ─────────────────────────────────────────────────────

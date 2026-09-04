@@ -344,6 +344,15 @@ describe('PostgresAdapter — round-trip mapping', () => {
     pool.queueResult({ rows: [] });
     expect(await adapter.getIdempotentInstance('tenant-1', 'missing-key')).toBeNull();
   });
+
+  it('getIdempotentInstance maps the matching row to an instance', async () => {
+    const instance = makeInstance({ idempotencyKey: 'key-1' });
+    const { pool, adapter } = freshAdapter();
+    pool.queueResult({ rows: [instanceToRow(instance)] });
+    const found = await adapter.getIdempotentInstance(instance.tenantId, 'key-1');
+    expect(found?.id).toBe(instance.id);
+    expect(found?.idempotencyKey).toBe('key-1');
+  });
 });
 
 describe('PostgresAdapter — updateInstance', () => {

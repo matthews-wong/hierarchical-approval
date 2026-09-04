@@ -109,4 +109,23 @@ describe('EventBus', () => {
 
     expect(() => bus.emit('approval:submitted', submittedEvent())).not.toThrow();
   });
+
+  it('tolerates a once listener that unregisters itself before its own cleanup runs', () => {
+    const bus = new EventBus();
+    const listener = vi.fn(() => {
+      // Removes its own bookkeeping first; the wrapper's own once-cleanup
+      // then finds nothing left to forget for this event.
+      bus.off('approval:submitted', listener);
+    });
+    bus.once('approval:submitted', listener);
+
+    expect(() => bus.emit('approval:submitted', submittedEvent())).not.toThrow();
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    // A later listener on the same event still works normally.
+    const next = vi.fn();
+    bus.on('approval:submitted', next);
+    bus.emit('approval:submitted', submittedEvent());
+    expect(next).toHaveBeenCalledTimes(1);
+  });
 });

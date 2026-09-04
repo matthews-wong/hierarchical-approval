@@ -335,4 +335,32 @@ describe('EscalationScheduler — error paths', () => {
     );
     expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1', 1);
   });
+
+  it('logs a throwing onRemind and still processes the instance', async () => {
+    const onRemind = vi.fn().mockRejectedValue(new Error('remind boom'));
+    const { scheduler, adapter, handlers, calls } = makeScheduler({ onRemind });
+    adapter.getOverdueInstances.mockResolvedValue([
+      makeInstance({
+        levels: [
+          {
+            level: 1,
+            name: 'L1',
+            status: 'pending',
+            approvers: [{ type: 'user', userId: 'bob' }],
+            reminderDueAt: PAST,
+          },
+        ],
+      }),
+    ]);
+
+    await expect(scheduler.tick()).resolves.toBeUndefined();
+
+    expect(onRemind).toHaveBeenCalledWith('inst-1', 1);
+    expect(calls.error).toHaveBeenCalledWith(
+      expect.stringContaining('failed to send reminder'),
+      expect.any(Error),
+      expect.objectContaining({ tenantId: 't', instanceId: 'inst-1', levelNumber: 1 }),
+    );
+    expect(handlers.onEscalate).not.toHaveBeenCalled();
+  });
 });
