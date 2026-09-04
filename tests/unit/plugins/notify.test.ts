@@ -251,6 +251,46 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect(transport).toHaveBeenCalledTimes(1);
   });
 
+  it('a failed delivery whose store.update() also fails is logged, and drain still reports failure', async () => {
+    const logger = spyLogger();
+    const clock = new ManualClock(0);
+    const record: OutboxRecord = {
+      id: 'rec-2',
+      partitionKey: 'tenant-1:inst-1',
+      tenantId: 'tenant-1',
+      event: makeEvent(),
+      status: 'pending',
+      attempts: 0,
+      nextAttemptAt: 0,
+      enqueuedAt: 0,
+    };
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [record],
+      update: async () => {
+        throw new Error('update fail');
+      },
+      remove: async () => {},
+      pending: async () => [],
+      deadLettered: async () => [],
+    };
+    const adapter = new OutboxNotificationAdapter({
+      transport: () => {
+        throw new Error('transport fail');
+      },
+      store,
+      logger,
+      clock,
+      maxAttempts: 3,
+    });
+    expect(await adapter.drain()).toBe(0);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('failed to persist record state'),
+      expect.any(Error),
+      expect.objectContaining({ id: 'rec-2' }),
+    );
+  });
+
   it('drain on an empty outbox returns 0 and does not throw', async () => {
     const adapter = new OutboxNotificationAdapter({ transport: () => {}, clock: new ManualClock(0) });
     expect(await adapter.drain()).toBe(0);
@@ -307,6 +347,37 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect((await adapter.deadLettered()).length).toBe(1);
   });
 
+  it('delivered but store.remove() fails is logged, and drain still reports success', async () => {
+    const logger = spyLogger();
+    const record: OutboxRecord = {
+      id: 'rec-1',
+      partitionKey: 'tenant-1:inst-1',
+      tenantId: 'tenant-1',
+      event: makeEvent(),
+      status: 'pending',
+      attempts: 0,
+      nextAttemptAt: 0,
+      enqueuedAt: 0,
+    };
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [record],
+      update: async () => {},
+      remove: async () => {
+        throw new Error('remove fail');
+      },
+      pending: async () => [],
+      deadLettered: async () => [],
+    };
+    const adapter = new OutboxNotificationAdapter({ transport: () => {}, store, logger, clock: new ManualClock(0) });
+    expect(await adapter.drain()).toBe(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('delivered but failed to remove record'),
+      expect.any(Error),
+      expect.objectContaining({ id: 'rec-1' }),
+    );
+  });
+
   it('store read error during drain is logged, not thrown', async () => {
     const logger = spyLogger();
     const store: IOutboxStore = {
@@ -338,6 +409,23 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     };
     const adapter = new OutboxNotificationAdapter({ transport: () => {}, store, logger });
     expect(await adapter.pending()).toEqual([]);
+    expect(logger.error).toHaveBeenCalled();
+  });
+
+  it('deadLettered() read error is logged and returns []', async () => {
+    const logger = spyLogger();
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [],
+      update: async () => {},
+      remove: async () => {},
+      pending: async () => [],
+      deadLettered: async () => {
+        throw new Error('dead-lettered fail');
+      },
+    };
+    const adapter = new OutboxNotificationAdapter({ transport: () => {}, store, logger });
+    expect(await adapter.deadLettered()).toEqual([]);
     expect(logger.error).toHaveBeenCalled();
   });
 });
@@ -501,6 +589,25 @@ describe('TemplatedNotificationAdapter', () => {
       }),
     );
     expect(sent[0]!.body).toBe('2026-01-02T03:04:05.000Z|a, b');
+  });
+
+  it('a circular object that cannot be JSON.stringify-ed falls back to the placeholder token, never throws', async () => {
+    const sent: { body: string }[] = [];
+    const adapter = new TemplatedNotificationAdapter({
+      send: (m) => {
+        sent.push(m);
+      },
+      unknownPlaceholderToken: '[unserializable]',
+      templates: { 'approval:approved': { subject: '', body: '{circular}' } },
+    });
+    const circular: Record<string, unknown> = { self: undefined };
+    circular.self = circular;
+    await adapter.notify(
+      makeEvent({
+        payload: { ...makeEvent().payload, circular } as unknown as NotificationEvent['payload'],
+      }),
+    );
+    expect(sent[0]!.body).toBe('[unserializable]');
   });
 
   it('missing template + no fallback => skip (no send, no throw)', async () => {

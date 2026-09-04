@@ -250,6 +250,14 @@ describe('PrometheusMetricsAdapter', () => {
     expect(order).toEqual([10, 50, 100]);
   });
 
+  it('falls back to default buckets when every configured bucket is invalid', () => {
+    const m = new PrometheusMetricsAdapter({ buckets: [-5, NaN, Infinity] });
+    m.timing('approval.operation_duration_ms', 1000, { operation: 'x' });
+    const out = m.scrape();
+    const bucketLines = [...out.matchAll(/le="(\d+)"/g)].map((mm) => Number(mm[1]));
+    expect(bucketLines).toEqual(DEFAULT_TIMING_BUCKETS_MS);
+  });
+
   it('applies a namespace prefix', () => {
     const m = new PrometheusMetricsAdapter({ namespace: 'myapp' });
     m.increment('approval.submitted');
@@ -267,6 +275,17 @@ describe('PrometheusMetricsAdapter', () => {
     m.timing('approval.operation_duration_ms', NaN, { operation: 'x' });
     expect(m.scrape()).toBe('');
     expect(logger.warn).toHaveBeenCalledOnce();
+  });
+
+  it('groups multiple series for the same metric under a single HELP/TYPE block', () => {
+    const m = new PrometheusMetricsAdapter();
+    m.increment('approval.submitted', { tenantId: 'a' });
+    m.increment('approval.submitted', { tenantId: 'b' });
+    const out = m.scrape();
+    expect(out.match(/# HELP approval_submitted /g)).toHaveLength(1);
+    expect(out.match(/# TYPE approval_submitted /g)).toHaveLength(1);
+    expect(out).toContain('approval_submitted{tenantId="a"} 1');
+    expect(out).toContain('approval_submitted{tenantId="b"} 1');
   });
 
   it('reset clears all metrics', () => {
