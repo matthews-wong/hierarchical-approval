@@ -44,6 +44,15 @@ describe('template inheritance', () => {
     expect(await levelsOf('PO-EU')).toEqual(['1:Manager', '2:Finance']);
   });
 
+  it('inherits the whole chain when the child omits levels entirely', async () => {
+    await engine.defineTemplate({
+      name: 'PO-EU',
+      extends: 'PO-base',
+      documentType: 'purchase_order',
+    } as never);
+    expect(await levelsOf('PO-EU')).toEqual(['1:Manager', '2:Finance']);
+  });
+
   it('inherits SLA, override flag and conditions', async () => {
     await engine.defineTemplate({
       name: 'PO-EU',
