@@ -2436,33 +2436,36 @@ export class ApprovalEngine {
     const now = this.clock.now();
     const newInstanceId = this.generateId('inst');
 
-    const levels: ApprovalLevelInstance[] = allLevelCfgs.map((cfg, idx) => ({
-      level: cfg.level,
-      name: cfg.name,
-      mode: cfg.mode,
-      approverConfigs: cfg.approvers,
-      approverIds: [],
-      approvedBy: [],
-      rejectedBy: [],
-      status: idx === 0 ? 'pending' : 'waiting',
-      minApprovals: cfg.minApprovals,
-      threshold: cfg.threshold,
-      weights: cfg.weights,
-      escalationAfterDays: cfg.escalationAfterDays,
-      escalationDueAt:
-        idx === 0 && cfg.escalationAfterDays
-          ? this.deadlineFrom(now, cfg.escalationAfterDays)
-          : undefined,
-    }));
-
+    // Built exactly as submit() builds a chain. This was a third hand-written
+    // copy, and it opened levels by ARRAY INDEX rather than by group — so a
+    // leading parallel group came back with only its first branch open — while
+    // also dropping group, subWorkflow, hour escalation and reminders.
     const firstCfg = allLevelCfgs[0];
-    const firstLevel = levels[0];
-    if (firstCfg && firstLevel) {
-      firstLevel.approverIds = await this.resolver.resolveApprovers(
-        firstCfg.approvers,
+    const firstGroupKey = firstCfg ? ApprovalEngine.groupKeyOf(firstCfg) : null;
+    const firstRung = this.firstRungOf(template.escalationSteps);
+
+    const levels: ApprovalLevelInstance[] = allLevelCfgs.map((cfg) =>
+      this.buildLevelInstance(cfg, {
+        open: ApprovalEngine.groupKeyOf(cfg) === firstGroupKey,
+        now,
+        firstRung,
+      }),
+    );
+
+    for (const lvl of levels.filter((l) => l.status === 'pending')) {
+      // A sub-workflow level is decided by its child, so it has no approvers to
+      // resolve; asking for them would throw on an empty list.
+      if (lvl.subWorkflowTemplate) {
+        lvl.approverIds = [];
+        continue;
+      }
+      lvl.approverIds = await this.resolver.resolveApprovers(
+        lvl.approverConfigs,
         opts.resubmittedBy,
         mergedData,
         this.opts.orgProvider,
+        this.opts.outOfOfficeProvider,
+        now,
       );
     }
 

@@ -33,11 +33,33 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Audit (block on high/critical CVEs)
-        # Was `|| true`, which made this gate decorative. Scoping to runtime
-        # deps removes the false positives that motivated that instead, so a real
-        # advisory in a shipped dependency now fails the build.
-        run: npm audit --audit-level=high --omit=dev
+      - name: Audit production dependencies (block on high/critical CVEs)
+        # Was `npm run lint || true`-style decorative once; scoping to runtime deps
+        # removed the false positives that motivated that, so a real advisory in a
+        # shipped dependency fails the build.
+        #
+        # npm audit exits non-zero both for "found an advisory" and for "could not
+        # reach the advisory endpoint", and a v3.1.0 release was blocked by the
+        # latter. Retry the transient case only; a real advisory fails on the
+        # first attempt, and an endpoint that stays down still fails the build
+        # rather than passing silently.
+        run: |
+          for attempt in 1 2 3; do
+            if out=$(npm audit --audit-level=high --omit=dev 2>&1); then
+              echo "$out"
+              exit 0
+            fi
+            if printf '%s' "$out" | grep -qiE 'audit endpoint returned an error|network timeout|ENOTFOUND|ECONNRESET|EAI_AGAIN|ETIMEDOUT'; then
+              echo "::warning::npm audit endpoint unreachable (attempt $attempt/3); retrying"
+              sleep $((attempt * 10))
+              continue
+            fi
+            echo "$out"
+            echo "::error::npm audit reported a high or critical advisory in a runtime dependency"
+            exit 1
+          done
+          echo "::error::npm audit endpoint unreachable after 3 attempts; refusing to publish unaudited"
+          exit 1
 
       - name: Build
         run: npm run build

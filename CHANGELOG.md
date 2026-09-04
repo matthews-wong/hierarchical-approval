@@ -7,6 +7,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [3.6.0] - 2026-09-04
+
+### Fixed — `resubmit()` rebuilt an incomplete chain
+
+- **A resubmitted approval could never finish.** `resubmit()` was a third
+  hand-written copy of level construction, after `submit()` and
+  `recomputeFutureChain()` (unified in 3.0.0), and the only one that decided
+  what to open by **array index** rather than by group. On a template whose
+  chain begins with a parallel group, resubmitting opened just the first branch
+  and left the rest of the group behind.
+
+  It also dropped `group`, `subWorkflow`, `escalationAfterHours` and every
+  reminder field — so a sub-workflow level came back unbound and threw
+  "No approvers resolved for this level" the moment the chain reached it,
+  leaving the approval permanently stuck.
+
+  All three paths now go through the same `buildLevelInstance()`.
+
+### Changed — the release audit gate distinguishes a flaky endpoint from a real CVE
+
+- `npm audit` exits non-zero both for "found an advisory" and for "could not
+  reach the advisory endpoint", and the v3.1.0 publish was blocked by the
+  latter. The CI and publish workflows now retry **only** the transient case,
+  with backoff.
+
+  A genuine high/critical advisory still fails on the first attempt, and an
+  endpoint that stays unreachable still fails the build — refusing to publish
+  unaudited, rather than passing silently the way an `|| true` would.
+
 ## [3.5.0] - 2026-09-04
 
 ### Fixed — an approval could complete with a branch rejected and another never decided
