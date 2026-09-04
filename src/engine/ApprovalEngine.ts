@@ -898,6 +898,7 @@ export class ApprovalEngine {
         lvl.approverIds = [];
         continue;
       }
+      const substitutions = new Map<string, string>();
       lvl.approverIds = await this.resolver.resolveApprovers(
         lvl.approverConfigs,
         opts.submittedBy,
@@ -905,7 +906,9 @@ export class ApprovalEngine {
         this.opts.orgProvider,
         this.opts.outOfOfficeProvider,
         now,
+        substitutions,
       );
+      this.inheritWeightsForSubstitutions(lvl, substitutions);
     }
 
     const auditEntry: AuditEntry = {
@@ -1408,6 +1411,7 @@ export class ApprovalEngine {
       }
 
       const level = this.resolveActorLevel(instance, opts.fromApprover, opts.level);
+      this.inheritWeight(level, opts.fromApprover, opts.toApprover);
       await this.runAuthorizationPolicy({
         operation: 'delegate',
         actorId: opts.fromApprover,
@@ -1502,6 +1506,7 @@ export class ApprovalEngine {
       }
 
       const level = this.resolveActorLevel(instance, opts.fromApprover, opts.level);
+      this.inheritWeight(level, opts.fromApprover, opts.toApprover);
       await this.runAuthorizationPolicy({
         operation: 'reassign',
         actorId: opts.reassignedBy,
@@ -4019,6 +4024,37 @@ export class ApprovalEngine {
     return level;
   }
 
+  /**
+   * Carry a weighted level's vote weight from one approver to another.
+   *
+   * On a weighted level the weight belongs to the **seat**, not to the person
+   * filling it. Without this, replacing an approver silently dropped their
+   * weight to the default of 1: a CFO carrying weight 3 who was reassigned,
+   * delegated or covered while away left the level unable to reach its
+   * threshold, and the next decision threw "needs a weight of 3 but the
+   * assigned approvers total only 2" — an approval nobody could complete.
+   *
+   * A no-op unless the level actually carries weights and the original had one.
+   */
+  private inheritWeight(level: ApprovalLevelInstance, from: string, to: string): void {
+    if (!level.weights || from === to) return;
+    const weight = level.weights[from];
+    if (weight === undefined) return;
+    // Copy rather than move: the original may still appear in approvedBy, and
+    // its weight must keep counting for a vote already cast.
+    level.weights = { ...level.weights, [to]: weight };
+  }
+
+  /** Apply {@link inheritWeight} for every out-of-office substitution made on a level. */
+  private inheritWeightsForSubstitutions(
+    level: ApprovalLevelInstance,
+    substitutions: Map<string, string>,
+  ): void {
+    for (const [original, standIn] of substitutions) {
+      this.inheritWeight(level, original, standIn);
+    }
+  }
+
   /** Level deadline from whichever of days/hours the template configured. */
   private levelEscalationDue(
     from: Date,
@@ -4220,6 +4256,7 @@ export class ApprovalEngine {
         // Nobody approves this level directly — a child approval decides it.
         lvl.approverIds = [];
       } else {
+        const substitutions = new Map<string, string>();
         lvl.approverIds = await this.resolver.resolveApprovers(
           lvl.approverConfigs,
           instance.submittedBy,
@@ -4227,7 +4264,9 @@ export class ApprovalEngine {
           this.opts.orgProvider,
           this.opts.outOfOfficeProvider,
           now,
+          substitutions,
         );
+        this.inheritWeightsForSubstitutions(lvl, substitutions);
       }
       lvl.openedAt = now;
       lvl.escalationDueAt = this.levelEscalationDue(now, lvl, firstRung);

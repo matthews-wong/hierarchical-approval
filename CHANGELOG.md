@@ -7,6 +7,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [3.9.0] - 2026-09-04
+
+### Fixed — replacing an approver on a weighted level bricked the approval
+
+- **On a weighted level the weight belongs to the seat, not the person — but
+  replacing the person dropped it.** `weights` is keyed by approver id, and a
+  substitute was not in the map, so they fell back to the default weight of 1.
+
+  A CFO carrying weight 3 on a level with `threshold: 3` who was reassigned,
+  delegated, or covered by out-of-office left the level's achievable weight at
+  2. The next decision then threw
+
+  > `Level 1 ("Exec") needs a weight of 3 but the assigned approvers total only 2.`
+
+  and **nobody could approve the instance again**. `transferApprovals()` did this
+  in bulk, which made offboarding — the exact situation the feature exists for —
+  the most likely way to hit it.
+
+  A substitute now inherits the weight of the approver they replace, through
+  `reassign()`, `delegate()` and out-of-office cover alike. The original's weight
+  is copied rather than moved, so a vote they had already cast keeps counting.
+
+  Nothing is invented: an approver who never carried a weight still gets the
+  default, and escalation continues to *add* approvers at the default weight
+  rather than inheriting anyone's.
+
 ## [3.8.0] - 2026-09-04
 
 ### Fixed — a condition could build a parallel group the validator forbids

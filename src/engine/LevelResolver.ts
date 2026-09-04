@@ -77,6 +77,13 @@ export class LevelResolver {
     orgProvider?: OrgProvider,
     outOfOffice?: OutOfOfficeProvider,
     at?: Date,
+    /**
+     * Filled with `original -> stand-in` for each approver replaced by
+     * out-of-office cover, so the caller can carry anything keyed by the
+     * original id (such as a weighted level's vote weight) across to the
+     * substitute.
+     */
+    substitutions?: Map<string, string>,
   ): Promise<string[]> {
     const resolved: string[] = [];
 
@@ -135,7 +142,7 @@ export class LevelResolver {
         'No approvers resolved for this level. Check your approver configuration — role may have no members or dynamic resolver returned empty.',
       );
     }
-    return this.applyOutOfOffice(result, outOfOffice, at);
+    return this.applyOutOfOffice(result, outOfOffice, at, substitutions);
   }
 
   /**
@@ -153,6 +160,7 @@ export class LevelResolver {
     userIds: string[],
     provider: OutOfOfficeProvider | undefined,
     at: Date | undefined,
+    substitutions?: Map<string, string>,
   ): Promise<string[]> {
     if (!provider) return userIds;
     const asOf = at ?? new Date();
@@ -172,6 +180,7 @@ export class LevelResolver {
         seen.add(delegate);
         current = delegate;
       }
+      if (current !== original) substitutions?.set(original, current);
       covered.push(current);
     }
 
