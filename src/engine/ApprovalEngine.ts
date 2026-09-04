@@ -708,8 +708,17 @@ export class ApprovalEngine {
     // A group's levels must form one unbroken run, so that "advance past the
     // group" and "advance past a level" cannot disagree about what comes next.
     // An interleaved group would otherwise activate a level from outside it.
-    if (config.levels && config.levels.length > 0) {
-      const ordered = [...config.levels].sort((a, b) => a.level - b.level);
+    //
+    // Checked across the levels the template can produce, static and
+    // condition-added alike: a rule that adds a level into an existing group
+    // from further down the chain builds exactly the interleaving this rule
+    // exists to forbid, and inspecting only the static levels let it through.
+    const everyLevel = [
+      ...(config.levels ?? []),
+      ...(config.conditions ?? []).flatMap((rule) => rule.addLevels ?? []),
+    ];
+    if (everyLevel.length > 0) {
+      const ordered = [...everyLevel].sort((a, b) => a.level - b.level);
       const seenGroups = new Set<string>();
       let previousGroup: string | null = null;
       ordered.forEach((l) => {

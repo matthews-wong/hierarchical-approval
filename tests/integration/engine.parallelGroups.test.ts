@@ -423,3 +423,58 @@ describe('an approver on an upper branch is visible everywhere', () => {
     expect((await engine.getPendingFor('fin')).items.map((x) => x.id)).toEqual([i.id]);
   });
 });
+
+describe('group contiguity covers condition-added levels', () => {
+  // The rule existed but inspected only the static levels, so a condition that
+  // added a level into an existing group from further down the chain built
+  // exactly the interleaving it forbids — and the template validated clean.
+  const engine = () => new ApprovalEngine({ adapter: new MemoryAdapter() });
+
+  const withCondition = (addedLevel: Record<string, unknown>) => ({
+    name: 'PO',
+    documentType: 'purchase_order',
+    levels: [
+      lvl(1, 'Finance', 'fin', 'review'),
+      lvl(2, 'Legal', 'legal', 'review'),
+      lvl(3, 'CEO', 'ceo'),
+    ],
+    conditions: [
+      {
+        when: { field: 'big', operator: '==' as const, value: true },
+        addLevels: [addedLevel as never],
+      },
+    ],
+  });
+
+  it('rejects a condition that rejoins a group past an intervening level', () => {
+    const result = engine().validateTemplate(withCondition(lvl(4, 'Risk', 'risk', 'review')));
+    expect(result.valid).toBe(false);
+    expect(result.errors.map((e) => e.message).join(' ')).toMatch(/not contiguous/);
+  });
+
+  it('accepts a condition that adds an ungrouped level after the group', () => {
+    expect(engine().validateTemplate(withCondition(lvl(4, 'Risk', 'risk'))).valid).toBe(true);
+  });
+
+  it('accepts a condition that adds a level to its own new group', () => {
+    expect(engine().validateTemplate(withCondition(lvl(4, 'Risk', 'risk', 'second'))).valid).toBe(
+      true,
+    );
+  });
+
+  it('defineTemplate refuses the interleaved template', async () => {
+    await expect(
+      engine().defineTemplate(withCondition(lvl(4, 'Risk', 'risk', 'review'))),
+    ).rejects.toThrow(/not contiguous/);
+  });
+
+  it('still accepts a wholly contiguous group', () => {
+    expect(
+      engine().validateTemplate({
+        name: 'OK',
+        documentType: 'ok',
+        levels: [lvl(1, 'A', 'a'), lvl(2, 'B', 'b', 'g'), lvl(3, 'C', 'c', 'g')],
+      }).valid,
+    ).toBe(true);
+  });
+});

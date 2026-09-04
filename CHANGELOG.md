@@ -7,6 +7,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [3.8.0] - 2026-09-04
+
+### Fixed — a condition could build a parallel group the validator forbids
+
+- **`validateTemplate()` checked group contiguity across the static levels
+  only.** A condition whose `addLevels` joined an existing group from further
+  down the chain therefore passed validation and then built, at runtime,
+  precisely the interleaving the rule exists to forbid.
+
+  With levels 1–2 in group `review` and an ungrouped level 3, a rule adding
+  level 4 to `review` produced a chain where levels 1, 2 **and 4** were all open
+  while level 3 sat waiting — the group had jumped over a level that was meant
+  to come first, and the template author's ordering was silently inverted.
+
+  Contiguity is now checked across every level a template can produce, static
+  and condition-added alike. A group whose members are interleaved with anything
+  else is rejected at definition time, where the author can see it.
+
 ## [3.7.0] - 2026-09-04
 
 ### Fixed — `override()` and expiry did not end the sub-workflow family
