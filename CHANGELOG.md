@@ -7,6 +7,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [3.4.0] - 2026-09-04
+
+### Fixed — notifications went to the wrong people
+
+`NotificationEvent.recipients` is what an adapter actually delivers to, and it
+was read from the single level matching `instance.currentLevel`. That was wrong
+in two directions at once.
+
+- **An approver on any branch of a parallel group except the lowest was never
+  notified.** They were not told work had arrived, not told the instance
+  advanced — nothing. Combined with the inbox bug fixed in 3.3.0, an
+  upper-branch approver had no way at all to learn they owed a decision.
+  Recipients are now the union across every open level, matching what
+  `getCurrentApprovers()` has returned since 1.0.0.
+
+- **An event that already named its own audience had it overwritten.** A comment
+  mentioning one person was delivered to the current level's approvers instead
+  of the person mentioned; a reminder aimed at those who had not yet voted, and
+  a clarification request addressed to the submitter, were redirected the same
+  way. An event that names recipients now keeps them.
+
+  This had been latent since mentions were added in 2.8.0: the payload carried
+  the right audience and the adapter boundary discarded it.
+
+- **`ApprovalTestKit.fullyApprove()` could not drive a parallel group.** It read
+  `instance.currentLevel`, which does not move until the whole group closes, so
+  it approved the lowest branch and then re-offered the same decision until the
+  engine refused it. It now walks every open level.
+
 ## [3.3.0] - 2026-09-04
 
 ### Fixed — an approver on an upper parallel branch had an empty inbox

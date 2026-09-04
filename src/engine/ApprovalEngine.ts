@@ -4684,14 +4684,27 @@ export class ApprovalEngine {
     payload: ApprovalEventMap[ApprovalEventName],
   ): Promise<void> {
     if (!this.opts.notificationAdapter) return;
-    const level = instance.levels.find((l) => l.level === instance.currentLevel);
+
+    // An event that names its own audience keeps it: a comment mentioning one
+    // person, a reminder aimed at those who have not voted, a question put to
+    // the submitter. Overwriting those with "the current level" sent each of
+    // them to the wrong people.
+    const named = (payload as { recipients?: unknown }).recipients;
+    const recipients = Array.isArray(named)
+      ? (named as string[])
+      : // Otherwise everyone who currently owes a decision. Reading one level by
+        // instance.currentLevel notified only the lowest branch of a parallel
+        // group, so an approver on any other branch never heard that work had
+        // arrived. Matches getCurrentApprovers().
+        [...new Set(this.pendingLevels(instance).flatMap((l) => l.approverIds))];
+
     const notifEvent = {
       type: eventType,
       instanceId: instance.id,
       documentId: instance.documentId,
       documentType: instance.documentType,
       timestamp: this.clock.now(),
-      recipients: level?.approverIds ?? [],
+      recipients,
       templateName: instance.templateName,
       tenantId: instance.tenantId,
       payload,

@@ -56,13 +56,22 @@ export class ApprovalTestKit {
     let instance = await engine.getInstance(instanceId);
 
     while (instance.status === 'pending') {
-      const approverId = approverMap[instance.currentLevel];
-      if (!approverId) {
-        throw new Error(
-          `No approver provided for level ${instance.currentLevel}. Pass all levels in approverMap.`,
-        );
+      // Every open level, not just instance.currentLevel: a parallel group has
+      // several branches open at once, and approving only the lowest would
+      // re-offer the same decision forever once that branch closed.
+      const open = instance.levels.filter((l) => l.status === 'pending');
+      if (open.length === 0) break;
+
+      for (const level of open) {
+        const approverId = approverMap[level.level];
+        if (!approverId) {
+          throw new Error(
+            `No approver provided for level ${level.level}. Pass all levels in approverMap.`,
+          );
+        }
+        instance = await engine.approve(instanceId, { approverId, level: level.level });
+        if (instance.status !== 'pending') break;
       }
-      instance = await engine.approve(instanceId, { approverId });
     }
 
     return instance;
