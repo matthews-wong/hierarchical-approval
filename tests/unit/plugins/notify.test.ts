@@ -503,6 +503,25 @@ describe('TemplatedNotificationAdapter', () => {
     expect(sent[0]!.body).toBe('2026-01-02T03:04:05.000Z|a, b');
   });
 
+  it('a circular object that cannot be JSON.stringify-ed falls back to the placeholder token, never throws', async () => {
+    const sent: { body: string }[] = [];
+    const adapter = new TemplatedNotificationAdapter({
+      send: (m) => {
+        sent.push(m);
+      },
+      unknownPlaceholderToken: '[unserializable]',
+      templates: { 'approval:approved': { subject: '', body: '{circular}' } },
+    });
+    const circular: Record<string, unknown> = { self: undefined };
+    circular.self = circular;
+    await adapter.notify(
+      makeEvent({
+        payload: { ...makeEvent().payload, circular } as unknown as NotificationEvent['payload'],
+      }),
+    );
+    expect(sent[0]!.body).toBe('[unserializable]');
+  });
+
   it('missing template + no fallback => skip (no send, no throw)', async () => {
     const send = vi.fn();
     const logger = spyLogger();
