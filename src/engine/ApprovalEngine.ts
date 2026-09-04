@@ -2864,7 +2864,7 @@ export class ApprovalEngine {
     auditCtx?: AuditContext,
   ): Promise<ApprovalInstance> {
     const opts = parseOrThrow(() => OverrideOptionsSchema.parse(raw));
-    return this.withOptimisticRetry(instanceId, async (instance) => {
+    const overridden = await this.withOptimisticRetry(instanceId, async (instance) => {
       assertStatus(instance, 'pending');
 
       const allowOverride =
@@ -2944,6 +2944,12 @@ export class ApprovalEngine {
 
       return instance;
     });
+
+    // An override still finishes the instance, so its sub-workflow children
+    // must stop and its own parent must hear the outcome — the same
+    // obligations approve() and reject() have.
+    await this.afterDecision(overridden);
+    return overridden;
   }
 
   /** Approve multiple instances in one call. Never throws — failures collected in result.failed. */
@@ -3769,7 +3775,7 @@ export class ApprovalEngine {
     deadlineAction: 'cancel' | 'reject',
   ): Promise<void> {
     try {
-      await this.withOptimisticRetry(instanceId, async (instance) => {
+      const expired = await this.withOptimisticRetry(instanceId, async (instance) => {
         if (instance.status !== 'pending') return instance;
 
         const now = this.clock.now();
@@ -3808,6 +3814,13 @@ export class ApprovalEngine {
 
         return instance;
       });
+
+      // An expiry is terminal too. Without this a child that expired left its
+      // parent waiting on an answer that would never come, and an expired
+      // parent left its own children running.
+      if (TERMINAL_STATUSES.has(expired.status)) {
+        await this.afterDecision(expired);
+      }
     } catch (err) {
       this.logger.error('expireInstance: failed', err, { tenantId: this.tenantId, instanceId });
     }

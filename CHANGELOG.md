@@ -7,6 +7,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [3.7.0] - 2026-09-04
+
+### Fixed — `override()` and expiry did not end the sub-workflow family
+
+3.0.0 made a finished parent stop its children and report to its own parent,
+but wired that into `approve()`, `reject()` and `cancel()` only. `override()`
+and deadline expiry are terminal too, and were missed — so the fix was
+incomplete in exactly the two paths nobody watches.
+
+- **An expired child left its parent waiting forever.** The child reached
+  `cancelled`, but never told the parent, which sat pending on an approval that
+  could now never happen. A permanent deadlock, and the more serious of the two.
+
+- **An overridden parent left its children running** — still notifying, still
+  escalating, still in `getWorkload()`, for a decision whose outcome nobody
+  would read.
+
+Both now run the same post-decision step as every other terminal path.
+`override()` continues to bypass the parent's own remaining levels, which is
+what an administrative override is for; what changes is that it no longer
+strands the work it started.
+
 ## [3.6.0] - 2026-09-04
 
 ### Fixed — `resubmit()` rebuilt an incomplete chain

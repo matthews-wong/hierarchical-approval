@@ -137,3 +137,82 @@ describe('sub-workflow child lifecycle', () => {
     });
   });
 });
+
+describe('every terminal path ends the family', () => {
+  // 3.0.0 cascaded from approve, reject and cancel. override() and expiry are
+  // terminal too and were missed: an overridden parent left its children
+  // running, and an expired child left its parent waiting on an answer that
+  // would never come.
+  const build = async (extra: Record<string, unknown> = {}) => {
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({ adapter });
+    await engine.defineTemplate({
+      name: 'CHILD',
+      documentType: 'child',
+      levels: [
+        { level: 1, name: 'Board', approvers: [{ type: 'user', userId: 'chair' }], mode: 'any' },
+      ],
+    });
+    await engine.defineTemplate({
+      name: 'PO',
+      documentType: 'purchase_order',
+      allowOverride: true,
+      levels: [
+        {
+          level: 1,
+          name: 'Sub',
+          mode: 'any',
+          approvers: [],
+          subWorkflow: { templateName: 'CHILD' },
+        },
+      ],
+      ...extra,
+    });
+    const parent = await engine.submit({
+      templateName: 'PO',
+      documentId: `po-${Math.random()}`,
+      documentType: 'purchase_order',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    const childId = (await engine.getInstance(parent.id)).levels[0]?.childInstanceId as string;
+    return { engine, adapter, parent, childId };
+  };
+
+  it('an override cancels the still-running child', async () => {
+    const { engine, parent, childId } = await build();
+    await engine.override(parent.id, { overriddenBy: 'admin', justification: 'urgent' });
+
+    expect((await engine.getInstance(parent.id)).status).toBe('approved');
+    expect((await engine.getInstance(childId)).status).toBe('cancelled');
+  });
+
+  it('an expired child releases its parent instead of hanging it', async () => {
+    const { engine, adapter, parent, childId } = await build();
+
+    const child = await engine.getInstance(childId);
+    child.expiresAt = new Date(Date.now() - 1000);
+    await adapter.updateInstance(child, child.version);
+    await (
+      engine as unknown as { expireInstance: (id: string, a: 'cancel' | 'reject') => Promise<void> }
+    ).expireInstance(childId, 'cancel');
+
+    expect((await engine.getInstance(childId)).status).toBe('cancelled');
+    // The parent was waiting on an approval that can now never happen.
+    expect((await engine.getInstance(parent.id)).status).toBe('rejected');
+  });
+
+  it('an expired parent stops its child', async () => {
+    const { engine, adapter, parent, childId } = await build();
+
+    const p = await engine.getInstance(parent.id);
+    p.expiresAt = new Date(Date.now() - 1000);
+    await adapter.updateInstance(p, p.version);
+    await (
+      engine as unknown as { expireInstance: (id: string, a: 'cancel' | 'reject') => Promise<void> }
+    ).expireInstance(parent.id, 'cancel');
+
+    expect((await engine.getInstance(parent.id)).status).toBe('cancelled');
+    expect((await engine.getInstance(childId)).status).toBe('cancelled');
+  });
+});
