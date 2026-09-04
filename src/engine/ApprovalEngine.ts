@@ -873,38 +873,14 @@ export class ApprovalEngine {
     const firstCfg = allLevelCfgs[0];
     const firstGroupKey = firstCfg ? ApprovalEngine.groupKeyOf(firstCfg) : null;
 
-    const levels: ApprovalLevelInstance[] = allLevelCfgs.map((cfg) => {
-      const inFirstGroup = ApprovalEngine.groupKeyOf(cfg) === firstGroupKey;
-      return {
-        level: cfg.level,
-        name: cfg.name,
-        group: cfg.group,
-        mode: cfg.mode,
-        approverConfigs: cfg.approvers,
-        approverIds: [],
-        approvedBy: [],
-        rejectedBy: [],
-        status: inFirstGroup ? ('pending' as const) : ('waiting' as const),
-        minApprovals: cfg.minApprovals,
-        threshold: cfg.threshold,
-        weights: cfg.weights,
-        escalationAfterDays: cfg.escalationAfterDays,
-        escalationAfterHours: cfg.escalationAfterHours,
-        escalationStep: 0,
-        escalationDueAt: inFirstGroup
-          ? this.levelEscalationDue(now, cfg, this.firstRungOf(template.escalationSteps))
-          : undefined,
-        subWorkflowTemplate: cfg.subWorkflow?.templateName,
-        reminderAfterDays: cfg.reminderAfterDays,
-        reminderEveryDays: cfg.reminderEveryDays,
-        maxReminders: cfg.maxReminders,
-        remindersSent: 0,
-        reminderDueAt:
-          inFirstGroup && cfg.reminderAfterDays
-            ? this.deadlineFrom(now, cfg.reminderAfterDays)
-            : undefined,
-      };
-    });
+    const firstRung = this.firstRungOf(template.escalationSteps);
+    const levels: ApprovalLevelInstance[] = allLevelCfgs.map((cfg) =>
+      this.buildLevelInstance(cfg, {
+        open: ApprovalEngine.groupKeyOf(cfg) === firstGroupKey,
+        now,
+        firstRung,
+      }),
+    );
 
     for (const lvl of levels.filter((l) => l.status === 'pending')) {
       // A sub-workflow level has no approvers of its own — a child approval
@@ -1665,9 +1641,12 @@ export class ApprovalEngine {
       return instance;
     });
 
-    // A cancelled child still owes its parent an outcome: the approval the
-    // parent was waiting on will now never happen.
-    if (cancelled) await this.propagateToParent(cancelled);
+    if (cancelled) {
+      // Cancelling a parent must not leave its children running, and a
+      // cancelled child still owes its own parent an outcome.
+      await this.cancelOrphanedChildren(cancelled);
+      await this.propagateToParent(cancelled);
+    }
     return result;
   }
 
@@ -1863,20 +1842,9 @@ export class ApprovalEngine {
       // Preserve an untouched waiting level as-is so any delegation already
       // arranged on it survives a data edit elsewhere in the document.
       if (kept) return kept;
-      return {
-        level: cfg.level,
-        name: cfg.name,
-        mode: cfg.mode,
-        approverConfigs: cfg.approvers,
-        approverIds: [],
-        approvedBy: [],
-        rejectedBy: [],
-        status: 'waiting' as const,
-        minApprovals: cfg.minApprovals,
-        threshold: cfg.threshold,
-        weights: cfg.weights,
-        escalationAfterDays: cfg.escalationAfterDays,
-      };
+      // Same construction submit() uses, so a condition-added level cannot come
+      // out missing fields the template configured on it.
+      return this.buildLevelInstance(cfg, { open: false, now: this.clock.now() });
     });
 
     instance.levels = [...frozen, ...rebuiltFuture];
@@ -3462,6 +3430,9 @@ export class ApprovalEngine {
     }
 
     const result: PurgeResult = { purged: [], scanned: 0, dryRun };
+    // Parent and child usually share a terminal status, so both turn up in the
+    // scan; without this the family sweep would report each of them twice.
+    const handled = new Set<string>();
 
     for (const status of requested) {
       if (result.purged.length >= limit) break;
@@ -3478,6 +3449,7 @@ export class ApprovalEngine {
 
       for (const instance of page.items) {
         if (result.purged.length >= limit) break;
+        if (handled.has(instance.id)) continue;
         result.scanned++;
 
         // Defence in depth: the filter should already exclude these, but a
@@ -3485,12 +3457,20 @@ export class ApprovalEngine {
         if (!TERMINAL_STATUSES.has(instance.status)) continue;
         if (new Date(instance.createdAt) > opts.olderThan) continue;
 
-        if (!dryRun) await deleteInstance!(this.tenantId, instance.id);
-        result.purged.push({
-          instanceId: instance.id,
-          documentId: instance.documentId,
-          status: instance.status,
-        });
+        // Sub-workflow children go with the parent. Leaving them behind would
+        // orphan rows whose parentInstanceId points at something that no longer
+        // exists — unreachable, and invisible to a purge scoped by document type.
+        const family = await this.collectSubWorkflowFamily(instance);
+        for (const member of family) {
+          if (handled.has(member.id)) continue;
+          handled.add(member.id);
+          if (!dryRun) await deleteInstance!(this.tenantId, member.id);
+          result.purged.push({
+            instanceId: member.id,
+            documentId: member.documentId,
+            status: member.status,
+          });
+        }
       }
     }
 
@@ -3953,6 +3933,52 @@ export class ApprovalEngine {
   private deadlineFromHours(from: Date, hours: number): Date {
     const addHours = this.calendar?.addBusinessHours?.bind(this.calendar);
     return addHours ? addHours(from, hours) : new Date(from.getTime() + hours * 3_600_000);
+  }
+
+  /**
+   * Build a level instance from its template config.
+   *
+   * The single place a level is constructed. It previously happened twice — in
+   * `submit()` and again in `recomputeFutureChain()` — and the second copy was
+   * missing `group`, `subWorkflowTemplate`, `escalationAfterHours` and the
+   * reminder fields, so a level added by a condition during `updateData()` came
+   * out silently different from the same level created at submit.
+   *
+   * @param cfg - The template's configuration for this level.
+   * @param opts - `open` activates the level now, computing deadlines from `now`.
+   */
+  private buildLevelInstance(
+    cfg: ApprovalLevelConfig,
+    opts: { open: boolean; now: Date; firstRung?: EscalationStep },
+  ): ApprovalLevelInstance {
+    const level: ApprovalLevelInstance = {
+      level: cfg.level,
+      name: cfg.name,
+      group: cfg.group,
+      mode: cfg.mode,
+      approverConfigs: cfg.approvers,
+      approverIds: [],
+      approvedBy: [],
+      rejectedBy: [],
+      status: opts.open ? 'pending' : 'waiting',
+      minApprovals: cfg.minApprovals,
+      threshold: cfg.threshold,
+      weights: cfg.weights,
+      subWorkflowTemplate: cfg.subWorkflow?.templateName,
+      escalationAfterDays: cfg.escalationAfterDays,
+      escalationAfterHours: cfg.escalationAfterHours,
+      escalationStep: 0,
+      reminderAfterDays: cfg.reminderAfterDays,
+      reminderEveryDays: cfg.reminderEveryDays,
+      maxReminders: cfg.maxReminders,
+      remindersSent: 0,
+    };
+
+    if (opts.open) {
+      level.escalationDueAt = this.levelEscalationDue(opts.now, cfg, opts.firstRung);
+      this.scheduleReminder(level, opts.now);
+    }
+    return level;
   }
 
   /** Level deadline from whichever of days/hours the template configured. */
@@ -4507,8 +4533,76 @@ export class ApprovalEngine {
    * about them, so a slow child template would surface as a spurious conflict
    * on the decision the user just made.
    */
+  /**
+   * An instance and every sub-workflow descendant beneath it, parents first.
+   *
+   * A child is only reachable through its parent's `childInstanceId`, so a
+   * purge that removed the parent alone would strand the rest of the tree.
+   * Depth is bounded by the same cap that limits spawning, and an already-seen
+   * id is skipped so a corrupted link cannot loop.
+   */
+  private async collectSubWorkflowFamily(root: ApprovalInstance): Promise<ApprovalInstance[]> {
+    const family: ApprovalInstance[] = [root];
+    const seen = new Set<string>([root.id]);
+    const queue: ApprovalInstance[] = [root];
+
+    for (let depth = 0; queue.length > 0 && depth <= MAX_SUBWORKFLOW_DEPTH; depth++) {
+      const generation = queue.splice(0, queue.length);
+      for (const parent of generation) {
+        for (const level of parent.levels) {
+          const childId = level.childInstanceId;
+          if (!childId || seen.has(childId)) continue;
+          seen.add(childId);
+          const child = await this.opts.adapter.getInstance(this.tenantId, childId);
+          if (!child) continue;
+          family.push(child);
+          queue.push(child);
+        }
+      }
+    }
+    return family;
+  }
+
+  /**
+   * Cancel sub-workflow children whose parent has finished.
+   *
+   * A child outlives its parent otherwise: it stays pending, keeps notifying
+   * and escalating, and keeps appearing in {@link getWorkload} — asking people
+   * to decide something whose outcome nobody will ever read, because
+   * {@link propagateToParent} ignores a parent that is no longer pending.
+   *
+   * Cancelling rather than deleting keeps the child's own audit trail intact:
+   * the people who were asked, and why the request stopped, stay on the record.
+   */
+  private async cancelOrphanedChildren(parent: ApprovalInstance): Promise<void> {
+    const childIds = parent.levels
+      .map((l) => l.childInstanceId)
+      .filter((id): id is string => typeof id === 'string');
+    if (childIds.length === 0) return;
+
+    for (const childId of childIds) {
+      try {
+        const child = await this.opts.adapter.getInstance(this.tenantId, childId);
+        if (!child || TERMINAL_STATUSES.has(child.status)) continue;
+        await this.cancel(childId, {
+          cancelledBy: 'system',
+          reason: `Parent approval ${parent.id} ended as "${parent.status}".`,
+        });
+      } catch (err) {
+        // A child that cannot be cancelled must not undo the parent's own
+        // decision, which is already recorded.
+        this.logger.error('subWorkflow: failed to cancel orphaned child', err, {
+          tenantId: this.tenantId,
+          parentInstanceId: parent.id,
+          childInstanceId: childId,
+        });
+      }
+    }
+  }
+
   private async afterDecision(instance: ApprovalInstance): Promise<void> {
     if (TERMINAL_STATUSES.has(instance.status)) {
+      await this.cancelOrphanedChildren(instance);
       await this.propagateToParent(instance);
       return;
     }

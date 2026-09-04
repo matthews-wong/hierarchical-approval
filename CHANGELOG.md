@@ -7,6 +7,54 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [3.0.0] - 2026-09-04
+
+Three defects found by auditing the interactions between features added across
+2.x, rather than by adding anything new.
+
+### Fixed — `updateData()` built condition-added levels wrong
+
+- **A level a condition added during `updateData()` silently lost its `group`,
+  `subWorkflow`, `escalationAfterHours` and reminder configuration.** Levels
+  were constructed in two places — `submit()` and `recomputeFutureChain()` —
+  and the second copy had never been updated as fields were added across 1.0.0
+  to 2.6.0. The consequences were quiet and serious:
+
+  - a condition-added **parallel group ran sequentially**, one branch at a time,
+    because the levels came back without their `group`;
+  - a condition-added **sub-workflow level lost its binding**, then failed with
+    "No approvers resolved for this level" when reached — leaving an approval
+    that could never advance;
+  - hour-based escalation and reminders simply never fired.
+
+  A level whose configuration was unchanged was carried over intact, so this
+  only bit templates whose conditions *add* levels — and it bit them silently.
+
+  Both paths now go through one `buildLevelInstance()`, so a field cannot be
+  added to a level in one place and forgotten in the other. This is the same
+  failure the 1.6.0 Postgres column list had, in a different file.
+
+### BREAKING — a finished parent no longer leaves its sub-workflow children running
+
+- **Cancelling or rejecting a parent left its child approval pending forever.**
+  The child kept notifying, kept escalating, and kept appearing in
+  `getWorkload()` — asking people to decide something whose outcome nobody would
+  ever read, since `propagateToParent()` ignores a parent that is no longer
+  pending. Children of a terminal parent are now cancelled, with the reason
+  naming the parent, and the child's own audit trail is left intact rather than
+  deleted.
+
+  **Behaviour change:** a child that used to stay open now reaches `cancelled`.
+  Anything counting open approvals, or waiting on a child whose parent has
+  ended, will see different numbers — correct ones.
+
+- **`purgeInstances()` orphaned sub-workflow children.** It removed the parent
+  and left the child behind, holding a `parentInstanceId` pointing at a row that
+  no longer existed — unreachable, and invisible to a purge scoped by document
+  type, since a child usually has a different one. A purge now takes the whole
+  sub-workflow family together, parents first, deduplicated so a parent and
+  child sharing a terminal status are each reported once.
+
 ## [2.9.0] - 2026-09-04
 
 ### Added — `simulate()`

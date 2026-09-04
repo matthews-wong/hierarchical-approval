@@ -689,6 +689,13 @@ Collapsing the non-approved outcomes into one rejection is deliberate: a parent
 that treated a cancelled child as "carry on" would advance past a gate nobody
 cleared.
 
+**A finished parent ends its children.** If a parent is cancelled or rejected
+while a child is still running, the child is cancelled too, with the reason
+naming the parent — otherwise it would keep asking people to decide something
+whose outcome nobody will read. A child that already finished is left alone.
+`purgeInstances()` likewise removes a whole sub-workflow family together, so a
+child is never orphaned behind a deleted parent.
+
 Children link back via `parentInstanceId` and `parentLevel`, and the level
 records `childInstanceId`. Nesting is allowed up to five levels deep, and
 `validateTemplate()` rejects a template that would spawn itself. Emits
