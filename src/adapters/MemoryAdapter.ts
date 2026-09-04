@@ -185,9 +185,12 @@ export class MemoryAdapter implements IStorageAdapter {
   ): Promise<ApprovalInstance[]> {
     return [...this.instances.values()]
       .filter((i) => {
-        if (i.tenantId !== tenantId || i.status !== 'pending') return false;
-        if (filter.documentType && i.documentType !== filter.documentType) return false;
-        if (filter.submittedBy && i.submittedBy !== filter.submittedBy) return false;
+        if (i.tenantId !== tenantId) return false;
+        // Honour the whole filter, not a hand-picked subset. getStatistics()
+        // passes its filter straight through, so a partial match here made
+        // `overdue` count instances the other figures had excluded — reporting
+        // more overdue approvals than the filter said existed.
+        if (!applyFilter(i, { ...filter, status: 'pending' })) return false;
         // Escalation overdue on ANY open branch. Filtering to i.currentLevel
         // would miss the upper branches of a parallel group entirely, and left
         // this adapter disagreeing with PostgresAdapter, which already scans

@@ -7,6 +7,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Nothing yet._
 
+## [3.2.0] - 2026-09-04
+
+### Fixed — `getStatistics().overdue` ignored most of its filter
+
+- **A filtered statistics call could report more overdue approvals than it
+  reported approvals.** `getStatistics()` passes its filter straight to
+  `getOverdueInstances()`, which honoured only `documentType` and `submittedBy`
+  — in both adapters. `templateName`, `fromDate`, `toDate` and the `data`
+  matching from 1.4.0 were silently dropped, so `overdue` was counted across the
+  whole tenant while `total`, `byStatus` and `cycleTime` respected the filter.
+
+  A per-template dashboard would show, say, one pending purchase order and two
+  of them overdue.
+
+  Both adapters now apply the whole filter. `MemoryAdapter` reuses the same
+  `applyFilter` every other query goes through, rather than keeping a
+  hand-picked subset that could drift again; `PostgresAdapter` adds the missing
+  clauses, including the parameterised JSONB path lookup, alongside its existing
+  overdue predicates.
+
 ## [3.1.0] - 2026-09-04
 
 ### Fixed — escalation ladders drifted on parallel branches

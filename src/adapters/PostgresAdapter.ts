@@ -535,6 +535,27 @@ export class PostgresAdapter implements IStorageAdapter {
       values.push(filter.submittedBy);
       query += ` AND submitted_by = $${values.length}`;
     }
+    // The rest of the filter matters too: getStatistics() passes its filter
+    // through unchanged, and honouring only part of it made `overdue` count
+    // instances the other figures had excluded.
+    if (filter.templateName) {
+      values.push(filter.templateName);
+      query += ` AND template_name = $${values.length}`;
+    }
+    if (filter.fromDate) {
+      values.push(filter.fromDate.toISOString());
+      query += ` AND created_at >= $${values.length}`;
+    }
+    if (filter.toDate) {
+      values.push(filter.toDate.toISOString());
+      query += ` AND created_at <= $${values.length}`;
+    }
+    if (filter.data) {
+      for (const [path, expected] of Object.entries(filter.data)) {
+        query += ` AND ${jsonbPathCondition(path, values.length + 1)}`;
+        values.push(toPgTextArray(path), JSON.stringify(expected ?? null));
+      }
+    }
 
     query += ` AND (
           EXISTS (
