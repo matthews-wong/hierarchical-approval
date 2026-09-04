@@ -269,6 +269,17 @@ describe('PrometheusMetricsAdapter', () => {
     expect(logger.warn).toHaveBeenCalledOnce();
   });
 
+  it('groups multiple series for the same metric under a single HELP/TYPE block', () => {
+    const m = new PrometheusMetricsAdapter();
+    m.increment('approval.submitted', { tenantId: 'a' });
+    m.increment('approval.submitted', { tenantId: 'b' });
+    const out = m.scrape();
+    expect(out.match(/# HELP approval_submitted /g)).toHaveLength(1);
+    expect(out.match(/# TYPE approval_submitted /g)).toHaveLength(1);
+    expect(out).toContain('approval_submitted{tenantId="a"} 1');
+    expect(out).toContain('approval_submitted{tenantId="b"} 1');
+  });
+
   it('reset clears all metrics', () => {
     const m = new PrometheusMetricsAdapter();
     m.increment('approval.submitted');
