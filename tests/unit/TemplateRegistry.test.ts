@@ -58,6 +58,21 @@ describe('TemplateRegistry', () => {
     await expect(registry.update(config)).rejects.toThrow(ApprovalTemplateNotFoundError);
   });
 
+  it('update treats a stored template with no version as v1 and bumps to v2', async () => {
+    const adapter = new MemoryAdapter();
+    const registry = new TemplateRegistry(adapter, 't1');
+    // Simulate legacy data saved before `version` was a required field.
+    await adapter.saveTemplate({
+      ...config,
+      id: 'tpl_legacy',
+      tenantId: 't1',
+      createdAt: new Date(),
+    } as never);
+    const newId = await registry.update(config);
+    const updated = await registry.get('purchase');
+    expect(updated).toMatchObject({ id: newId, version: 2, previousVersionId: 'tpl_legacy' });
+  });
+
   it('get throws ApprovalTemplateNotFoundError for an unknown template', async () => {
     const registry = new TemplateRegistry(new MemoryAdapter(), 't1');
     await expect(registry.get('missing')).rejects.toThrow(ApprovalTemplateNotFoundError);
