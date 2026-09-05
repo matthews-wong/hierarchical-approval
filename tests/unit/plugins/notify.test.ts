@@ -376,6 +376,62 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect(await adapter.pending()).toEqual([]);
     expect(logger.error).toHaveBeenCalled();
   });
+
+  it('deadLettered() read error is logged and returns []', async () => {
+    const logger = spyLogger();
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [],
+      update: async () => {},
+      remove: async () => {},
+      pending: async () => [],
+      deadLettered: async () => {
+        throw new Error('dead-letter read fail');
+      },
+    };
+    const adapter = new OutboxNotificationAdapter({ transport: () => {}, store, logger });
+    expect(await adapter.deadLettered()).toEqual([]);
+    expect(logger.error).toHaveBeenCalled();
+  });
+
+  it('failure to persist record state after a failed delivery is logged, not thrown', async () => {
+    const logger = spyLogger();
+    const record: OutboxRecord = {
+      id: 'r1',
+      partitionKey: 'tenant-1:inst-1',
+      tenantId: 'tenant-1',
+      event: makeEvent(),
+      status: 'pending',
+      attempts: 0,
+      nextAttemptAt: 0,
+      enqueuedAt: 0,
+    };
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [record],
+      update: async () => {
+        throw new Error('update fail');
+      },
+      remove: async () => {},
+      pending: async () => [],
+      deadLettered: async () => [],
+    };
+    const adapter = new OutboxNotificationAdapter({
+      transport: async () => {
+        throw new Error('delivery fail');
+      },
+      store,
+      logger,
+      maxAttempts: 5,
+      clock: new ManualClock(0),
+    });
+    expect(await adapter.drain()).toBe(0);
+    expect(logger.error).toHaveBeenCalledWith(
+      'OutboxNotificationAdapter: failed to persist record state',
+      expect.any(Error),
+      expect.objectContaining({ id: 'r1' }),
+    );
+  });
 });
 
 describe('CompositeNotificationAdapter', () => {
