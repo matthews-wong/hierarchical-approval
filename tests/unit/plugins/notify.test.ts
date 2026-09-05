@@ -324,6 +324,42 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect(logger.error).toHaveBeenCalled();
   });
 
+  it('delivered but failed to remove record is logged, and drain still counts it as delivered', async () => {
+    const logger = spyLogger();
+    const record: OutboxRecord = {
+      id: 'r1',
+      partitionKey: 'tenant-1:inst-1',
+      tenantId: 'tenant-1',
+      event: makeEvent(),
+      status: 'pending',
+      attempts: 0,
+      nextAttemptAt: 0,
+      enqueuedAt: 0,
+    };
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [record],
+      update: async () => {},
+      remove: async () => {
+        throw new Error('remove fail');
+      },
+      pending: async () => [],
+      deadLettered: async () => [],
+    };
+    const adapter = new OutboxNotificationAdapter({
+      transport: async () => {},
+      store,
+      logger,
+      clock: new ManualClock(0),
+    });
+    expect(await adapter.drain()).toBe(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      'OutboxNotificationAdapter: delivered but failed to remove record',
+      expect.any(Error),
+      expect.objectContaining({ id: 'r1', tenantId: 'tenant-1' }),
+    );
+  });
+
   it('pending() read error is logged and returns []', async () => {
     const logger = spyLogger();
     const store: IOutboxStore = {
