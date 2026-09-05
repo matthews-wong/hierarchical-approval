@@ -103,6 +103,15 @@ describe('isLevelApproved', () => {
     ).toThrow(/total only/);
   });
 
+  it('weighted — throws when threshold is zero or negative', () => {
+    expect(() =>
+      isLevelApproved(makeLevel('weighted', ['a'], [], [], { threshold: 0 })),
+    ).toThrow(/positive number/);
+    expect(() =>
+      isLevelApproved(makeLevel('weighted', ['a'], [], [], { threshold: -1 })),
+    ).toThrow(/positive number/);
+  });
+
   it('weighted — a zero weight is honoured, not treated as free approval', () => {
     // a has weight 0, b defaults to 1: total weight is 1.
     expect(
