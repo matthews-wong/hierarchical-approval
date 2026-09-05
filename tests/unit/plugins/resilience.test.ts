@@ -354,6 +354,17 @@ describe('RateLimitMiddleware — token bucket', () => {
     expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError);
   });
 
+  it('peekTokens projects accrued tokens for a touched bucket without persisting them', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 5, refillTokensPerSecond: 1, clock });
+
+    mw.before(authCtx()); // 5 -> 4
+    clock.advance(200); // 0.2s elapsed
+    expect(mw.peekTokens(authCtx())).toBeCloseTo(4.2, 5);
+    // A repeated peek at the same instant is stable, confirming the store wasn't mutated.
+    expect(mw.peekTokens(authCtx())).toBeCloseTo(4.2, 5);
+  });
+
   it('reset clears all buckets (tokens return to capacity)', () => {
     const clock = new ManualClock(0);
     const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
