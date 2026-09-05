@@ -177,4 +177,24 @@ describe('ApprovalEngine — weighted mode', () => {
     ).rejects.toThrow(/Weight for "cfo" must be a non-negative number/);
     await engine.shutdown();
   });
+
+  it('rejects a missing threshold at definition time', async () => {
+    const engine = makeEngine();
+    await expect(
+      engine.defineTemplate({
+        name: 'No Threshold Weighted',
+        documentType: 'x',
+        levels: [
+          {
+            level: 1,
+            name: 'L1',
+            mode: 'weighted',
+            weights: { cfo: 1 },
+            approvers: [{ type: 'user', userId: 'cfo' }],
+          },
+        ],
+      }),
+    ).rejects.toThrow(/requires threshold to be a positive number/);
+    await engine.shutdown();
+  });
 });
