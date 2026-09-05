@@ -64,6 +64,15 @@ describe('isLevelApproved', () => {
     ).toThrow(/only 2 approver/);
   });
 
+  it('quorum — throws when minApprovals is not a positive integer', () => {
+    expect(() =>
+      isLevelApproved(makeLevel('quorum', ['a', 'b'], [], [], { minApprovals: 1.5 })),
+    ).toThrow(/positive integer/);
+    expect(() =>
+      isLevelApproved(makeLevel('quorum', ['a', 'b'], [], [], { minApprovals: 0 })),
+    ).toThrow(/positive integer/);
+  });
+
   it('weighted — approved when cumulative approved weight meets threshold', () => {
     const weights = { cfo: 3, mgr: 1 };
     expect(
