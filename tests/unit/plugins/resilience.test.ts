@@ -106,6 +106,20 @@ describe('RbacAuthorizationPolicy — role matching', () => {
 
     expect(denial).toMatch(/must have all of role\(s\): manager, director/);
   });
+
+  it('resolves tenantId via a custom tenantIdFn instead of ctx.instance.tenantId', async () => {
+    const seen: string[] = [];
+    const policy = new RbacAuthorizationPolicy({
+      rules: { approve: { roles: ['manager'] } },
+      tenantIdFn: () => 'override-tenant',
+      roleProvider: (_actorId, tenantId) => {
+        seen.push(tenantId);
+        return ['manager'];
+      },
+    });
+    expect(await policy.authorize(authCtx())).toBeUndefined();
+    expect(seen).toEqual(['override-tenant']);
+  });
 });
 
 describe('RbacAuthorizationPolicy — fail-closed provider', () => {
