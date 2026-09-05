@@ -218,6 +218,73 @@ describe('EscalationScheduler — SLA breach', () => {
   });
 });
 
+describe('EscalationScheduler — reminders', () => {
+  it('sends a due reminder for a pending level and still escalates in the same tick', async () => {
+    const onRemind = vi.fn(async () => {});
+    const { scheduler, adapter, handlers } = makeScheduler({ onRemind });
+    adapter.getOverdueInstances.mockResolvedValue([
+      makeInstance({
+        levels: [
+          {
+            level: 1,
+            name: 'L1',
+            status: 'pending',
+            approvers: [{ type: 'user', userId: 'bob' }],
+            reminderDueAt: PAST,
+            escalationDueAt: PAST,
+          },
+        ],
+      }),
+    ]);
+
+    await scheduler.tick();
+
+    expect(onRemind).toHaveBeenCalledWith('inst-1', 1);
+    expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1', 1);
+  });
+
+  it('does not remind a level whose reminderDueAt has not arrived yet', async () => {
+    const onRemind = vi.fn(async () => {});
+    const { scheduler, adapter } = makeScheduler({ onRemind });
+    adapter.getOverdueInstances.mockResolvedValue([
+      makeInstance({
+        levels: [
+          {
+            level: 1,
+            name: 'L1',
+            status: 'pending',
+            approvers: [{ type: 'user', userId: 'bob' }],
+            reminderDueAt: FUTURE,
+          },
+        ],
+      }),
+    ]);
+
+    await scheduler.tick();
+
+    expect(onRemind).not.toHaveBeenCalled();
+  });
+
+  it('skips reminders entirely when no onRemind handler is configured', async () => {
+    const { scheduler, adapter } = makeScheduler();
+    adapter.getOverdueInstances.mockResolvedValue([
+      makeInstance({
+        levels: [
+          {
+            level: 1,
+            name: 'L1',
+            status: 'pending',
+            approvers: [{ type: 'user', userId: 'bob' }],
+            reminderDueAt: PAST,
+          },
+        ],
+      }),
+    ]);
+
+    await expect(scheduler.tick()).resolves.not.toThrow();
+  });
+});
+
 describe('EscalationScheduler — error paths', () => {
   it('logs a throwing onSlaBreach and still escalates', async () => {
     const { scheduler, adapter, handlers, calls } = makeScheduler();
