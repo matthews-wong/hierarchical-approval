@@ -211,6 +211,12 @@ describe('approval reminders', () => {
       ).toBe(false);
     });
 
+    it('rejects a maxReminders below 1', () => {
+      expect(
+        engine.validateTemplate(withLevel({ reminderAfterDays: 1, maxReminders: 0 })).valid,
+      ).toBe(false);
+    });
+
     it('rejects reminderEveryDays without reminderAfterDays, which would never fire', () => {
       const r = engine.validateTemplate(withLevel({ reminderEveryDays: 2 }));
       expect(r.valid).toBe(false);
