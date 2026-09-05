@@ -526,6 +526,19 @@ describe('RedactingAuditAdapter', () => {
     await adapter.append('t', 'i', original, INST);
     expect(seen[0]!.entry).not.toBe(original);
   });
+
+  it('a redaction failure (unclonable circular value) logs and forwards the original entry unmodified', async () => {
+    const logger = spyLogger();
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue.a'], logger });
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const original = makeEntry({ newValue: { a: circular } });
+    await adapter.append('t', 'i', original, INST);
+    expect(logger.error).toHaveBeenCalledOnce();
+    expect(logger.error.mock.calls[0]![0]).toContain('redaction failed');
+    expect(seen[0]!.entry).toBe(original);
+  });
 });
 
 describe('CompositeAuditAdapter', () => {
