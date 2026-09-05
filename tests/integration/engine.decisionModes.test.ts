@@ -104,6 +104,26 @@ describe('ApprovalEngine — quorum mode', () => {
     ).rejects.toThrow(/requires 3 approvals but only 2 approver/);
     await engine.shutdown();
   });
+
+  it('allows minApprovals exceeding the approver count when a role approver could resolve to more than one user', async () => {
+    const engine = makeEngine();
+    await expect(
+      engine.defineTemplate({
+        name: 'Role Quorum',
+        documentType: 'x',
+        levels: [
+          {
+            level: 1,
+            name: 'L1',
+            mode: 'quorum',
+            minApprovals: 3,
+            approvers: [{ type: 'user', userId: 'a' }, { type: 'role', role: 'finance' }],
+          },
+        ],
+      }),
+    ).resolves.not.toThrow();
+    await engine.shutdown();
+  });
 });
 
 describe('ApprovalEngine — weighted mode', () => {
