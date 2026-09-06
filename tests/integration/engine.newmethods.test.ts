@@ -359,6 +359,27 @@ describe('healthCheck', () => {
     await engine.shutdown();
   });
 
+  it('returns degraded when an instance has an overdue escalation', async () => {
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({ adapter, tenantId: 'health-tenant', escalationPollIntervalMs: 999999 });
+    await engine.defineTemplate({
+      name: 'Simple',
+      documentType: 'doc',
+      levels: [{ level: 1, name: 'Approver', approvers: [{ type: 'user', userId: 'approver1' }], mode: 'any', escalationAfterDays: 3 }],
+      escalation: { escalateTo: { type: 'user', userId: 'escalated-user' } },
+    });
+    const instance = await engine.submit({ templateName: 'Simple', documentId: 'HC-001', documentType: 'doc', submittedBy: 'alice', data: {} });
+
+    const raw = await adapter.getInstance('health-tenant', instance.id);
+    raw!.levels.find((l) => l.level === 1)!.escalationDueAt = new Date(Date.now() - 1000);
+    await adapter.updateInstance(raw!, raw!.version);
+
+    const result = await engine.healthCheck();
+    expect(result.status).toBe('degraded');
+    expect(result.adapter).toBe('connected');
+    await engine.shutdown();
+  });
+
   it('escalationRunning is false after shutdown', async () => {
     const engine = makeEngine();
     await engine.shutdown();
