@@ -520,6 +520,13 @@ describe('RedactingAuditAdapter', () => {
     expect(seen[0]!.entry.newValue).toEqual({ keep: 'ok' });
   });
 
+  it('an all-dots field path parses to nothing and is a no-op', async () => {
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['...'] });
+    await adapter.append('t', 'i', makeEntry({ newValue: { keep: 'ok' } }), INST);
+    expect(seen[0]!.entry.newValue).toEqual({ keep: 'ok' });
+  });
+
   it('a path into a primitive/array/null is a no-op', async () => {
     const { inner, seen } = capturingInner();
     const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue.a.b'] });
