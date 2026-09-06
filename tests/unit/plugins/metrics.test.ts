@@ -180,6 +180,15 @@ describe('InMemoryMetricsAdapter', () => {
     expect(s.max).toBe(30);
   });
 
+  it('a non-positive maxSamplesPerSeries falls back to unbounded retention', () => {
+    const m = new InMemoryMetricsAdapter({ maxSamplesPerSeries: 0 });
+    for (const v of [10, 20, 30]) m.timing('approval.operation_duration_ms', v, { operation: 'op' });
+    const s = m.snapshot().timings['approval.operation_duration_ms{operation="op"}']!;
+    expect(s.count).toBe(3);
+    expect(s.p50).toBe(20);
+    expect(s.p95).toBe(30);
+  });
+
   it('reset clears everything', () => {
     const m = new InMemoryMetricsAdapter();
     m.increment('approval.submitted');
