@@ -543,6 +543,17 @@ describe('RedactingAuditAdapter', () => {
     expect((seen[0]!.entry.newValue as { when: Date }).when.getTime()).toBe(when.getTime());
   });
 
+  it('deep-clones an array value, mutating the clone does not affect the original', async () => {
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner });
+    const tags = ['a', 'b'];
+    await adapter.append('t', 'i', makeEntry({ newValue: { tags } }), INST);
+    const nv = seen[0]!.entry.newValue as { tags: string[] };
+    expect(nv.tags).toEqual(['a', 'b']);
+    nv.tags.push('c');
+    expect(tags).toEqual(['a', 'b']);
+  });
+
   it('forwards a clone, not the same reference', async () => {
     const { inner, seen } = capturingInner();
     const adapter = new RedactingAuditAdapter({ inner });
