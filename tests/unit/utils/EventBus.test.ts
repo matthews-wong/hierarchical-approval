@@ -66,6 +66,17 @@ describe('EventBus', () => {
     expect(bus.off('approval:submitted', never)).toBe(bus);
   });
 
+  it('once registered twice for the same listener fires both, second cleanup is a no-op', () => {
+    const bus = new EventBus();
+    const listener = vi.fn();
+    bus.once('approval:submitted', listener);
+    bus.once('approval:submitted', listener);
+
+    expect(() => bus.emit('approval:submitted', submittedEvent())).not.toThrow();
+
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
   it('once fires exactly once across repeated emits', () => {
     const bus = new EventBus();
     const listener = vi.fn();
