@@ -372,6 +372,21 @@ describe('P0 Bug 5 — delegatedUntil is stored on level instance', () => {
     expect(level1.delegatedUntil).toBeDefined();
   });
 
+  it('reassigning the delegate slot clears the active delegation', async () => {
+    const instance = await engine.submit({ templateName: 'Two Level', documentId: 'DU-003', documentType: 'doc', submittedBy: 'alice', data: {} });
+    const until = new Date(Date.now() + 86_400_000);
+    await engine.delegate(instance.id, { fromApprover: 'mgr1', toApprover: 'mgr2', reason: 'on leave', until });
+
+    await engine.reassign(instance.id, { reassignedBy: 'admin', fromApprover: 'mgr2', toApprover: 'mgr3', reason: 'reassigned while delegated' });
+
+    const updated = await engine.getInstance(instance.id);
+    const level1 = updated.levels.find((l) => l.level === 1)!;
+    expect(level1.delegatedTo).toBeUndefined();
+    expect(level1.delegatedFrom).toBeUndefined();
+    expect(level1.delegatedUntil).toBeUndefined();
+    expect(level1.approverIds).toContain('mgr3');
+  });
+
   it('delegate without until does not set delegatedUntil', async () => {
     const instance = await engine.submit({ templateName: 'Two Level', documentId: 'DU-002', documentType: 'doc', submittedBy: 'alice', data: {} });
     await engine.delegate(instance.id, { fromApprover: 'mgr1', toApprover: 'mgr2', reason: 'permanent' });
