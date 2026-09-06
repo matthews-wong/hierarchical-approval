@@ -77,10 +77,11 @@ describe('TemplateRegistry', () => {
     // Manually corrupt version in storage to undefined
     const existing = await adapter.getTemplate('t1', 'purchase');
     if (existing) {
-      delete (existing as any).version;
+      // Simulate legacy stored data predating the version field.
+      delete (existing as Partial<typeof existing>).version;
       await adapter.saveTemplate(existing);
     }
-    const secondId = await registry.update(config);
+    await registry.update(config);
     const updated = await registry.get('purchase');
     expect(updated.version).toBe(2);
     expect(updated.previousVersionId).toBe(firstId);
