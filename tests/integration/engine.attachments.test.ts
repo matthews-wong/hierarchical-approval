@@ -130,6 +130,16 @@ describe('attachments', () => {
       );
     });
 
+    it('refuses to remove an attachment from a terminal instance', async () => {
+      const i = await submit();
+      const attached = await engine.addAttachment(i.id, quote);
+      const attachmentId = attached.attachments?.[0]?.id as string;
+      await engine.cancel(i.id, { cancelledBy: 'buyer', reason: 'x' });
+      await expect(
+        engine.removeAttachment(i.id, { actorId: 'buyer', attachmentId }),
+      ).rejects.toThrow(/Cannot modify attachments on a "cancelled"/);
+    });
+
     it('refuses to remove an attachment that is not there', async () => {
       const i = await submit();
       await expect(
