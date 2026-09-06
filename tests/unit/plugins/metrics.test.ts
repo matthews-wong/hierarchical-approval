@@ -213,6 +213,16 @@ describe('PrometheusMetricsAdapter', () => {
     expect(out.match(/# TYPE approval_submitted /g)).toHaveLength(1);
   });
 
+  it('groups multiple distinct series of the same metric under one HELP/TYPE block', () => {
+    const m = new PrometheusMetricsAdapter();
+    m.increment('approval.submitted', { tenantId: 'acme' });
+    m.increment('approval.submitted', { tenantId: 'globex' });
+    const out = m.scrape();
+    expect(out.match(/# HELP approval_submitted /g)).toHaveLength(1);
+    expect(out).toContain('approval_submitted{tenantId="acme"} 1');
+    expect(out).toContain('approval_submitted{tenantId="globex"} 1');
+  });
+
   it('renders histograms with cumulative buckets, +Inf == _count, plus _sum/_count', () => {
     const m = new PrometheusMetricsAdapter({ buckets: [10, 100] });
     m.timing('approval.operation_duration_ms', 5, { operation: 'submit' }); // <=10
