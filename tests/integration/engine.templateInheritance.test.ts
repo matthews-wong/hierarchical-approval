@@ -133,6 +133,12 @@ describe('template inheritance', () => {
     expect(await levelsOf('PO-base')).toEqual(['1:Manager', '2:Finance', '9:New']);
   });
 
+  it('updateTemplate rejects a resolved config with no levels and no extends', async () => {
+    await expect(
+      engine.updateTemplate({ name: 'PO-base', documentType: 'purchase_order', levels: [] }),
+    ).rejects.toThrow('Invalid template configuration: Template must have at least one level.');
+  });
+
   it('does not persist the extends/removeLevels directives', async () => {
     await engine.defineTemplate({
       name: 'PO-Fast',
