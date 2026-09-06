@@ -232,6 +232,17 @@ describe('ApprovalEngine — delegate', () => {
   });
 });
 
+describe('ApprovalEngine — getCurrentApprovers', () => {
+  it('returns an empty array once the instance is no longer pending', async () => {
+    const engine = makeEngine();
+    await engine.defineTemplate(poTemplate);
+    const instance = await engine.submit({ templateName: 'Purchase Order', documentId: 'PO-011', documentType: 'purchase_order', submittedBy: 'alice', data: {} });
+    await engine.cancel(instance.id, { cancelledBy: 'alice', reason: 'no longer needed' });
+    expect(await engine.getCurrentApprovers(instance.id)).toEqual([]);
+    engine.shutdown();
+  });
+});
+
 describe('ApprovalEngine — cancel', () => {
   it('cancels a pending instance', async () => {
     const engine = makeEngine();
