@@ -171,6 +171,15 @@ describe('InMemoryMetricsAdapter', () => {
     expect(s.avg).toBe(25);
   });
 
+  it('min/max update independently as a lower or non-extreme sample arrives later', () => {
+    const m = new InMemoryMetricsAdapter();
+    for (const v of [20, 30, 10, 25]) m.timing('approval.operation_duration_ms', v, { operation: 'op' });
+    const s = m.snapshot().timings['approval.operation_duration_ms{operation="op"}']!;
+    expect(s.count).toBe(4);
+    expect(s.min).toBe(10);
+    expect(s.max).toBe(30);
+  });
+
   it('reset clears everything', () => {
     const m = new InMemoryMetricsAdapter();
     m.increment('approval.submitted');
