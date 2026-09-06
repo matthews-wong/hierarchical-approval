@@ -527,6 +527,13 @@ describe('RedactingAuditAdapter', () => {
     expect(seen[0]!.entry.newValue).toEqual({ a: 'primitive' });
   });
 
+  it('a wildcard path into a primitive is a no-op', async () => {
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue.a.*'] });
+    await adapter.append('t', 'i', makeEntry({ newValue: { a: 'primitive' } }), INST);
+    expect(seen[0]!.entry.newValue).toEqual({ a: 'primitive' });
+  });
+
   it('uses a configurable mask token', async () => {
     const { inner, seen } = capturingInner();
     const adapter = new RedactingAuditAdapter({ inner, mask: '***', freeTextFields: ['comment'] });
