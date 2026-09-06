@@ -205,6 +205,16 @@ describe('approval reminders', () => {
       expect(engine.validateTemplate(withLevel({ reminderAfterDays: 0 })).valid).toBe(false);
     });
 
+    it('rejects a non-positive reminderEveryDays', () => {
+      const r = engine.validateTemplate(
+        withLevel({ reminderAfterDays: 1, reminderEveryDays: 0 }),
+      );
+      expect(r.valid).toBe(false);
+      expect(r.errors.map((e) => e.message).join(' ')).toMatch(
+        /reminderEveryDays must be a positive number/,
+      );
+    });
+
     it('rejects a non-integer maxReminders', () => {
       expect(
         engine.validateTemplate(withLevel({ reminderAfterDays: 1, maxReminders: 1.5 })).valid,
