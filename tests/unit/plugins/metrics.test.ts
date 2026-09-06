@@ -58,6 +58,10 @@ describe('internal helpers', () => {
     expect(sanitizeDuration(0)).toBe(0);
     expect(sanitizeDuration(2.5)).toBe(2.5);
   });
+
+  it('sanitizeDuration rejects a non-number value from an untyped caller', () => {
+    expect(sanitizeDuration('12' as unknown as number)).toBeNull();
+  });
 });
 
 describe('stats', () => {
