@@ -250,6 +250,12 @@ describe('sub-workflows', () => {
       expect(engine.validateTemplate(withLevel({})).valid).toBe(false);
     });
 
+    it('rejects a subWorkflow with no templateName', () => {
+      const r = engine.validateTemplate(withLevel({ subWorkflow: {} }));
+      expect(r.valid).toBe(false);
+      expect(r.errors.map((e) => e.message).join(' ')).toMatch(/without a templateName/);
+    });
+
     it('rejects a template that would spawn itself', () => {
       const r = engine.validateTemplate(withLevel({ subWorkflow: { templateName: 'X' } }));
       expect(r.valid).toBe(false);
