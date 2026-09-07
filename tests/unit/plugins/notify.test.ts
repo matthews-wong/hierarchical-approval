@@ -263,6 +263,32 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect(dead[0]!.lastError).toBe('plain string failure');
   });
 
+  it('a due record that is no longer pending (stale row) is skipped, not delivered', async () => {
+    const clock = new ManualClock(0);
+    const transport = vi.fn(async () => {});
+    const staleRecord: OutboxRecord = {
+      id: 'r1',
+      partitionKey: 'tenant-1:inst-1',
+      tenantId: 'tenant-1',
+      event: makeEvent(),
+      status: 'dead',
+      attempts: 5,
+      nextAttemptAt: 0,
+      enqueuedAt: 0,
+    };
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [staleRecord],
+      update: async () => {},
+      remove: async () => {},
+      pending: async () => [],
+      deadLettered: async () => [staleRecord],
+    };
+    const adapter = new OutboxNotificationAdapter({ transport, clock, store });
+    expect(await adapter.drain()).toBe(0);
+    expect(transport).not.toHaveBeenCalled();
+  });
+
   it('drain on an empty outbox returns 0 and does not throw', async () => {
     const adapter = new OutboxNotificationAdapter({ transport: () => {}, clock: new ManualClock(0) });
     expect(await adapter.drain()).toBe(0);
