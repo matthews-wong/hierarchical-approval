@@ -180,6 +180,16 @@ describe('InMemoryMetricsAdapter', () => {
     expect(s.max).toBe(10);
   });
 
+  it('a non-positive maxSamplesPerSeries falls back to unbounded retention', () => {
+    const m = new InMemoryMetricsAdapter({ maxSamplesPerSeries: 0 });
+    for (const v of [10, 20, 30]) m.timing('approval.operation_duration_ms', v, { operation: 'op' });
+    // p50 over the full reservoir requires all 3 samples to have been retained,
+    // which only happens when the non-positive cap collapsed to Infinity.
+    const s = m.snapshot().timings['approval.operation_duration_ms{operation="op"}']!;
+    expect(s.p50).toBe(20);
+    expect(s.count).toBe(3);
+  });
+
   it('reset clears everything', () => {
     const m = new InMemoryMetricsAdapter();
     m.increment('approval.submitted');
