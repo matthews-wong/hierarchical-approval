@@ -563,6 +563,23 @@ describe('RedactingAuditAdapter', () => {
     expect(logger.error.mock.calls[0]![0]).toContain('redaction failed');
     expect(seen[0]!.entry).toBe(original);
   });
+
+  it('deep-clones array values, leaving them structurally intact but not the same reference', async () => {
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue.ssn'] });
+    const original = makeEntry({ newValue: { ssn: 'hide', tags: ['a', 'b'] } });
+    await adapter.append('t', 'i', original, INST);
+    const nv = seen[0]!.entry.newValue as { ssn: string; tags: string[] };
+    expect(nv.tags).toEqual(['a', 'b']);
+    expect(nv.tags).not.toBe((original.newValue as { tags: string[] }).tags);
+  });
+
+  it('a bare bag path (newValue.*) masks every direct child of the whole bag', async () => {
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue.*'] });
+    await adapter.append('t', 'i', makeEntry({ newValue: { ssn: '123', name: 'Jane' } }), INST);
+    expect(seen[0]!.entry.newValue).toEqual({ ssn: DEFAULT_REDACTION_MASK, name: DEFAULT_REDACTION_MASK });
+  });
 });
 
 describe('CompositeAuditAdapter', () => {
