@@ -345,6 +345,43 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect((await adapter.deadLettered()).length).toBe(1);
   });
 
+  it('computeBackoff collapses a non-finite intermediate value to maxDelayMs', async () => {
+    const clock = new ManualClock(0);
+    const record: OutboxRecord = {
+      id: 'r1',
+      partitionKey: 'tenant-1:inst-1',
+      tenantId: 'tenant-1',
+      event: makeEvent(),
+      status: 'pending',
+      // Already past a normal retry count, but still under maxAttempts, so this
+      // attempt takes the retry path where computeBackoff runs.
+      attempts: 2000,
+      nextAttemptAt: 0,
+      enqueuedAt: 0,
+    };
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [record],
+      update: async () => {},
+      remove: async () => {},
+      pending: async () => [],
+      deadLettered: async () => [],
+    };
+    const adapter = new OutboxNotificationAdapter({
+      transport: async () => {
+        throw new Error('fail');
+      },
+      store,
+      clock,
+      maxAttempts: 1_000_000,
+      maxDelayMs: 12_345,
+    });
+    // Math.pow(backoffFactor, attempts - 1) overflows to Infinity here, so
+    // computeBackoff must collapse it to maxDelayMs rather than Infinity/NaN.
+    await adapter.drain();
+    expect(record.nextAttemptAt).toBe(12_345);
+  });
+
   it('store read error during drain is logged, not thrown', async () => {
     const logger = spyLogger();
     const store: IOutboxStore = {
