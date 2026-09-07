@@ -135,6 +135,24 @@ describe('sub-workflow child lifecycle', () => {
       expect(result.purged).toHaveLength(2);
       expect((await engine.getInstance(childId)).id).toBe(childId);
     });
+
+    it('purges an already-finished child only once when its status differs from the parent', async () => {
+      const { parent } = await submit();
+      const childId = (await engine.getInstance(parent.id)).levels[0]?.childInstanceId as string;
+      // Child finishes on its own ('approved') before the parent later ends
+      // with a different terminal status ('rejected'). Both statuses are
+      // scanned in separate passes, so the child turns up twice: once on its
+      // own and once again via the parent's family sweep.
+      await engine.approve(childId, { approverId: 'chair' });
+      await engine.reject(parent.id, { approverId: 'ceo', reason: 'no' });
+
+      const result = await engine.purgeInstances({
+        olderThan: new Date(Date.now() + 86_400_000),
+      });
+
+      expect(result.purged.map((p) => p.instanceId).sort()).toEqual([parent.id, childId].sort());
+      expect((await engine.queryInstances({})).items).toEqual([]);
+    });
   });
 });
 
