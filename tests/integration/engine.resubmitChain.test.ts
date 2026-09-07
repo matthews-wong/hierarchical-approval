@@ -138,4 +138,66 @@ describe('resubmit rebuilds a complete chain', () => {
     expect(re.levels[0]?.approverIds).toEqual(['a']);
     expect(re.parentInstanceId).toBe(i.id);
   });
+
+  it('refuses a resubmit whose updated data skips every level', async () => {
+    await engine.defineTemplate({
+      name: 'SKIPALL',
+      documentType: 'memo',
+      levels: [
+        { level: 1, name: 'Manager', approvers: [{ type: 'user', userId: 'mgr' }], mode: 'any' },
+      ],
+      conditions: [{ when: { field: 'skipAll', operator: '==', value: true }, skipLevels: [1] }],
+    });
+    const i = await engine.submit({
+      templateName: 'SKIPALL',
+      documentId: `sk-${Math.random()}`,
+      documentType: 'memo',
+      submittedBy: 'buyer',
+      data: { skipAll: false },
+    });
+    await engine.reject(i.id, { approverId: 'mgr', reason: 'rework' });
+
+    await expect(
+      engine.resubmit(i.id, { resubmittedBy: 'buyer', updatedData: { skipAll: true } }),
+    ).rejects.toThrow(/no active levels/);
+  });
+
+  it('refuses a resubmit whose updated data introduces a duplicate level number', async () => {
+    // Neither addLevels[level:2] conflicts with the static level (1) or its own
+    // rule's skipLevels, so defineTemplate accepts this — the collision between
+    // the two conditions' added levels only surfaces once both rules match.
+    await engine.defineTemplate({
+      name: 'DUPNUM',
+      documentType: 'memo',
+      levels: [
+        { level: 1, name: 'Manager', approvers: [{ type: 'user', userId: 'mgr' }], mode: 'any' },
+      ],
+      conditions: [
+        {
+          when: { field: 'addA', operator: '==', value: true },
+          addLevels: [
+            { level: 2, name: 'ExtraA', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' },
+          ],
+        },
+        {
+          when: { field: 'addB', operator: '==', value: true },
+          addLevels: [
+            { level: 2, name: 'ExtraB', approvers: [{ type: 'user', userId: 'b' }], mode: 'any' },
+          ],
+        },
+      ],
+    });
+    const i = await engine.submit({
+      templateName: 'DUPNUM',
+      documentId: `dn-${Math.random()}`,
+      documentType: 'memo',
+      submittedBy: 'buyer',
+      data: { addA: false, addB: false },
+    });
+    await engine.reject(i.id, { approverId: 'mgr', reason: 'rework' });
+
+    await expect(
+      engine.resubmit(i.id, { resubmittedBy: 'buyer', updatedData: { addA: true, addB: true } }),
+    ).rejects.toThrow(/Duplicate level numbers/);
+  });
 });
