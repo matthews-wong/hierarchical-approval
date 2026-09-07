@@ -251,6 +251,18 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect(transport).toHaveBeenCalledTimes(1);
   });
 
+  it('a non-Error thrown value is stringified into lastError', async () => {
+    const clock = new ManualClock(0);
+    const transport = vi.fn(() => {
+      throw 'plain string failure';
+    });
+    const adapter = new OutboxNotificationAdapter({ transport, clock, maxAttempts: 1 });
+    await adapter.notify(makeEvent());
+    await adapter.drain();
+    const dead = await adapter.deadLettered();
+    expect(dead[0]!.lastError).toBe('plain string failure');
+  });
+
   it('drain on an empty outbox returns 0 and does not throw', async () => {
     const adapter = new OutboxNotificationAdapter({ transport: () => {}, clock: new ManualClock(0) });
     expect(await adapter.drain()).toBe(0);
