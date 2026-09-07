@@ -340,6 +340,49 @@ describe('delegation revert', () => {
 
     await localEngine.shutdown();
   });
+
+  it("the engine's own internal scheduler reverts an expired delegation", async () => {
+    // Every other case in this describe block hand-rolls a standalone
+    // EscalationScheduler with its own reimplemented onRevertDelegation, which
+    // never runs the engine's real private revertDelegation handler. Tick the
+    // engine's own internal scheduler instance directly (still no real timers,
+    // per this file's header) to exercise that handler for real.
+    const localEngine = new ApprovalEngine({
+      adapter: new MemoryAdapter(),
+      tenantId: 'delrev-internal-tenant',
+      escalationPollIntervalMs: 999999,
+    });
+    await localEngine.defineTemplate({
+      name: 'DelRevInternal',
+      documentType: 'doc',
+      levels: [
+        { level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'mgr1' }], mode: 'any' },
+      ],
+    });
+    const instance = await localEngine.submit({
+      templateName: 'DelRevInternal',
+      documentId: 'DR-INT-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+    await localEngine.delegate(instance.id, {
+      fromApprover: 'mgr1',
+      toApprover: 'temp-mgr',
+      reason: 'temp',
+      until: new Date(Date.now() - 1000),
+    });
+
+    await (localEngine as unknown as { escalation: EscalationScheduler }).escalation.tick();
+
+    const updated = await localEngine.getInstance(instance.id);
+    const level1 = updated.levels.find((l) => l.level === 1)!;
+    expect(level1.approverIds).toEqual(['mgr1']);
+    expect(level1.delegatedTo).toBeUndefined();
+    expect(level1.delegatedUntil).toBeUndefined();
+
+    await localEngine.shutdown();
+  });
 });
 
 // ─── Escalation via scheduler ─────────────────────────────────────────────────
