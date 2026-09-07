@@ -653,6 +653,18 @@ describe('CompositeAuditAdapter', () => {
     await composite.append('t', 'i', makeEntry(), INST);
     expect(logger.error.mock.calls[0]![0]).toContain('child[0]');
   });
+
+  it('a CompositeChild wrapper with no explicit id also defaults to child[index]', async () => {
+    const logger = spyLogger();
+    const bad: IAuditAdapter = {
+      append: async () => {
+        throw new Error('boom');
+      },
+    };
+    const composite = new CompositeAuditAdapter({ children: [{ adapter: bad }], logger });
+    await composite.append('t', 'i', makeEntry(), INST);
+    expect(logger.error.mock.calls[0]![0]).toContain('child[0]');
+  });
 });
 
 // Integration of decorator + chain (drop-in composition).
