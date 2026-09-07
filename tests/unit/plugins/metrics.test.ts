@@ -171,6 +171,15 @@ describe('InMemoryMetricsAdapter', () => {
     expect(s.avg).toBe(25);
   });
 
+  it('a later sample lower than the running min updates min without touching max', () => {
+    const m = new InMemoryMetricsAdapter();
+    m.timing('approval.operation_duration_ms', 10, { operation: 'op' });
+    m.timing('approval.operation_duration_ms', 5, { operation: 'op' });
+    const s = m.snapshot().timings['approval.operation_duration_ms{operation="op"}']!;
+    expect(s.min).toBe(5);
+    expect(s.max).toBe(10);
+  });
+
   it('reset clears everything', () => {
     const m = new InMemoryMetricsAdapter();
     m.increment('approval.submitted');
