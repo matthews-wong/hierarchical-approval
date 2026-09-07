@@ -77,6 +77,21 @@ describe('EventBus', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it('registering the same listener with once twice fires it twice and does not throw on cleanup', () => {
+    const bus = new EventBus();
+    const listener = vi.fn();
+    bus.once('approval:submitted', listener);
+    bus.once('approval:submitted', listener);
+
+    bus.emit('approval:submitted', submittedEvent());
+
+    // Each once() call wraps the listener independently, so both wrappers fire;
+    // their cleanup races to drop the same per-event bookkeeping entry, and the
+    // second cleanup finding it already gone must be a silent no-op.
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(() => bus.off('approval:submitted', listener)).not.toThrow();
+  });
+
   it('on, off, and once return the bus for chaining', () => {
     const bus = new EventBus();
     const listener = vi.fn();
