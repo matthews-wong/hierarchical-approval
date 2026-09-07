@@ -153,6 +153,21 @@ describe('sub-workflow child lifecycle', () => {
       expect(result.purged.map((p) => p.instanceId).sort()).toEqual([parent.id, childId].sort());
       expect((await engine.queryInstances({})).items).toEqual([]);
     });
+
+    it('stops mid-scan once a family sweep already reached the limit', async () => {
+      const { parent, childId } = await submit();
+      await engine.cancel(parent.id, { cancelledBy: 'buyer', reason: 'x' });
+
+      // The parent and its child are both terminal and both turn up in the
+      // same status scan; a limit equal to the family size must stop before
+      // re-examining the child as its own top-level page entry.
+      const result = await engine.purgeInstances({
+        olderThan: new Date(Date.now() + 86_400_000),
+        limit: 2,
+      });
+
+      expect(result.purged.map((p) => p.instanceId).sort()).toEqual([parent.id, childId].sort());
+    });
   });
 });
 
