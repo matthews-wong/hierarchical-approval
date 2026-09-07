@@ -142,4 +142,21 @@ describe('explainChain', () => {
   it('throws for a template that does not exist', async () => {
     await expect(engine.explainChain('nope', {}, 'buyer')).rejects.toThrow();
   });
+
+  it('attributes a skip to the first matching rule when two rules skip the same level', async () => {
+    await engine.defineTemplate({
+      name: 'DUP-SKIP',
+      documentType: 'memo',
+      levels: [u(1, 'A', 'a'), u(2, 'B', 'b')],
+      conditions: [
+        // 0: skips B for internal transfers
+        { when: { field: 'internal', operator: '==', value: true }, skipLevels: [2] },
+        // 1: also skips B for a different reason - should not steal the attribution
+        { when: { field: 'lowRisk', operator: '==', value: true }, skipLevels: [2] },
+      ],
+    });
+
+    const e = await engine.explainChain('DUP-SKIP', { internal: true, lowRisk: true }, 'buyer');
+    expect(e.skipped).toEqual([{ level: 2, name: 'B', skippedByRule: 0 }]);
+  });
 });
