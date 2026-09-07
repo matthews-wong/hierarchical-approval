@@ -376,6 +376,18 @@ describe('PostgresAdapter — appendAuditEntry', () => {
     expect(params[6]).toBeNull(); // actorUserAgent
     expect(params[7]).toBeNull(); // traceId
   });
+
+  it('serializes oldValue and newValue to JSON when provided', async () => {
+    const { pool, adapter } = freshAdapter();
+    await adapter.appendAuditEntry(
+      'tenant-1',
+      'inst-1',
+      makeEntry({ oldValue: { amount: 1 }, newValue: { amount: 2 } }),
+    );
+    const { params } = pool.queries[0]!;
+    expect(params[10]).toBe(JSON.stringify({ amount: 1 }));
+    expect(params[11]).toBe(JSON.stringify({ amount: 2 }));
+  });
 });
 
 describe('PostgresAdapter — getInstancesByApprover', () => {
