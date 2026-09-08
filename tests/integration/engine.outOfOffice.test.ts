@@ -81,6 +81,16 @@ describe('out-of-office cover', () => {
     expect(i.levels[0]?.approverIds).toHaveLength(1);
   });
 
+  it('stops when a stand-in names itself as its own cover', async () => {
+    // A misconfigured provider returns the same id it was just asked about,
+    // one hop after a real substitution — must stop there rather than treat
+    // itself as a fresh delegate forever.
+    const engine = build(providerFrom({ mgr: 'a', a: 'a' }));
+    await defineTwoLevel(engine);
+    const i = await submit(engine);
+    expect(i.levels[0]?.approverIds).toEqual(['a']);
+  });
+
   it('stops after the hop cap on an unbounded cover chain', async () => {
     const engine = build({
       // Every user is away, forever forwarding to the next.
