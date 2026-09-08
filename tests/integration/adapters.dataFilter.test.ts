@@ -69,6 +69,14 @@ describe('filtering instances by document data', () => {
       ).toEqual(['b']);
     });
 
+    it('does not match an array against a plain object with the same keys', async () => {
+      const engine = await buildEngine();
+      await submit(engine, 'a', { tags: ['x', 'y'] });
+
+      const r = await engine.queryInstances({ data: { tags: { 0: 'x', 1: 'y' } } });
+      expect(r.items).toHaveLength(0);
+    });
+
     it('distinguishes a missing field from a null one', async () => {
       const engine = await buildEngine();
       await submit(engine, 'a', { amount: null });
