@@ -339,6 +339,19 @@ describe('MemoryAdapter', () => {
       expect(backward.items.map((i) => i.id)).toEqual(['i1', 'i2']);
     });
 
+    it('direction backward without a cursor is a no-op, starting from the first page', async () => {
+      const adapter = new MemoryAdapter();
+      await saveFive(adapter);
+
+      const page = await adapter.getInstancesByCursor(
+        't1',
+        {},
+        { limit: 2, direction: 'backward' },
+      );
+      expect(page.items.map((i) => i.id)).toEqual(['i1', 'i2']);
+      expect(page.prevCursor).toBeUndefined();
+    });
+
     it('sorts by updatedAt then id and applies the filter', async () => {
       const adapter = new MemoryAdapter();
       await adapter.saveInstance(
