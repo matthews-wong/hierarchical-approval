@@ -346,6 +346,43 @@ describe('SLA tracking', () => {
 
     await localEngine.shutdown();
   });
+
+  it('markSlaBreached is a no-op once the instance has left pending status', async () => {
+    // The scheduler's own overdue query already filters to status=pending, so
+    // this guard only matters for a race where the instance is decided between
+    // the query and the handler running. Call the private handler directly to
+    // exercise it without needing to actually win that race.
+    const adapter = new MemoryAdapter();
+    const localEngine = new ApprovalEngine({
+      adapter,
+      tenantId: 'sla-terminal-tenant',
+      escalationPollIntervalMs: 999999,
+    });
+    await localEngine.defineTemplate({
+      name: 'SLATerminal',
+      documentType: 'doc',
+      slaDeadlineDays: 1,
+      levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'u1' }], mode: 'any' }],
+    });
+    const instance = await localEngine.submit({
+      templateName: 'SLATerminal',
+      documentId: 'SLA-TERM-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+    await localEngine.approve(instance.id, { approverId: 'u1' });
+
+    await (
+      localEngine as unknown as { markSlaBreached: (id: string) => Promise<void> }
+    ).markSlaBreached(instance.id);
+
+    const updated = await localEngine.getInstance(instance.id);
+    expect(updated.status).toBe('approved');
+    expect(updated.slaBreachedAt).toBeUndefined();
+
+    await localEngine.shutdown();
+  });
 });
 
 // ─── Delegation revert (P0 Bug 5) ────────────────────────────────────────────
