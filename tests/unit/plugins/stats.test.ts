@@ -34,6 +34,11 @@ describe('percentileNearestRank', () => {
     expect(percentileNearestRank([10, 20, 30], 1)).toBe(10);
   });
 
+  it('clamps a rank below 1 up to the first sample', () => {
+    // p0: ceil(0 * 3) = 0, which Math.max(rank, 1) clamps up to 1 -> index 0
+    expect(percentileNearestRank([10, 20, 30], 0)).toBe(10);
+  });
+
 });
 
 describe('computeTimingStats', () => {
