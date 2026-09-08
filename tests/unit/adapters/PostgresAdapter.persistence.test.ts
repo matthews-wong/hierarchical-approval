@@ -103,6 +103,19 @@ describe('PostgresAdapter persists every mutable field', () => {
     expect(q?.params).toContain('reject');
   });
 
+  it('writes template_snapshot on update when the instance carries one', async () => {
+    const { pool, adapter } = fresh();
+    pool.queueResult({ rows: [{ id: 'inst-1' }], rowCount: 1 });
+    await adapter.updateInstance(
+      makeInstance({ templateSnapshot: { allowOverride: true, slaDeadlineDays: 3 } }),
+      1,
+    );
+
+    const q = lastUpdate(pool);
+    expect(q?.sql).toMatch(/template_snapshot\s+=\s+\$/);
+    expect(q?.params).toContain('{"allowOverride":true,"slaDeadlineDays":3}');
+  });
+
   it('still guards on version, so optimistic concurrency is intact', async () => {
     const { pool, adapter } = fresh();
     pool.queueResult({ rows: [{ id: 'inst-1' }], rowCount: 1 });
