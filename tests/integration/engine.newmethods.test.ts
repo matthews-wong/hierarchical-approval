@@ -123,6 +123,14 @@ describe('canApprove', () => {
     expect(result.eligible).toBe(false);
     expect(result.reason).toBe('wrong_status');
   });
+
+  it('returns delegated_away for an approver who delegated their slot away', async () => {
+    const instance = await engine.submit({ templateName: 'Two Level', documentId: 'CA-006', documentType: 'doc', submittedBy: 'alice', data: {} });
+    await engine.delegate(instance.id, { fromApprover: 'mgr1', toApprover: 'temp-mgr', reason: 'out of office' });
+    const result = await engine.canApprove(instance.id, 'mgr1');
+    expect(result.eligible).toBe(false);
+    expect(result.reason).toBe('delegated_away');
+  });
 });
 
 // ─── addComment ───────────────────────────────────────────────────────────────
