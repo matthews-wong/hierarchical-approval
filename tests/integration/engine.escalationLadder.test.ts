@@ -146,6 +146,28 @@ describe('escalation ladders', () => {
     expect(i.levels[0]?.escalationDueAt?.getTime()).toBe(clock.now().getTime() + 1 * DAY);
   });
 
+  it('sorts an hours-based rung ahead of a slower days-based rung', async () => {
+    const HOUR = 3_600_000;
+    const e = new ApprovalEngine({ adapter: new MemoryAdapter(), clock });
+    await e.defineTemplate({
+      name: 'HRS',
+      documentType: 'hrs',
+      levels: [{ level: 1, name: 'L', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' }],
+      escalationSteps: [
+        { afterDays: 1, escalateTo: { type: 'user', userId: 'late' } },
+        { afterHours: 5, escalateTo: { type: 'user', userId: 'early' } },
+      ],
+    });
+    const i = await e.submit({
+      templateName: 'HRS',
+      documentId: 'h-1',
+      documentType: 'hrs',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    expect(i.levels[0]?.escalationDueAt?.getTime()).toBe(clock.now().getTime() + 5 * HOUR);
+  });
+
   it('an explicit per-level delay overrides the ladder timing', async () => {
     const e = new ApprovalEngine({ adapter: new MemoryAdapter(), clock });
     await e.defineTemplate({
