@@ -462,6 +462,53 @@ describe('delegation revert', () => {
 
     await localEngine.shutdown();
   });
+
+  it('pushes the reverting approver back on when the delegate was already removed from the approver list', async () => {
+    // Mirrors the internal-scheduler case above, but the delegate ('temp-mgr')
+    // is no longer in approverIds by the time the delegation expires (e.g. a
+    // separate admin action already dropped them), so revertDelegation cannot
+    // swap it out and must push the original approver back on instead.
+    const localEngine = new ApprovalEngine({
+      adapter: new MemoryAdapter(),
+      tenantId: 'delrev-push-tenant',
+      escalationPollIntervalMs: 999999,
+    });
+    await localEngine.defineTemplate({
+      name: 'DelRevPush',
+      documentType: 'doc',
+      levels: [
+        { level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'mgr1' }], mode: 'any' },
+      ],
+    });
+    const instance = await localEngine.submit({
+      templateName: 'DelRevPush',
+      documentId: 'DR-PUSH-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+    await localEngine.delegate(instance.id, {
+      fromApprover: 'mgr1',
+      toApprover: 'temp-mgr',
+      reason: 'temp',
+      until: new Date(Date.now() - 1000),
+    });
+
+    const adapter = (localEngine as unknown as { opts: { adapter: MemoryAdapter } }).opts.adapter;
+    const stored = await adapter.getInstance('delrev-push-tenant', instance.id);
+    const level1Before = stored!.levels.find((l) => l.level === 1)!;
+    level1Before.approverIds = level1Before.approverIds.filter((a) => a !== 'temp-mgr');
+    await adapter.updateInstance(stored!, stored!.version);
+
+    await (localEngine as unknown as { escalation: EscalationScheduler }).escalation.tick();
+
+    const updated = await localEngine.getInstance(instance.id);
+    const level1 = updated.levels.find((l) => l.level === 1)!;
+    expect(level1.approverIds).toEqual(['mgr1']);
+    expect(level1.delegatedTo).toBeUndefined();
+
+    await localEngine.shutdown();
+  });
 });
 
 // ─── Escalation via scheduler ─────────────────────────────────────────────────
