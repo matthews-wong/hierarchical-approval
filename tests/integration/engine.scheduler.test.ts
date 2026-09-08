@@ -135,6 +135,42 @@ describe('instance expiry', () => {
     expect(updated.status).toBe('rejected');
     await localEngine.shutdown();
   });
+
+  it("the engine's own internal scheduler expires a past-due instance", async () => {
+    // Every other case in this describe block hand-rolls a standalone
+    // EscalationScheduler with its own reimplemented onExpire, which never
+    // runs the engine's real private expireInstance handler. Tick the
+    // engine's own internal scheduler instance directly (still no real
+    // timers, per this file's header) to exercise that handler for real.
+    const localEngine = new ApprovalEngine({
+      adapter: new MemoryAdapter(),
+      tenantId: 'exp-internal-tenant',
+      escalationPollIntervalMs: 999999,
+    });
+    await localEngine.defineTemplate(simpleTemplate);
+
+    const events: string[] = [];
+    localEngine.on('approval:expired', (p) => events.push(p.instanceId));
+
+    const instance = await localEngine.submit({
+      templateName: 'Simple',
+      documentId: 'EX-INT-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+      expiresAt: new Date(Date.now() - 1000),
+      deadlineAction: 'reject',
+    });
+
+    await (localEngine as unknown as { escalation: EscalationScheduler }).escalation.tick();
+
+    const updated = await localEngine.getInstance(instance.id);
+    expect(updated.status).toBe('rejected');
+    expect(events).toContain(instance.id);
+    expect(updated.auditLog.some((e) => e.action === 'expired')).toBe(true);
+
+    await localEngine.shutdown();
+  });
 });
 
 // ─── SLA tracking (P3) ───────────────────────────────────────────────────────
