@@ -126,6 +126,33 @@ describe('approval reminders', () => {
     expect(after.levels[0]?.reminderDueAt).toBeUndefined();
   });
 
+  it('sendReminder clears reminderDueAt without firing when remindersSent already meets the cap', async () => {
+    // scheduleReminder itself never leaves reminderDueAt set once the cap is
+    // hit, so drive this defensively-coded guard directly by forcing that
+    // combination back onto the stored level before calling sendReminder.
+    await define({ reminderAfterDays: 1, reminderEveryDays: 1, maxReminders: 2 });
+    const i = await submit();
+    clock.advanceDays(1);
+    await tick();
+    clock.advanceDays(1);
+    await tick();
+    expect(events).toHaveLength(2);
+
+    const raw = await adapter.getInstance('default', i.id);
+    const level = raw!.levels.find((l) => l.level === 1)!;
+    level.reminderDueAt = clock.now();
+    await adapter.updateInstance(raw!, raw!.version);
+
+    await (
+      engine as unknown as { sendReminder: (id: string, n: number) => Promise<void> }
+    ).sendReminder(i.id, 1);
+
+    expect(events).toHaveLength(2);
+    const after = await engine.getInstance(i.id);
+    expect(after.levels[0]?.remindersSent).toBe(2);
+    expect(after.levels[0]?.reminderDueAt).toBeUndefined();
+  });
+
   it('defaults the cap to 3 when maxReminders is omitted', async () => {
     await define({ reminderAfterDays: 1, reminderEveryDays: 1 });
     await submit();
