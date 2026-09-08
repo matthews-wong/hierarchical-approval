@@ -310,6 +310,42 @@ describe('PostgresAdapter — round-trip mapping', () => {
     expect(actual?.templateSnapshot).toBeUndefined();
   });
 
+  it('maps stored comments and attachments, reviving their date fields', async () => {
+    const instance = makeInstance();
+    const row = {
+      ...instanceToRow(instance),
+      comments: [
+        { id: 'c1', authorId: 'mgr-1', body: 'looks fine', createdAt: '2026-06-27T01:00:00.000Z' },
+      ],
+      attachments: [
+        {
+          id: 'a1',
+          name: 'invoice.pdf',
+          uri: 's3://bucket/invoice.pdf',
+          addedBy: 'buyer',
+          addedAt: '2026-06-27T02:00:00.000Z',
+        },
+      ],
+    };
+
+    const { pool, adapter } = freshAdapter();
+    pool.queueResult({ rows: [row] });
+    const actual = await adapter.getInstance(instance.tenantId, instance.id);
+
+    expect(actual?.comments).toEqual([
+      { id: 'c1', authorId: 'mgr-1', body: 'looks fine', createdAt: new Date('2026-06-27T01:00:00.000Z') },
+    ]);
+    expect(actual?.attachments).toEqual([
+      {
+        id: 'a1',
+        name: 'invoice.pdf',
+        uri: 's3://bucket/invoice.pdf',
+        addedBy: 'buyer',
+        addedAt: new Date('2026-06-27T02:00:00.000Z'),
+      },
+    ]);
+  });
+
   it('getInstance returns null (not undefined) when no row matches', async () => {
     const { pool, adapter } = freshAdapter();
     pool.queueResult({ rows: [] });
