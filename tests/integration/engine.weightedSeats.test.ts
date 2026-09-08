@@ -86,6 +86,46 @@ describe('weighted levels keep the seat weight through a substitution', () => {
     expect(after.status).toBe('pending');
   });
 
+  it('delegating an approver with no explicit weight entry does not add one', async () => {
+    const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+    await engine.defineTemplate({
+      name: 'W2',
+      documentType: 'w',
+      levels: [
+        {
+          level: 1,
+          name: 'Exec',
+          mode: 'weighted' as const,
+          threshold: 3,
+          weights: { cfo: 3 }, // mgr has no explicit entry, so falls back to the default weight
+          approvers: [
+            { type: 'user' as const, userId: 'cfo' },
+            { type: 'user' as const, userId: 'mgr' },
+          ],
+        },
+      ],
+    });
+    const instance = await engine.submit({
+      templateName: 'W2',
+      documentId: `w2-${Math.random()}`,
+      documentType: 'w',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+    await engine.delegate(instance.id, {
+      fromApprover: 'mgr',
+      toApprover: 'temp-mgr',
+      reason: 'on holiday',
+    });
+
+    const delegated = await engine.getInstance(instance.id);
+    expect(delegated.levels[0]?.weights).toEqual({ cfo: 3 });
+
+    const after = await engine.approve(instance.id, { approverId: 'temp-mgr' });
+    expect(after.status).toBe('pending'); // default weight 1, still below threshold 3
+  });
+
   it('does not invent a weight for someone who never had one', async () => {
     const { engine, instance } = await build();
     // Escalation adds an approver rather than replacing one; they get the
