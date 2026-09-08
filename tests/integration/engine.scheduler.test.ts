@@ -303,6 +303,49 @@ describe('SLA tracking', () => {
     expect(callCount).toBe(0);
     await localEngine.shutdown();
   });
+
+  it("the engine's own internal scheduler marks a past-due instance SLA-breached", async () => {
+    // Every other case in this describe block hand-rolls a standalone
+    // EscalationScheduler with its own reimplemented onSlaBreach, which never
+    // runs the engine's real private markSlaBreached handler. Tick the
+    // engine's own internal scheduler instance directly (still no real
+    // timers, per this file's header) to exercise that handler for real.
+    const adapter = new MemoryAdapter();
+    const localEngine = new ApprovalEngine({
+      adapter,
+      tenantId: 'sla-internal-tenant',
+      escalationPollIntervalMs: 999999,
+    });
+    await localEngine.defineTemplate({
+      name: 'SLAInternal',
+      documentType: 'doc',
+      slaDeadlineDays: 1,
+      levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'u1' }], mode: 'any' }],
+    });
+
+    const breached: string[] = [];
+    localEngine.on('approval:sla_breached', (p) => breached.push(p.instanceId));
+
+    const instance = await localEngine.submit({
+      templateName: 'SLAInternal',
+      documentId: 'SLA-INT-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+
+    const raw = await adapter.getInstance('sla-internal-tenant', instance.id);
+    raw!.slaDeadlineAt = new Date(Date.now() - 1000);
+    await adapter.updateInstance(raw!, raw!.version);
+
+    await (localEngine as unknown as { escalation: EscalationScheduler }).escalation.tick();
+
+    const updated = await localEngine.getInstance(instance.id);
+    expect(updated.slaBreachedAt).toBeDefined();
+    expect(breached).toContain(instance.id);
+
+    await localEngine.shutdown();
+  });
 });
 
 // ─── Delegation revert (P0 Bug 5) ────────────────────────────────────────────
