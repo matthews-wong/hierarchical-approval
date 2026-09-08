@@ -346,6 +346,17 @@ describe('PostgresAdapter — round-trip mapping', () => {
     ]);
   });
 
+  it('maps a NULL template_id column to an empty string, for a row from before that column existed', async () => {
+    const instance = makeInstance();
+    const row = { ...instanceToRow(instance), template_id: null };
+
+    const { pool, adapter } = freshAdapter();
+    pool.queueResult({ rows: [row] });
+    const actual = await adapter.getInstance(instance.tenantId, instance.id);
+
+    expect(actual?.templateId).toBe('');
+  });
+
   it('getInstance returns null (not undefined) when no row matches', async () => {
     const { pool, adapter } = freshAdapter();
     pool.queueResult({ rows: [] });
