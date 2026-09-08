@@ -237,6 +237,40 @@ describe('escalation ladders', () => {
     expect((await e.getInstance(i.id)).levels[0]?.approverIds).toEqual(['a', 'boss']);
   });
 
+  it('does not add approvers or advance the rung when escalation resolves to the submitter only', async () => {
+    const e = new ApprovalEngine({ adapter: new MemoryAdapter(), clock });
+    await e.defineTemplate({
+      name: 'SELF',
+      documentType: 'self',
+      levels: [{ level: 1, name: 'L', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' }],
+      escalationSteps: [{ afterDays: 1, escalateTo: { type: 'user', userId: 'buyer' } }],
+    });
+    const i = await e.submit({
+      templateName: 'SELF',
+      documentId: 'self-1',
+      documentType: 'self',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    const s = new EscalationScheduler({
+      adapter: (e as unknown as { opts: { adapter: MemoryAdapter } }).opts.adapter,
+      tenantId: 'default',
+      clock,
+      onEscalate: async (id, lvl) => {
+        await (
+          e as unknown as {
+            escalateInternal: (i: string, by: string, c: undefined, l?: number) => Promise<unknown>;
+          }
+        ).escalateInternal(id, 'system', undefined, lvl);
+      },
+    });
+    clock.advanceDays(1);
+    await s.tick();
+    const after = await e.getInstance(i.id);
+    expect(after.levels[0]?.approverIds).toEqual(['a']);
+    expect(after.levels[0]?.escalationStep).toBe(0);
+  });
+
   it('records each escalation in the audit trail', async () => {
     const i = await submit();
     clock.advanceDays(2);
