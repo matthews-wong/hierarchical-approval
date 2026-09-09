@@ -183,5 +183,13 @@ describe('purgeInstances', () => {
       pool.queueResult({ rows: [], rowCount: 0 });
       expect(await pg.deleteInstance('t1', 'missing')).toBe(false);
     });
+
+    it('reports false when the driver returns a null rowCount instead of 0', async () => {
+      const pool = new FakePool();
+      const pg = new PostgresAdapter({ pool: pool.asPool() });
+      pool.queueResult({ rows: [], rowCount: 1 });
+      pool.queueResult({ rows: [], rowCount: null });
+      expect(await pg.deleteInstance('t1', 'missing')).toBe(false);
+    });
   });
 });
