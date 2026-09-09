@@ -555,6 +555,14 @@ describe('RedactingAuditAdapter', () => {
     expect(seen[0]!.entry.newValue).toEqual({ ssn: 'not-an-object' });
   });
 
+  it('a newValue-scoped path is a no-op when the entry has no newValue bag at all', async () => {
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue.ssn'] });
+    await adapter.append('t', 'i', makeEntry({ oldValue: { ssn: 'keep' } }), INST);
+    expect(seen[0]!.entry.newValue).toBeUndefined();
+    expect(seen[0]!.entry.oldValue).toEqual({ ssn: 'keep' });
+  });
+
   it('a path into a primitive/array/null is a no-op', async () => {
     const { inner, seen } = capturingInner();
     const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue.a.b'] });
