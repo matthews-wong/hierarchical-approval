@@ -781,6 +781,19 @@ describe('TemplatedNotificationAdapter', () => {
     expect(sent[0]!.to).toEqual(['ops@x.com']);
   });
 
+  it('the default recipientsFor treats an undefined event.recipients as empty, not a crash', async () => {
+    const send = vi.fn();
+    const logger = spyLogger();
+    const adapter = new TemplatedNotificationAdapter({
+      send,
+      templates: { 'approval:cancelled': { subject: 's', body: 'b' } },
+      logger,
+    });
+    await adapter.notify(makeEvent({ type: 'approval:cancelled', recipients: undefined }));
+    expect(send).not.toHaveBeenCalled();
+    expect(logger.debug).toHaveBeenCalled();
+  });
+
   it('custom channelFor and recipientsFor are honored', async () => {
     const sent: { channel: string; to: string[] }[] = [];
     const adapter = new TemplatedNotificationAdapter({
