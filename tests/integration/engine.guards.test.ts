@@ -458,6 +458,43 @@ describe('validateTemplate', () => {
     await expect(engine.defineTemplate({ name: 'Fail', documentType: 'doc', levels: [] }))
       .rejects.toThrow(ApprovalValidationError);
   });
+
+  it('errors when a weighted level declares a negative or NaN weight', () => {
+    const result = engine.validateTemplate({
+      name: 'BadWeights',
+      documentType: 'doc',
+      levels: [
+        {
+          level: 1,
+          name: 'L1',
+          approvers: [{ type: 'user', userId: 'u1' }],
+          mode: 'weighted',
+          threshold: 1,
+          weights: { u1: -1, u2: Number.NaN },
+        },
+      ],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field === 'levels[0].weights.u1')).toBe(true);
+    expect(result.errors.some((e) => e.field === 'levels[0].weights.u2')).toBe(true);
+  });
+
+  it('accepts a weighted level with no weights configured, defaulting every approver', () => {
+    const result = engine.validateTemplate({
+      name: 'GoodWeights',
+      documentType: 'doc',
+      levels: [
+        {
+          level: 1,
+          name: 'L1',
+          approvers: [{ type: 'user', userId: 'u1' }],
+          mode: 'weighted',
+          threshold: 1,
+        },
+      ],
+    });
+    expect(result.valid).toBe(true);
+  });
 });
 
 // ─── StateMachine: empty approver guard ──────────────────────────────────────
