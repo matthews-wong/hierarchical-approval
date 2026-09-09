@@ -606,6 +606,19 @@ describe('PostgresAdapter — getInstancesByCursor', () => {
     expect(result.nextCursor).toBeUndefined();
   });
 
+  it('serializes an undefined data-filter value as JSON null rather than dropping the param', async () => {
+    const { pool, adapter } = freshAdapter();
+    pool.queueResult({ rows: [] });
+    await adapter.getInstancesByCursor(
+      'tenant-1',
+      { data: { 'vendor.id': undefined } },
+      { limit: 10 },
+    );
+    const { sql, params } = pool.queries[0]!;
+    expect(sql).toMatch(/data #> \$\d+::text\[\] = \$\d+::jsonb/);
+    expect(params).toContain('null');
+  });
+
   it('decodes a cursor into a (updated_at, id) comparison appended after filter params — forward direction uses > and ASC', async () => {
     const { pool, adapter } = freshAdapter();
     const cursor = Buffer.from('2026-06-26T09:00:00.000Z:inst-1').toString('base64');
