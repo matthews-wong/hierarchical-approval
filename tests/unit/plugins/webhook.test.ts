@@ -315,6 +315,27 @@ describe('WebhookNotificationAdapter — 429 Retry-After', () => {
     expect(sleep).toHaveBeenCalledWith(50);
   });
 
+  it('falls back to the computed backoff when Retry-After is neither a number nor a date', async () => {
+    let calls = 0;
+    const client: HttpClient = async () => {
+      calls++;
+      return calls === 1 ? fakeResponse(429, { 'Retry-After': 'not-a-real-date' }) : fakeResponse(200);
+    };
+    const sleep = vi.fn(noSleep);
+    const adapter = new WebhookNotificationAdapter({
+      url: 'https://example.com/hook',
+      httpClient: client,
+      sleep,
+      maxAttempts: 3,
+      random: () => 1, // deterministic upper bound of the jitter window
+      baseDelayMs: 50,
+      backoffFactor: 2,
+      maxDelayMs: 1000,
+    });
+    await adapter.deliver(makeEvent());
+    expect(sleep).toHaveBeenCalledWith(50);
+  });
+
   it('collapses an overflowing backoff to the cap instead of Infinity/NaN', async () => {
     let calls = 0;
     const client: HttpClient = async () => {
