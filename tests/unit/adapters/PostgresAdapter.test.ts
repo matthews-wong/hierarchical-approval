@@ -555,6 +555,17 @@ describe('PostgresAdapter — getInstancesByFilter', () => {
   });
 });
 
+describe('PostgresAdapter — countInstances', () => {
+  it('serializes an undefined data-filter value as JSON null rather than dropping the param', async () => {
+    const { pool, adapter } = freshAdapter();
+    pool.queueResult({ rows: [{ count: '0' }] });
+    await adapter.countInstances('tenant-1', { data: { 'vendor.id': undefined } });
+    const { sql, params } = pool.queries[0]!;
+    expect(sql).toMatch(/data #> \$\d+::text\[\] = \$\d+::jsonb/);
+    expect(params).toContain('null');
+  });
+});
+
 describe('PostgresAdapter — getOverdueInstances', () => {
   it('checks escalation, expiry, SLA breach, and delegation-expiry conditions, tenant-scoped', async () => {
     const { pool, adapter } = freshAdapter();
