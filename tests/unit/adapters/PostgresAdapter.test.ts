@@ -583,6 +583,17 @@ describe('PostgresAdapter — getOverdueInstances', () => {
     expect(sql).toContain('delegatedUntil');
     expect(params).toEqual(['tenant-1', asOf.toISOString()]);
   });
+
+  it('serializes an undefined data-filter value as JSON null rather than dropping the param', async () => {
+    const { pool, adapter } = freshAdapter();
+    pool.queueResult({ rows: [] });
+    await adapter.getOverdueInstances('tenant-1', new Date('2026-07-01T00:00:00.000Z'), {
+      data: { 'vendor.id': undefined },
+    });
+    const { sql, params } = pool.queries[0]!;
+    expect(sql).toMatch(/data #> \$\d+::text\[\] = \$\d+::jsonb/);
+    expect(params).toContain('null');
+  });
 });
 
 describe('PostgresAdapter — getInstancesByCursor', () => {
