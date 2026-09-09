@@ -544,6 +544,15 @@ describe('PostgresAdapter — getInstancesByFilter', () => {
     const empty = await adapter.getInstancesByFilter('tenant-1', {});
     expect(empty.total).toBe(0);
   });
+
+  it('serializes an undefined data-filter value as JSON null rather than dropping the param', async () => {
+    const { pool, adapter } = freshAdapter();
+    pool.queueResult({ rows: [] });
+    await adapter.getInstancesByFilter('tenant-1', { data: { 'vendor.id': undefined } });
+    const { sql, params } = pool.queries[0]!;
+    expect(sql).toMatch(/data #> \$\d+::text\[\] = \$\d+::jsonb/);
+    expect(params).toContain('null');
+  });
 });
 
 describe('PostgresAdapter — getOverdueInstances', () => {
