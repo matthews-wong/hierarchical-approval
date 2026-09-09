@@ -527,6 +527,34 @@ describe('RedactingAuditAdapter', () => {
     expect(seen[0]!.entry.newValue).toEqual({ keep: 'ok' });
   });
 
+  it('an empty or all-dots path is a no-op, not a crash', async () => {
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['', '...'] });
+    await adapter.append('t', 'i', makeEntry({ newValue: { ssn: 'keep' } }), INST);
+    expect(seen[0]!.entry.newValue).toEqual({ ssn: 'keep' });
+  });
+
+  it('a bare bag name with no segments and no wildcard is a no-op', async () => {
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue'] });
+    await adapter.append('t', 'i', makeEntry({ newValue: { ssn: 'keep' } }), INST);
+    expect(seen[0]!.entry.newValue).toEqual({ ssn: 'keep' });
+  });
+
+  it('a missing final key on an existing parent object is a no-op', async () => {
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue.applicant.ssn'] });
+    await adapter.append('t', 'i', makeEntry({ newValue: { applicant: { name: 'Jane' } } }), INST);
+    expect(seen[0]!.entry.newValue).toEqual({ applicant: { name: 'Jane' } });
+  });
+
+  it('a wildcard whose target resolves to a primitive is a no-op', async () => {
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue.ssn.*'] });
+    await adapter.append('t', 'i', makeEntry({ newValue: { ssn: 'not-an-object' } }), INST);
+    expect(seen[0]!.entry.newValue).toEqual({ ssn: 'not-an-object' });
+  });
+
   it('a path into a primitive/array/null is a no-op', async () => {
     const { inner, seen } = capturingInner();
     const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue.a.b'] });
