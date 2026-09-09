@@ -200,4 +200,31 @@ describe('resubmit rebuilds a complete chain', () => {
       engine.resubmit(i.id, { resubmittedBy: 'buyer', updatedData: { addA: true, addB: true } }),
     ).rejects.toThrow(/Duplicate level numbers/);
   });
+
+  it('leaves approverIds empty for a sub-workflow level that opens immediately on resubmit', async () => {
+    // Regression guard for the same bug this file's header describes: a
+    // sub-workflow level has no approvers of its own, so resubmit()'s rebuild
+    // loop must special-case it too, not just when the level opens later.
+    await engine.defineTemplate({
+      name: 'CHILDFIRST',
+      documentType: 'memo',
+      levels: [
+        { level: 1, name: 'Board approval', mode: 'any', approvers: [], subWorkflow: { templateName: 'CHILD' } },
+      ],
+    });
+    const i = await engine.submit({
+      templateName: 'CHILDFIRST',
+      documentId: `cf-${Math.random()}`,
+      documentType: 'memo',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    const childId = (await engine.getInstance(i.id)).levels[0]?.childInstanceId as string;
+    await engine.reject(childId, { approverId: 'chair', reason: 'rework' });
+    expect((await engine.getInstance(i.id)).status).toBe('rejected');
+
+    const re = await engine.resubmit(i.id, { resubmittedBy: 'buyer' });
+    expect(re.levels[0]?.status).toBe('pending');
+    expect(re.levels[0]?.approverIds).toEqual([]);
+  });
 });
