@@ -159,4 +159,22 @@ describe('explainChain', () => {
     const e = await engine.explainChain('DUP-SKIP', { internal: true, lowRisk: true }, 'buyer');
     expect(e.skipped).toEqual([{ level: 2, name: 'B', skippedByRule: 0 }]);
   });
+
+  it('attributes an add to the first matching rule when two rules add the same level', async () => {
+    await engine.defineTemplate({
+      name: 'DUP-ADD',
+      documentType: 'memo',
+      levels: [u(1, 'A', 'a')],
+      conditions: [
+        // 0: adds CFO for large amounts
+        { when: { field: 'amount', operator: '>', value: 10000 }, addLevels: [u(2, 'CFO', 'cfo')] },
+        // 1: also adds CFO for high-risk documents - should not steal the attribution
+        { when: { field: 'highRisk', operator: '==', value: true }, addLevels: [u(2, 'CFO', 'cfo')] },
+      ],
+    });
+
+    const e = await engine.explainChain('DUP-ADD', { amount: 20000, highRisk: true }, 'buyer');
+    const cfo = e.levels.find((l) => l.level === 2);
+    expect(cfo?.addedByRule).toBe(0);
+  });
 });
