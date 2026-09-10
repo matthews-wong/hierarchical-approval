@@ -428,6 +428,15 @@ describe('RateLimitMiddleware — token bucket', () => {
     expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError);
   });
 
+  it('shares one bucket across actorId-less contexts via the default key fn', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
+    const anonymousCtx: OperationContext = { operation: 'approve', tenantId: 'tenant-1', input: {} };
+
+    mw.before(anonymousCtx); // consumes the '<anonymous>:approve' bucket
+    expect(() => mw.before(anonymousCtx)).toThrow(/Rate limit exceeded for "<anonymous>:approve"/);
+  });
+
   it('collapses distinct actors into one shared bucket via a custom keyFn', () => {
     const clock = new ManualClock(0);
     const mw = new RateLimitMiddleware({
