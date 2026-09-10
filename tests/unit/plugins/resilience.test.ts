@@ -455,6 +455,14 @@ describe('RateLimitMiddleware — token bucket', () => {
   });
 });
 
+describe('LoggingMiddleware — defaults', () => {
+  it('constructs with no options and logs through the noop logger without throwing', () => {
+    const mw = new LoggingMiddleware();
+    expect(() => mw.before(authCtx())).not.toThrow();
+    expect(() => mw.after(authCtx(), makeInstance())).not.toThrow();
+  });
+});
+
 describe('LoggingMiddleware — correlation key', () => {
   it('defaults to instanceId ?? operation', () => {
     expect(defaultLoggingCorrelationKeyFn(authCtx())).toBe('inst-1');
