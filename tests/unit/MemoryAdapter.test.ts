@@ -240,6 +240,18 @@ describe('MemoryAdapter', () => {
       expect(await adapter.getOverdueInstances('t1', asOf)).toHaveLength(0);
     });
 
+    it('excludes an overdue instance belonging to a different tenant', async () => {
+      const adapter = new MemoryAdapter();
+      await adapter.saveInstance(
+        makeInstance({
+          id: 'other-tenant',
+          tenantId: 't2',
+          levels: [makeLevel({ escalationDueAt: new Date('2026-06-05T00:00:00.000Z') })],
+        }),
+      );
+      expect(await adapter.getOverdueInstances('t1', asOf)).toHaveLength(0);
+    });
+
     it('matches an escalation due exactly at asOf and applies the extra filter', async () => {
       const adapter = new MemoryAdapter();
       await adapter.saveInstance(
