@@ -141,6 +141,41 @@ describe('transferApprovals', () => {
     expect((await engine.getInstance(good.id)).levels[0]?.approverIds).toEqual(['bob']);
   });
 
+  it('wraps a non-ApprovalError failure from a single move as UNKNOWN', async () => {
+    const strictEngine = new ApprovalEngine({
+      adapter: new MemoryAdapter(),
+      authorizationPolicy: {
+        authorize: () => {
+          throw new Error('policy backend unreachable');
+        },
+      },
+    });
+    await strictEngine.defineTemplate({
+      name: 'PO',
+      documentType: 'purchase_order',
+      levels: [user(1, 'Manager', 'alice')],
+    });
+    const a = await strictEngine.submit({
+      templateName: 'PO',
+      documentId: 'po-1',
+      documentType: 'purchase_order',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+    const result = await strictEngine.transferApprovals({
+      fromApprover: 'alice',
+      toApprover: 'bob',
+      transferredBy: 'admin',
+      reason: 'Alice left the company',
+    });
+
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0]?.instanceId).toBe(a.id);
+    expect(result.failed[0]?.error.code).toBe('UNKNOWN');
+    expect(result.failed[0]?.error.message).toMatch(/policy backend unreachable/);
+  });
+
   it('refuses a transfer to the same person', async () => {
     await expect(transfer({ toApprover: 'alice' })).rejects.toThrow(
       /different fromApprover and toApprover/,
