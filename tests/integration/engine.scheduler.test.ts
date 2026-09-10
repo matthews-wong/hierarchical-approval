@@ -701,6 +701,38 @@ describe('graceful shutdown', () => {
     expect(scheduler.isRunning).toBe(true);
     void scheduler.stop();
   });
+
+  it('stop() awaits an in-progress tick instead of resolving immediately', async () => {
+    let releaseTick!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseTick = resolve;
+    });
+    const adapter = new MemoryAdapter();
+    adapter.getOverdueInstances = async () => {
+      await blocker;
+      return [];
+    };
+    const scheduler = new EscalationScheduler({
+      adapter,
+      tenantId: 'stop-inflight',
+      onEscalate: async () => {},
+      pollIntervalMs: 5,
+    });
+    scheduler.start();
+    // Let the interval fire at least once so a tick is genuinely in flight.
+    await new Promise((r) => setTimeout(r, 20));
+
+    let stopped = false;
+    const stopPromise = scheduler.stop().then(() => {
+      stopped = true;
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(stopped).toBe(false);
+
+    releaseTick();
+    await stopPromise;
+    expect(stopped).toBe(true);
+  });
 });
 
 // ─── schedulerAdapter wiring (B9) ─────────────────────────────────────────────
