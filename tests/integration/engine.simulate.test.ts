@@ -66,6 +66,12 @@ describe('simulate', () => {
     expect(r.transcript.at(-1)).toMatchObject({ action: 'reject', actorId: 'cfo' });
   });
 
+  it('defaults the rejection reason when the decision omits one', async () => {
+    const r = await sim({ decisions: [{ reject: 'mgr' }] });
+    expect(r.transcript[0]).toMatchObject({ action: 'reject', actorId: 'mgr' });
+    expect(r.finalStatus).toBe('rejected');
+  });
+
   it('stops at a refused decision and reports why', async () => {
     const r = await sim({ decisions: [{ approve: 'not-an-approver' }, { approve: 'fin' }] });
     expect(r.transcript).toHaveLength(1);
