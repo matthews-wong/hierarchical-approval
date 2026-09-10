@@ -406,5 +406,19 @@ describe('MemoryAdapter', () => {
       expect(result.nextCursor).toBeUndefined();
       expect(result.prevCursor).toBeUndefined();
     });
+
+    it('returns an empty page when the cursor points past the last item', async () => {
+      const adapter = new MemoryAdapter();
+      await saveFive(adapter);
+      // No stored instance's (updatedAt, id) sorts after this one, so the
+      // cursor decode finds no match and falls back to starting at the end.
+      const pastTheEnd = Buffer.from(`${new Date('2026-06-05').getTime()}|i5`).toString('base64');
+
+      const result = await adapter.getInstancesByCursor('t1', {}, { limit: 5, cursor: pastTheEnd });
+
+      expect(result.items).toHaveLength(0);
+      expect(result.hasMore).toBe(false);
+      expect(result.nextCursor).toBeUndefined();
+    });
   });
 });
