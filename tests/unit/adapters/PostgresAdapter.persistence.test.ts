@@ -125,6 +125,15 @@ describe('PostgresAdapter persists every mutable field', () => {
     expect(q?.params[2]).toBe(7);
   });
 
+  it('writes template_snapshot on create when the instance carries one', async () => {
+    const { pool, adapter } = fresh();
+    await adapter.saveInstance(
+      makeInstance({ templateSnapshot: { allowOverride: true, slaDeadlineDays: 3 } }),
+    );
+    const insert = pool.queries.find((q) => q.sql.includes('INSERT INTO'));
+    expect(insert?.params).toContain('{"allowOverride":true,"slaDeadlineDays":3}');
+  });
+
   it('inserts info_request on create', async () => {
     const { pool, adapter } = fresh();
     await adapter.saveInstance(
