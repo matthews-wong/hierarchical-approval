@@ -199,6 +199,7 @@ describe('purgeInstances', () => {
       } as unknown as Pool;
       const pg = new PostgresAdapter({ pool });
       expect(await pg.deleteInstance('t1', 'missing')).toBe(false);
+      expect(calls).toBe(2);
     });
   });
 });
