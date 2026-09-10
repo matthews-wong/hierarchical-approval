@@ -72,6 +72,14 @@ describe('simulate', () => {
     expect(r.finalStatus).toBe('rejected');
   });
 
+  it('stops at a refused rejection decision and reports why', async () => {
+    const r = await sim({ decisions: [{ reject: 'not-an-approver' }] });
+    expect(r.transcript).toHaveLength(1);
+    expect(r.transcript[0]).toMatchObject({ action: 'reject', actorId: 'not-an-approver' });
+    expect(r.transcript[0]?.error).toMatch(/not an approver/i);
+    expect(r.finalStatus).toBe('pending');
+  });
+
   it('stops at a refused decision and reports why', async () => {
     const r = await sim({ decisions: [{ approve: 'not-an-approver' }, { approve: 'fin' }] });
     expect(r.transcript).toHaveLength(1);
