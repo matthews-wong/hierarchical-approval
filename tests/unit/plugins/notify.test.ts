@@ -838,6 +838,45 @@ describe('TemplatedNotificationAdapter', () => {
     );
     expect(sent[0]!.body).toBe('c=');
   });
+
+  it('a dotted path through a null or primitive intermediate resolves to the unknown token', async () => {
+    const sent: { body: string }[] = [];
+    const adapter = new TemplatedNotificationAdapter({
+      send: (m) => {
+        sent.push(m);
+      },
+      templates: { 'approval:approved': { subject: '', body: '{comment.nested}|{level.nested}' } },
+    });
+    await adapter.notify(
+      makeEvent({
+        payload: {
+          instanceId: 'i',
+          documentId: 'd',
+          documentType: 't',
+          timestamp: new Date(),
+          approverId: 'a',
+          level: 1,
+          isFinal: false,
+          comment: null,
+        } as unknown as NotificationEvent['payload'],
+      }),
+    );
+    expect(sent[0]!.body).toBe('|');
+  });
+
+  it('a malformed event with no payload at all interpolates safely (no throw)', async () => {
+    const sent: { body: string }[] = [];
+    const adapter = new TemplatedNotificationAdapter({
+      send: (m) => {
+        sent.push(m);
+      },
+      templates: { 'approval:approved': { subject: 's', body: 'c={comment}' } },
+    });
+    // Bypasses the type system: a plain-JS caller could still hand the
+    // adapter an event missing `payload` entirely, not just a missing field.
+    await adapter.notify(makeEvent({ payload: undefined as unknown as NotificationEvent['payload'] }));
+    expect(sent[0]!.body).toBe('c=');
+  });
 });
 
 describe('Notify adapters compose end-to-end', () => {
