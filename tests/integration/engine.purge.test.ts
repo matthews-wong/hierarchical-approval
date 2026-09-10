@@ -4,6 +4,7 @@ import { MemoryAdapter } from '../../src/adapters/MemoryAdapter.js';
 import { PostgresAdapter } from '../../src/adapters/PostgresAdapter.js';
 import { FakePool } from '../unit/adapters/_fakePg.js';
 import type { Clock } from '../../src/utils/Clock.js';
+import type { Pool } from 'pg';
 
 class TestClock implements Clock {
   constructor(private current = new Date('2026-01-01T00:00:00Z')) {}
@@ -185,10 +186,18 @@ describe('purgeInstances', () => {
     });
 
     it('reports false when the driver returns a null rowCount instead of 0', async () => {
-      const pool = new FakePool();
-      const pg = new PostgresAdapter({ pool: pool.asPool() });
-      pool.queueResult({ rows: [], rowCount: 1 });
-      pool.queueResult({ rows: [], rowCount: null });
+      // FakePool itself normalizes a null rowCount to rows.length, which would
+      // mask the adapter's own `result.rowCount ?? 0` fallback, so this test
+      // uses a minimal pool that passes the raw driver shape straight through.
+      const results = [
+        { rows: [], rowCount: 1 },
+        { rows: [], rowCount: null },
+      ];
+      let calls = 0;
+      const pool = {
+        query: async () => results[calls++]!,
+      } as unknown as Pool;
+      const pg = new PostgresAdapter({ pool });
       expect(await pg.deleteInstance('t1', 'missing')).toBe(false);
     });
   });
