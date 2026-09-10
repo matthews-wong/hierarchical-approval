@@ -139,6 +139,29 @@ describe('resubmit rebuilds a complete chain', () => {
     expect(re.parentInstanceId).toBe(i.id);
   });
 
+  it('carries an hour-based SLA deadline onto the resubmitted instance', async () => {
+    await engine.defineTemplate({
+      name: 'SLAHOURS',
+      documentType: 'memo',
+      slaDeadlineHours: 4,
+      levels: [
+        { level: 1, name: 'Manager', approvers: [{ type: 'user', userId: 'mgr' }], mode: 'any' },
+      ],
+    });
+    const i = await engine.submit({
+      templateName: 'SLAHOURS',
+      documentId: `slah-${Math.random()}`,
+      documentType: 'memo',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    await engine.reject(i.id, { approverId: 'mgr', reason: 'no' });
+    const re = await engine.resubmit(i.id, { resubmittedBy: 'buyer' });
+
+    expect(re.slaDeadlineAt).toBeInstanceOf(Date);
+    expect(re.slaDeadlineAt!.getTime()).toBeGreaterThan(re.createdAt.getTime());
+  });
+
   it('refuses a resubmit whose updated data skips every level', async () => {
     await engine.defineTemplate({
       name: 'SKIPALL',
