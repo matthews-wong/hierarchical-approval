@@ -216,6 +216,28 @@ describe('EscalationScheduler — SLA breach', () => {
     expect(handlers.onSlaBreach).not.toHaveBeenCalled();
     expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1', 1);
   });
+
+  it('skips breach reporting but still escalates when no onSlaBreach handler is configured', async () => {
+    const { scheduler, adapter, handlers } = makeScheduler({ onSlaBreach: undefined });
+    adapter.getOverdueInstances.mockResolvedValue([
+      makeInstance({
+        slaDeadlineAt: PAST,
+        levels: [
+          {
+            level: 1,
+            name: 'L1',
+            status: 'pending',
+            approvers: [{ type: 'user', userId: 'bob' }],
+            escalationDueAt: PAST,
+          },
+        ],
+      }),
+    ]);
+
+    await expect(scheduler.tick()).resolves.not.toThrow();
+
+    expect(handlers.onEscalate).toHaveBeenCalledWith('inst-1', 1);
+  });
 });
 
 describe('EscalationScheduler — reminders', () => {
