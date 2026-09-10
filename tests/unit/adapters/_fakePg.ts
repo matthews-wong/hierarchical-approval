@@ -42,7 +42,10 @@ export class FakePool {
     const next = (this.resultQueue.shift() ?? this.defaultResult) as FakeQueryResult<T>;
     return {
       rows: next.rows ?? [],
-      rowCount: next.rowCount ?? next.rows?.length ?? 0,
+      // An explicit `null` models the real driver's "no rowCount available"
+      // case and must reach the adapter unchanged; only a fully-omitted
+      // rowCount falls back to the row array's length.
+      rowCount: next.rowCount !== undefined ? next.rowCount : (next.rows?.length ?? 0),
     };
   }
 
