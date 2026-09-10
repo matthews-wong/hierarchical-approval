@@ -468,6 +468,25 @@ describe('group contiguity covers condition-added levels', () => {
     ).rejects.toThrow(/not contiguous/);
   });
 
+  it('accepts a condition rule that only skips a level, with no addLevels', () => {
+    const result = engine().validateTemplate({
+      name: 'PO',
+      documentType: 'purchase_order',
+      levels: [
+        lvl(1, 'Finance', 'fin', 'review'),
+        lvl(2, 'Legal', 'legal', 'review'),
+        lvl(3, 'CEO', 'ceo'),
+      ],
+      conditions: [
+        {
+          when: { field: 'big', operator: '==' as const, value: true },
+          skipLevels: [2],
+        },
+      ],
+    });
+    expect(result.valid).toBe(true);
+  });
+
   it('still accepts a wholly contiguous group', () => {
     expect(
       engine().validateTemplate({
