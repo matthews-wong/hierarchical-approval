@@ -237,6 +237,55 @@ describe('escalation ladders', () => {
     expect((await e.getInstance(i.id)).levels[0]?.approverIds).toEqual(['a', 'boss']);
   });
 
+  it('falls back to the live template config when the snapshot predates escalation', async () => {
+    const e = new ApprovalEngine({ adapter: new MemoryAdapter(), clock });
+    await e.defineTemplate({
+      name: 'RETRO',
+      documentType: 'retro',
+      levels: [
+        {
+          level: 1,
+          name: 'L',
+          approvers: [{ type: 'user', userId: 'a' }],
+          mode: 'any',
+          escalationAfterDays: 1,
+        },
+      ],
+    });
+    // Submitted before escalation existed on the template: the instance's
+    // templateSnapshot carries escalation: undefined.
+    const i = await e.submit({
+      templateName: 'RETRO',
+      documentId: 'retro-1',
+      documentType: 'retro',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+    await e.updateTemplate({
+      name: 'RETRO',
+      documentType: 'retro',
+      levels: [
+        {
+          level: 1,
+          name: 'L',
+          approvers: [{ type: 'user', userId: 'a' }],
+          mode: 'any',
+          escalationAfterDays: 1,
+        },
+      ],
+      escalation: { afterDays: 1, escalateTo: { type: 'user', userId: 'boss' } },
+    });
+
+    await (
+      e as unknown as {
+        escalateInternal: (i: string, by: string, c: undefined, l?: number) => Promise<unknown>;
+      }
+    ).escalateInternal(i.id, 'system', undefined, 1);
+
+    expect((await e.getInstance(i.id)).levels[0]?.approverIds).toEqual(['a', 'boss']);
+  });
+
   it('does not add approvers or advance the rung when escalation resolves to the submitter only', async () => {
     const e = new ApprovalEngine({ adapter: new MemoryAdapter(), clock });
     await e.defineTemplate({
