@@ -126,6 +126,22 @@ describe('template bundles', () => {
       await expect(target.getTemplate('PO')).rejects.toThrow();
     });
 
+    it('records a per-template error without failing the whole import', async () => {
+      const bundle = await source.exportTemplates();
+      const adapter = new MemoryAdapter();
+      const target = new ApprovalEngine({ adapter });
+      const originalSave = adapter.saveTemplate.bind(adapter);
+      adapter.saveTemplate = async (template) => {
+        if (template.name === 'PO') throw new Error('storage unavailable');
+        return originalSave(template);
+      };
+
+      const result = await target.importTemplates(bundle);
+      expect(result.created).toEqual(['INV']);
+      expect(result.errors).toEqual([{ name: 'PO', message: 'storage unavailable' }]);
+      await expect(target.getTemplate('PO')).rejects.toThrow();
+    });
+
     it('rejects an unsupported bundle version', async () => {
       const bundle = { ...(await source.exportTemplates()), bundleVersion: 99 };
       await expect(newEngine().importTemplates(bundle)).rejects.toThrow(
