@@ -397,6 +397,18 @@ describe('override', () => {
     const instance = await engine.submit({ templateName: 'Overridable3', documentId: 'OV-004', documentType: 'doc', submittedBy: 'alice', data: {} });
     await expect(engine.override(instance.id, { overriddenBy: 'alice', justification: 'self override' })).rejects.toThrow(ApprovalForbiddenError);
   });
+
+  it('falls back to the current template config when the snapshot predates allowOverride', async () => {
+    await engine.defineTemplate({ name: 'Retrofitted', documentType: 'doc', levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'mgr1' }], mode: 'any' }] });
+    // Submitted before allowOverride existed on the template: the instance's
+    // templateSnapshot carries allowOverride: undefined, not false.
+    const instance = await engine.submit({ templateName: 'Retrofitted', documentId: 'OV-005', documentType: 'doc', submittedBy: 'alice', data: {} });
+
+    await engine.updateTemplate({ name: 'Retrofitted', documentType: 'doc', allowOverride: true, levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'mgr1' }], mode: 'any' }] });
+
+    const overridden = await engine.override(instance.id, { overriddenBy: 'super-admin', justification: 'retrofit' });
+    expect(overridden.status).toBe('approved');
+  });
 });
 
 // ─── healthCheck ──────────────────────────────────────────────────────────────
