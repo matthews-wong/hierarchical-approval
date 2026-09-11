@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ApprovalEngine } from '../../src/engine/ApprovalEngine.js';
 import { MemoryAdapter } from '../../src/adapters/MemoryAdapter.js';
 import {
+  ApprovalError,
   ApprovalForbiddenError,
   ApprovalValidationError,
 } from '../../src/errors.js';
@@ -287,6 +288,28 @@ describe('bulkApprove', () => {
     await engine2.defineTemplate(simpleTemplate);
     await expect(engine2.bulkApprove(['a', 'b', 'c'], { approverId: 'approver1' })).rejects.toThrow(ApprovalValidationError);
     await engine2.shutdown();
+  });
+
+  it('wraps a non-ApprovalError failure as UNKNOWN in the failed list', async () => {
+    const strictEngine = new ApprovalEngine({
+      adapter: new MemoryAdapter(),
+      tenantId: 'strict-bulk-approve',
+      escalationPollIntervalMs: 999999,
+      authorizationPolicy: {
+        authorize: () => {
+          throw new Error('policy backend unreachable');
+        },
+      },
+    });
+    await strictEngine.defineTemplate(simpleTemplate);
+    const inst = await strictEngine.submit({ templateName: 'Simple', documentId: 'BF-3', documentType: 'doc', submittedBy: 'alice', data: {} });
+
+    const result = await strictEngine.bulkApprove([inst.id], { approverId: 'approver1' });
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0]?.error).toBeInstanceOf(ApprovalError);
+    expect(result.failed[0]?.error.code).toBe('UNKNOWN');
+    expect(result.failed[0]?.error.message).toBe('Error: policy backend unreachable');
+    await strictEngine.shutdown();
   });
 });
 
