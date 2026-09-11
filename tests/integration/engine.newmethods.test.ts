@@ -251,6 +251,22 @@ describe('previewApprovalChain', () => {
     const pending = await engine.getPendingFor('mgr1');
     expect(pending.total).toBe(0);
   });
+
+  it('reports a level with no resolved approvers when its resolver throws', async () => {
+    await engine.defineTemplate({
+      name: 'Broken',
+      documentType: 'doc',
+      levels: [
+        { level: 1, name: 'Bad', approvers: [{ type: 'broken' }], mode: 'any' },
+      ],
+    });
+    engine.registerApproverType('broken', async () => {
+      throw new Error('resolver exploded');
+    });
+
+    const result = await engine.previewApprovalChain('Broken', {}, 'alice');
+    expect(result.levels).toEqual([{ level: 1, name: 'Bad', resolvedApprovers: [], mode: 'any' }]);
+  });
 });
 
 // ─── bulkApprove / bulkReject ─────────────────────────────────────────────────
