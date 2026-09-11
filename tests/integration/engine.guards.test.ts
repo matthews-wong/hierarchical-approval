@@ -298,6 +298,17 @@ describe('P1 Guard 3 — returnTo=previous at first level', () => {
     await engine.reject(instance.id, { approverId: 'mgr1', reason: 'bad' });
     expect(payloads).toEqual([expect.objectContaining({ returnTo: null })]);
   });
+
+  it('off() stops a listener registered through on() from receiving further events', async () => {
+    const instance = await engine.submit({ templateName: 'Two Level', documentId: 'RP-005', documentType: 'doc', submittedBy: 'alice', data: {} });
+    const payloads: unknown[] = [];
+    const listener = (p: unknown) => payloads.push(p);
+    engine.on('approval:rejected', listener);
+    expect(engine.off('approval:rejected', listener)).toBe(engine);
+
+    await engine.reject(instance.id, { approverId: 'mgr1', reason: 'bad' });
+    expect(payloads).toEqual([]);
+  });
 });
 
 // ─── P1 Guard 4: duplicate template name ─────────────────────────────────────
