@@ -160,6 +160,24 @@ describe('explainChain', () => {
     expect(e.skipped).toEqual([{ level: 2, name: 'B', skippedByRule: 0 }]);
   });
 
+  it('sorts multiple skipped levels ascending by level', async () => {
+    await engine.defineTemplate({
+      name: 'MULTI-SKIP',
+      documentType: 'memo',
+      levels: [u(1, 'A', 'a'), u(2, 'B', 'b'), u(3, 'C', 'c')],
+      conditions: [
+        { when: { field: 'skipA', operator: '==', value: true }, skipLevels: [1] },
+        { when: { field: 'skipC', operator: '==', value: true }, skipLevels: [3] },
+      ],
+    });
+
+    const e = await engine.explainChain('MULTI-SKIP', { skipA: true, skipC: true }, 'buyer');
+    expect(e.skipped).toEqual([
+      { level: 1, name: 'A', skippedByRule: 0 },
+      { level: 3, name: 'C', skippedByRule: 1 },
+    ]);
+  });
+
   it('attributes an add to the first matching rule when two rules add the same level', async () => {
     await engine.defineTemplate({
       name: 'DUP-ADD',
