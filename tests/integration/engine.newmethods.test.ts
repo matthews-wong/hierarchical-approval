@@ -439,6 +439,27 @@ describe('healthCheck', () => {
     const result = await engine.healthCheck();
     expect(result.escalationRunning).toBe(false);
   });
+
+  it('returns unhealthy and skips the overdue check when countInstances throws', async () => {
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({ adapter, tenantId: 'health-unhealthy', escalationPollIntervalMs: 999999 });
+    let overdueCalls = 0;
+    const originalGetOverdue = adapter.getOverdueInstances.bind(adapter);
+    adapter.getOverdueInstances = async (...args) => {
+      overdueCalls++;
+      return originalGetOverdue(...args);
+    };
+    adapter.countInstances = async () => {
+      throw new Error('connection reset');
+    };
+
+    const result = await engine.healthCheck();
+    expect(result.status).toBe('unhealthy');
+    expect(result.adapter).toBe('error');
+    expect(result.overdueCount).toBe(0);
+    expect(overdueCalls).toBe(0);
+    await engine.shutdown();
+  });
 });
 
 // ─── getHistory ───────────────────────────────────────────────────────────────
