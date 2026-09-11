@@ -387,6 +387,41 @@ describe('P0 Bug 5 — delegatedUntil is stored on level instance', () => {
     expect(level1.approverIds).toContain('mgr3');
   });
 
+  it('reassigning the original delegator back onto the level later clears a stale delegation', async () => {
+    await engine.defineTemplate({
+      name: 'Two-Approver',
+      documentType: 'doc',
+      levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'alice' }, { type: 'user', userId: 'carol' }], mode: 'all' }],
+    });
+    const instance = await engine.submit({ templateName: 'Two-Approver', documentId: 'DU-004', documentType: 'doc', submittedBy: 'buyer', data: {} });
+    const until = new Date(Date.now() + 86_400_000);
+
+    // alice delegates away; the level now holds [bob, carol], and delegatedFrom
+    // records alice even though she is no longer an approver on this level.
+    await engine.delegate(instance.id, { fromApprover: 'alice', toApprover: 'bob', reason: 'on leave', until });
+    // carol is swapped out independently — this reassign's fromApprover matches
+    // neither delegatedTo (bob) nor delegatedFrom (alice), so the delegation survives.
+    await engine.reassign(instance.id, { reassignedBy: 'admin', fromApprover: 'carol', toApprover: 'dave', reason: 'coverage change' });
+    // dave is then swapped for alice, putting her back on the level in a slot
+    // unrelated to the original delegation. delegatedFrom still says "alice".
+    await engine.reassign(instance.id, { reassignedBy: 'admin', fromApprover: 'dave', toApprover: 'alice', reason: 'back from leave' });
+
+    const midway = await engine.getInstance(instance.id);
+    const midwayLevel = midway.levels.find((l) => l.level === 1)!;
+    expect(midwayLevel.delegatedFrom).toBe('alice');
+    expect(midwayLevel.approverIds).toEqual(['bob', 'alice']);
+
+    // Reassigning alice now hits the delegatedFrom side of the OR, not delegatedTo.
+    await engine.reassign(instance.id, { reassignedBy: 'admin', fromApprover: 'alice', toApprover: 'eve', reason: 'final swap' });
+
+    const updated = await engine.getInstance(instance.id);
+    const level1 = updated.levels.find((l) => l.level === 1)!;
+    expect(level1.delegatedTo).toBeUndefined();
+    expect(level1.delegatedFrom).toBeUndefined();
+    expect(level1.delegatedUntil).toBeUndefined();
+    expect(level1.approverIds).toEqual(['bob', 'eve']);
+  });
+
   it('delegate without until does not set delegatedUntil', async () => {
     const instance = await engine.submit({ templateName: 'Two Level', documentId: 'DU-002', documentType: 'doc', submittedBy: 'alice', data: {} });
     await engine.delegate(instance.id, { fromApprover: 'mgr1', toApprover: 'mgr2', reason: 'permanent' });
