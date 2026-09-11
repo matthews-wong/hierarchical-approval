@@ -68,6 +68,26 @@ describe('updateData', () => {
       expect(names(updated.levels)).toEqual(['Manager', 'Finance']);
     });
 
+    it('removes multiple future levels at once, sorted ascending', async () => {
+      await engine.defineTemplate({
+        name: 'PO',
+        documentType: 'purchase_order',
+        levels: [level(1, 'Manager', 'mgr')],
+        conditions: [
+          { when: { field: 'amount', operator: '>', value: 10000 }, addLevels: [level(3, 'CFO', 'cfo')] },
+          { when: { field: 'needsLegal', operator: '==', value: true }, addLevels: [level(2, 'Legal', 'legal')] },
+        ],
+      });
+      const instance = await submit({ amount: 20000, needsLegal: true });
+      expect(names(instance.levels)).toEqual(['Manager', 'Legal', 'CFO']);
+
+      const updated = await engine.updateData(instance.id, {
+        updatedBy: 'buyer',
+        data: { amount: 900, needsLegal: false },
+      });
+      expect(names(updated.levels)).toEqual(['Manager']);
+    });
+
     it('leaves the chain alone when recomputeChain is false', async () => {
       await engine.defineTemplate(conditionalTemplate());
       const instance = await submit({ amount: 5000 });
