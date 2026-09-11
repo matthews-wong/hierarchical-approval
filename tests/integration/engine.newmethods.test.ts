@@ -328,6 +328,28 @@ describe('bulkReject', () => {
     expect(result.failed).toHaveLength(1);
     expect(result.succeeded.every((i) => i.status === 'rejected')).toBe(true);
   });
+
+  it('wraps a non-ApprovalError failure as UNKNOWN in the failed list', async () => {
+    const strictEngine = new ApprovalEngine({
+      adapter: new MemoryAdapter(),
+      tenantId: 'strict-bulk-reject',
+      escalationPollIntervalMs: 999999,
+      authorizationPolicy: {
+        authorize: () => {
+          throw new Error('policy backend unreachable');
+        },
+      },
+    });
+    await strictEngine.defineTemplate(simpleTemplate);
+    const inst = await strictEngine.submit({ templateName: 'Simple', documentId: 'BR-3', documentType: 'doc', submittedBy: 'alice', data: {} });
+
+    const result = await strictEngine.bulkReject([inst.id], { approverId: 'approver1', reason: 'mass reject' });
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0]?.error).toBeInstanceOf(ApprovalError);
+    expect(result.failed[0]?.error.code).toBe('UNKNOWN');
+    expect(result.failed[0]?.error.message).toBe('Error: policy backend unreachable');
+    await strictEngine.shutdown();
+  });
 });
 
 // ─── override ─────────────────────────────────────────────────────────────────
