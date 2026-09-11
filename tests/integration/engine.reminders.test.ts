@@ -213,6 +213,22 @@ describe('approval reminders', () => {
     expect(entry?.newValue?.['reminderNumber']).toBe(1);
   });
 
+  it("the engine's own internal scheduler sends a reminder", async () => {
+    // Every other case in this file drives sendReminder directly, which
+    // never runs the engine's own internal EscalationScheduler and its
+    // onRemind wiring. Tick that internal scheduler directly (still no real
+    // timers, since it shares this file's TestClock) to exercise it for real.
+    await define({ reminderAfterDays: 1 });
+    const i = await submit();
+    clock.advanceDays(1);
+
+    await (engine as unknown as { escalation: { tick: () => Promise<void> } }).escalation.tick();
+
+    const updated = await engine.getInstance(i.id);
+    expect(updated.levels[0]?.remindersSent).toBe(1);
+    expect(events).toHaveLength(1);
+  });
+
   describe('validation', () => {
     const withLevel = (extra: Record<string, unknown>) => ({
       name: 'PO',
