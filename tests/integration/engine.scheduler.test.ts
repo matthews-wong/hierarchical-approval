@@ -644,6 +644,52 @@ describe('escalation', () => {
     expect(level1.approverIds).toContain('escalated-user');
     await localEngine.shutdown();
   });
+
+  it("the engine's own internal scheduler escalates an overdue level", async () => {
+    // Every other case in this describe block hand-rolls a standalone
+    // EscalationScheduler with its own onEscalate, which never runs the
+    // engine's real private escalateInternal handler. Tick the engine's own
+    // internal scheduler instance directly (still no real timers) to
+    // exercise that handler for real.
+    const adapter = new MemoryAdapter();
+    const localEngine = new ApprovalEngine({
+      adapter,
+      tenantId: 'escal-internal-tenant',
+      escalationPollIntervalMs: 999999,
+    });
+    await localEngine.defineTemplate({
+      name: 'EscalInternal',
+      documentType: 'doc',
+      levels: [
+        {
+          level: 1,
+          name: 'L1',
+          approvers: [{ type: 'user', userId: 'u1' }],
+          mode: 'any',
+          escalationAfterDays: 3,
+        },
+      ],
+      escalation: { escalateTo: { type: 'user', userId: 'escalated-user' } },
+    });
+
+    const instance = await localEngine.submit({
+      templateName: 'EscalInternal',
+      documentId: 'ESC-INT-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+
+    const raw = await adapter.getInstance('escal-internal-tenant', instance.id);
+    raw!.levels[0]!.escalationDueAt = new Date(Date.now() - 1000);
+    await adapter.updateInstance(raw!, raw!.version);
+
+    await (localEngine as unknown as { escalation: EscalationScheduler }).escalation.tick();
+
+    const updated = await localEngine.getInstance(instance.id);
+    expect(updated.levels[0]?.approverIds).toEqual(['u1', 'escalated-user']);
+    await localEngine.shutdown();
+  });
 });
 
 // ─── EscalationScheduler.computeEscalationDue ────────────────────────────────
