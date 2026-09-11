@@ -488,6 +488,20 @@ describe('healthCheck', () => {
     expect(overdueCalls).toBe(0);
     await engine.shutdown();
   });
+
+  it('returns unhealthy when getOverdueInstances throws after countInstances succeeds', async () => {
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({ adapter, tenantId: 'health-overdue-error', escalationPollIntervalMs: 999999 });
+    adapter.getOverdueInstances = async () => {
+      throw new Error('query timed out');
+    };
+
+    const result = await engine.healthCheck();
+    expect(result.status).toBe('unhealthy');
+    expect(result.adapter).toBe('error');
+    expect(result.overdueCount).toBe(0);
+    await engine.shutdown();
+  });
 });
 
 // ─── getHistory ───────────────────────────────────────────────────────────────
