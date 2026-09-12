@@ -174,6 +174,7 @@ describe('explainChain', () => {
     });
 
     const e = await engine.explainChain('MULTI-SKIP', { skipA: true, skipC: true }, 'buyer');
+    expect(e.skipped.map((s) => s.level)).toEqual([1, 3]);
     expect(e.skipped).toEqual([
       { level: 1, name: 'A', skippedByRule: 1 },
       { level: 3, name: 'C', skippedByRule: 0 },
