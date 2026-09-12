@@ -39,6 +39,22 @@ describe('ApprovalEngine — getStatistics', () => {
     await engine.shutdown();
   });
 
+  it('defaults a status count to 0 when a loose adapter returns nothing for it', async () => {
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({ adapter, tenantId: 'stats-tenant' });
+    // countInstances is typed to always return a number; a custom adapter
+    // that violates the contract must not turn a whole status bucket into NaN.
+    const realCount = adapter.countInstances.bind(adapter);
+    adapter.countInstances = (async (tenantId, filter) => {
+      if (filter.status === 'rejected') return undefined as unknown as number;
+      return realCount(tenantId, filter);
+    }) as typeof adapter.countInstances;
+
+    const stats = await engine.getStatistics();
+    expect(stats.byStatus.rejected).toBe(0);
+    await engine.shutdown();
+  });
+
   it('counts instances by status and computes approval rate', async () => {
     const engine = makeEngine();
     await engine.defineTemplate(template);
