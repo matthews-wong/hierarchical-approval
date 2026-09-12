@@ -370,6 +370,55 @@ describe('escalation ladders', () => {
     expect(history.some((h) => h.action === 'escalated')).toBe(false);
   });
 
+  it('falls back to the currently open level when the given levelNumber no longer exists', async () => {
+    const i = await submit();
+
+    // Simulates the scheduler having scanned a level that updateData()
+    // later removed before escalateInternal actually ran.
+    const after = await (
+      engine as unknown as {
+        escalateInternal: (
+          i: string,
+          by: string,
+          c: undefined,
+          l?: number,
+        ) => Promise<{ levels: { level: number; approverIds: string[] }[] }>;
+      }
+    ).escalateInternal(i.id, 'system', undefined, 99);
+
+    expect(after.levels.find((l) => l.level === 1)?.approverIds).toEqual(['mgr', 'director']);
+  });
+
+  it('does not escalate when neither the ladder nor a legacy config has an escalation target', async () => {
+    const e = new ApprovalEngine({ adapter: new MemoryAdapter(), clock });
+    await e.defineTemplate({
+      name: 'NO-ESCALATION',
+      documentType: 'no-escalation',
+      levels: [{ level: 1, name: 'L', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' }],
+    });
+    const i = await e.submit({
+      templateName: 'NO-ESCALATION',
+      documentId: 'ne-1',
+      documentType: 'no-escalation',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+    const after = await (
+      e as unknown as {
+        escalateInternal: (
+          i: string,
+          by: string,
+          c: undefined,
+          l?: number,
+        ) => Promise<{ levels: { escalationStep?: number; approverIds: string[] }[] }>;
+      }
+    ).escalateInternal(i.id, 'system', undefined, 1);
+
+    expect(after.levels[0]?.approverIds).toEqual(['a']);
+    expect(after.levels[0]?.escalationStep).toBe(0);
+  });
+
   it('records each escalation in the audit trail', async () => {
     const i = await submit();
     clock.advanceDays(2);
