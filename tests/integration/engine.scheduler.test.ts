@@ -678,6 +678,51 @@ describe('delegation revert', () => {
 
     await localEngine.shutdown();
   });
+
+  it('is a no-op when the instance is no longer pending by the time revertDelegation runs', async () => {
+    // getOverdueInstances only ever returns pending instances, so the real
+    // scheduler wiring can never hand revertDelegation a terminal one — this
+    // guards the same kind of scan-to-handler race already covered for
+    // markSlaBreached above, called directly the same way.
+    const localEngine = new ApprovalEngine({
+      adapter: new MemoryAdapter(),
+      tenantId: 'delrev-terminal-tenant',
+      escalationPollIntervalMs: 999999,
+    });
+    await localEngine.defineTemplate({
+      name: 'DelRevTerminal',
+      documentType: 'doc',
+      levels: [
+        { level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'mgr1' }], mode: 'any' },
+      ],
+    });
+    const instance = await localEngine.submit({
+      templateName: 'DelRevTerminal',
+      documentId: 'DR-TERM-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+    await localEngine.delegate(instance.id, {
+      fromApprover: 'mgr1',
+      toApprover: 'temp-mgr',
+      reason: 'temp',
+      until: new Date(Date.now() - 1000),
+    });
+    await localEngine.cancel(instance.id, { cancelledBy: 'alice', reason: 'withdrawn' });
+
+    await (
+      localEngine as unknown as {
+        revertDelegation: (id: string, level: number, from: string) => Promise<void>;
+      }
+    ).revertDelegation(instance.id, 1, 'mgr1');
+
+    const after = await localEngine.getInstance(instance.id);
+    expect(after.status).toBe('cancelled');
+    expect(after.levels[0]?.delegatedTo).toBe('temp-mgr');
+
+    await localEngine.shutdown();
+  });
 });
 
 // ─── Escalation via scheduler ─────────────────────────────────────────────────
