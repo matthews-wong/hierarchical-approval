@@ -171,6 +171,45 @@ describe('instance expiry', () => {
 
     await localEngine.shutdown();
   });
+
+  it('logs and swallows a failure from the internal expireInstance handler instead of throwing out of tick()', async () => {
+    const adapter = new MemoryAdapter();
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+    const localEngine = new ApprovalEngine({
+      adapter,
+      tenantId: 'exp-fail-tenant',
+      escalationPollIntervalMs: 999999,
+      logger,
+    });
+    await localEngine.defineTemplate(simpleTemplate);
+
+    const instance = await localEngine.submit({
+      templateName: 'Simple',
+      documentId: 'EX-FAIL-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+      expiresAt: new Date(Date.now() - 1000),
+      deadlineAction: 'reject',
+    });
+
+    const failure = new Error('storage unavailable');
+    adapter.updateInstance = async () => {
+      throw failure;
+    };
+
+    await expect(
+      (localEngine as unknown as { escalation: EscalationScheduler }).escalation.tick(),
+    ).resolves.not.toThrow();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'expireInstance: failed',
+      failure,
+      expect.objectContaining({ tenantId: 'exp-fail-tenant', instanceId: instance.id }),
+    );
+
+    await localEngine.shutdown();
+  });
 });
 
 // ─── SLA tracking (P3) ───────────────────────────────────────────────────────
