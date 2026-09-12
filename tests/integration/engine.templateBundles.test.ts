@@ -126,6 +126,18 @@ describe('template bundles', () => {
       await expect(target.getTemplate('PO')).rejects.toThrow();
     });
 
+    it('dryRun reports an upsert on an existing template without bumping its version', async () => {
+      const bundle = await source.exportTemplates(['PO']);
+      const before = await source.getTemplate('PO');
+
+      const result = await source.importTemplates(bundle, { mode: 'upsert', dryRun: true });
+      expect(result.dryRun).toBe(true);
+      expect(result.updated).toEqual(['PO']);
+
+      const after = await source.getTemplate('PO');
+      expect(after.version).toBe(before.version);
+    });
+
     it('records a per-template error without failing the whole import', async () => {
       const bundle = await source.exportTemplates();
       const adapter = new MemoryAdapter();
