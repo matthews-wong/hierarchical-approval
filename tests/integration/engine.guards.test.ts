@@ -317,6 +317,10 @@ describe('engine.off()', () => {
 
     await engine.reject(instance.id, { approverId: 'mgr1', reason: 'bad' });
     expect(payloads).toEqual([]);
+
+    // Removing an already-removed listener is a no-op, not an error — same
+    // chainable return as a live removal.
+    expect(engine.off('approval:rejected', listener)).toBe(engine);
   });
 });
 
