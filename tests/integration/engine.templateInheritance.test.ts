@@ -246,5 +246,17 @@ describe('template inheritance', () => {
       });
       expect(r.valid).toBe(false);
     });
+
+    it('validateTemplate tolerates a raw extends-only config with levels omitted entirely', () => {
+      // defineTemplate always resolves inheritance (flattening levels in)
+      // before calling validateTemplate, so this only matters for a caller
+      // that validates a raw, unresolved config directly.
+      const r = engine.validateTemplate({
+        name: 'PO-partial',
+        extends: 'PO-base',
+        documentType: 'purchase_order',
+      } as never);
+      expect(r.valid).toBe(true);
+    });
   });
 });
