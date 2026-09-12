@@ -298,8 +298,17 @@ describe('P1 Guard 3 — returnTo=previous at first level', () => {
     await engine.reject(instance.id, { approverId: 'mgr1', reason: 'bad' });
     expect(payloads).toEqual([expect.objectContaining({ returnTo: null })]);
   });
+});
 
-  it('off() stops a listener registered through on() from receiving further events', async () => {
+// ─── engine.off() — delegation to the underlying EventBus ────────────────────
+
+describe('engine.off()', () => {
+  let engine: ReturnType<typeof makeEngine>;
+
+  beforeEach(async () => { engine = makeEngine(); await engine.defineTemplate(twoLevelTemplate); });
+  afterEach(() => engine.shutdown());
+
+  it('stops a listener registered through on() from receiving further events', async () => {
     const instance = await engine.submit({ templateName: 'Two Level', documentId: 'RP-005', documentType: 'doc', submittedBy: 'alice', data: {} });
     const payloads: unknown[] = [];
     const listener = (p: unknown) => payloads.push(p);
