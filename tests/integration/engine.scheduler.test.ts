@@ -630,6 +630,54 @@ describe('delegation revert', () => {
 
     await localEngine.shutdown();
   });
+
+  it('logs and swallows a failure from the internal revertDelegation handler', async () => {
+    const adapter = new MemoryAdapter();
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+    const localEngine = new ApprovalEngine({
+      adapter,
+      tenantId: 'delrev-fail-tenant',
+      escalationPollIntervalMs: 999999,
+      logger,
+    });
+    await localEngine.defineTemplate({
+      name: 'DelRevFail',
+      documentType: 'doc',
+      levels: [
+        { level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'mgr1' }], mode: 'any' },
+      ],
+    });
+    const instance = await localEngine.submit({
+      templateName: 'DelRevFail',
+      documentId: 'DR-FAIL-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+    await localEngine.delegate(instance.id, {
+      fromApprover: 'mgr1',
+      toApprover: 'temp-mgr',
+      reason: 'temp',
+      until: new Date(Date.now() - 1000),
+    });
+
+    const failure = new Error('storage unavailable');
+    adapter.updateInstance = async () => {
+      throw failure;
+    };
+
+    await expect(
+      (localEngine as unknown as { escalation: EscalationScheduler }).escalation.tick(),
+    ).resolves.not.toThrow();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'revertDelegation: failed',
+      failure,
+      expect.objectContaining({ tenantId: 'delrev-fail-tenant', instanceId: instance.id }),
+    );
+
+    await localEngine.shutdown();
+  });
 });
 
 // ─── Escalation via scheduler ─────────────────────────────────────────────────
