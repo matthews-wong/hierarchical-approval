@@ -353,6 +353,23 @@ describe('escalation ladders', () => {
     expect(after.levels[0]?.escalationStep).toBe(0);
   });
 
+  it('is a no-op when the instance is no longer pending', async () => {
+    const i = await submit();
+    await engine.approve(i.id, { approverId: 'mgr' });
+
+    const after = await (
+      engine as unknown as {
+        escalateInternal: (i: string, by: string, c: undefined, l?: number) => Promise<{
+          status: string;
+        }>;
+      }
+    ).escalateInternal(i.id, 'system', undefined, 1);
+
+    expect(after.status).toBe('approved');
+    const history = await engine.getHistory(i.id);
+    expect(history.some((h) => h.action === 'escalated')).toBe(false);
+  });
+
   it('records each escalation in the audit trail', async () => {
     const i = await submit();
     clock.advanceDays(2);
