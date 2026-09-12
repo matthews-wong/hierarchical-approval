@@ -1088,6 +1088,34 @@ describe('schedulerAdapter wiring', () => {
     expect(fakeAdapter.scheduleAt).not.toHaveBeenCalled(); // no reschedule after teardown
   });
 
+  it('does not reschedule when shutdown() runs while a tick is still in flight', async () => {
+    const fakeAdapter = makeFakeSchedulerAdapter();
+    const engine = new ApprovalEngine({
+      adapter: new MemoryAdapter(),
+      tenantId: 'sched-adapter-inflight-tenant',
+      schedulerAdapter: fakeAdapter,
+    });
+
+    const firstCallback = fakeAdapter.scheduleAt.mock.calls[0]![2] as () => Promise<void>;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // The callback's own reschedule lives in a `finally`, so it still runs
+    // even though shutdown() flips schedulerStopped mid-tick; the outer guard
+    // at the top of the reschedule must be what stops it, not the finally.
+    const tickSpy = vi
+      .spyOn(EscalationScheduler.prototype, 'tick')
+      .mockImplementation(async () => {
+        await engine.shutdown();
+      });
+    fakeAdapter.scheduleAt.mockClear();
+
+    await firstCallback();
+
+    expect(fakeAdapter.scheduleAt).not.toHaveBeenCalled();
+    tickSpy.mockRestore();
+  });
+
   it('logs and does not throw when scheduleAt() rejects', async () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
     const failure = new Error('queue unavailable');
