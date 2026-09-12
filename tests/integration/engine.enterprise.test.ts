@@ -11,6 +11,7 @@ import {
   ApprovalForbiddenError,
   ApprovalValidationError,
   ApprovalError,
+  ApprovalConflictError,
 } from '../../src/errors.js';
 import type { AuditEntry, ApprovalInstance } from '../../src/types/index.js';
 
@@ -145,6 +146,32 @@ describe('RetryPolicy', () => {
       .rejects.toThrow();
     await engine.shutdown();
     await engine2.shutdown();
+  });
+
+  it('retries and succeeds once the conflicting write clears', async () => {
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({
+      adapter,
+      retryPolicy: { maxAttempts: 3, baseDelayMs: 0, jitter: false },
+    });
+    await engine.defineTemplate(basicTemplate);
+    const instance = await engine.submit({ templateName: 'enterprise-test', documentId: 'doc-1', documentType: 'invoice', submittedBy: 'user1', data: {} });
+
+    // The first write attempt loses the optimistic-lock race; the retry, which
+    // re-reads the instance and writes again, is not given a stale version and
+    // succeeds.
+    let calls = 0;
+    const originalUpdate = adapter.updateInstance.bind(adapter);
+    adapter.updateInstance = async (updated, expectedVersion) => {
+      calls += 1;
+      if (calls === 1) throw new ApprovalConflictError(updated.id);
+      return originalUpdate(updated, expectedVersion);
+    };
+
+    const result = await engine.approve(instance.id, { approverId: 'mgr1' });
+    expect(result.levels[0]?.status).toBe('approved');
+    expect(calls).toBe(2);
+    await engine.shutdown();
   });
 });
 
