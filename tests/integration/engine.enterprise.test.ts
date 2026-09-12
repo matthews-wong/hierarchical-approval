@@ -173,6 +173,34 @@ describe('RetryPolicy', () => {
     expect(calls).toBe(2);
     await engine.shutdown();
   });
+
+  it('refuses to retry into an instance that went terminal between attempts', async () => {
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({
+      adapter,
+      retryPolicy: { maxAttempts: 3, baseDelayMs: 0, jitter: false },
+    });
+    await engine.defineTemplate(basicTemplate);
+    const instance = await engine.submit({ templateName: 'enterprise-test', documentId: 'doc-1', documentType: 'invoice', submittedBy: 'user1', data: {} });
+
+    // Another process cancels the instance in between this approve()'s first
+    // attempt (which loses the optimistic-lock race) and its retry.
+    const originalUpdate = adapter.updateInstance.bind(adapter);
+    let firstAttempt = true;
+    adapter.updateInstance = async (updated, expectedVersion) => {
+      if (firstAttempt) {
+        firstAttempt = false;
+        await engine.cancel(instance.id, { cancelledBy: 'admin', reason: 'no longer needed' });
+        throw new ApprovalConflictError(updated.id);
+      }
+      return originalUpdate(updated, expectedVersion);
+    };
+
+    await expect(engine.approve(instance.id, { approverId: 'mgr1' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await engine.shutdown();
+  });
 });
 
 // ─── IdempotencyKeyFn ────────────────────────────────────────────────────────
