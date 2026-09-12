@@ -154,6 +154,25 @@ describe('sub-workflow child lifecycle', () => {
       expect((await engine.queryInstances({})).items).toEqual([]);
     });
 
+    it('does not re-report an already-purged family member found again under dryRun', async () => {
+      const { parent } = await submit();
+      const childId = (await engine.getInstance(parent.id)).levels[0]?.childInstanceId as string;
+      // Under a real (non-dryRun) purge the child would already be deleted by
+      // the time the parent's family sweep looks it up, so the dedup guard
+      // never fires. dryRun leaves both instances in place, so the parent's
+      // family sweep finds the child a second time and must still report it
+      // only once.
+      await engine.approve(childId, { approverId: 'chair' });
+      await engine.reject(parent.id, { approverId: 'ceo', reason: 'no' });
+
+      const result = await engine.purgeInstances({
+        olderThan: new Date(Date.now() + 86_400_000),
+        dryRun: true,
+      });
+
+      expect(result.purged.map((p) => p.instanceId).sort()).toEqual([parent.id, childId].sort());
+    });
+
     it('stops mid-scan once a family sweep already reached the limit', async () => {
       const { parent, childId } = await submit();
       await engine.cancel(parent.id, { cancelledBy: 'buyer', reason: 'x' });
