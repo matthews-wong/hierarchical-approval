@@ -422,6 +422,51 @@ describe('SLA tracking', () => {
 
     await localEngine.shutdown();
   });
+
+  it('logs and swallows a failure from the internal markSlaBreached handler', async () => {
+    const adapter = new MemoryAdapter();
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+    const localEngine = new ApprovalEngine({
+      adapter,
+      tenantId: 'sla-fail-tenant',
+      escalationPollIntervalMs: 999999,
+      logger,
+    });
+    await localEngine.defineTemplate({
+      name: 'SLAFail',
+      documentType: 'doc',
+      slaDeadlineDays: 1,
+      levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'u1' }], mode: 'any' }],
+    });
+    const instance = await localEngine.submit({
+      templateName: 'SLAFail',
+      documentId: 'SLA-FAIL-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+
+    const raw = await adapter.getInstance('sla-fail-tenant', instance.id);
+    raw!.slaDeadlineAt = new Date(Date.now() - 1000);
+    await adapter.updateInstance(raw!, raw!.version);
+
+    const failure = new Error('storage unavailable');
+    adapter.updateInstance = async () => {
+      throw failure;
+    };
+
+    await expect(
+      (localEngine as unknown as { escalation: EscalationScheduler }).escalation.tick(),
+    ).resolves.not.toThrow();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'markSlaBreached: failed',
+      failure,
+      expect.objectContaining({ tenantId: 'sla-fail-tenant', instanceId: instance.id }),
+    );
+
+    await localEngine.shutdown();
+  });
 });
 
 // ─── Delegation revert (P0 Bug 5) ────────────────────────────────────────────
