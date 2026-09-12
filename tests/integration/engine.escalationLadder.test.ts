@@ -419,6 +419,54 @@ describe('escalation ladders', () => {
     expect(after.levels[0]?.escalationStep).toBe(0);
   });
 
+  it('sorts a rung with neither delay field as a zero-delay rung, in either position', async () => {
+    // Neither afterDays nor afterHours is required on an EscalationStep, so a
+    // rung can declare only escalateTo. The sort comparator's inner "?? 0"
+    // fallback is what keeps that rung orderable against the others,
+    // regardless of which side of the comparison it lands on.
+    const e = new ApprovalEngine({ adapter: new MemoryAdapter(), clock });
+    await e.defineTemplate({
+      name: 'ZERO-DELAY-FIRST',
+      documentType: 'zero-delay-first',
+      levels: [{ level: 1, name: 'L', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' }],
+      escalationSteps: [
+        { escalateTo: { type: 'user', userId: 'immediate' } },
+        { afterDays: 3, escalateTo: { type: 'user', userId: 'late' } },
+      ],
+    });
+    const first = await e.submit({
+      templateName: 'ZERO-DELAY-FIRST',
+      documentId: 'zd-1',
+      documentType: 'zero-delay-first',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+    await e.defineTemplate({
+      name: 'ZERO-DELAY-SECOND',
+      documentType: 'zero-delay-second',
+      levels: [{ level: 1, name: 'L', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' }],
+      escalationSteps: [
+        { afterDays: 3, escalateTo: { type: 'user', userId: 'late' } },
+        { escalateTo: { type: 'user', userId: 'immediate' } },
+      ],
+    });
+    const second = await e.submit({
+      templateName: 'ZERO-DELAY-SECOND',
+      documentId: 'zd-2',
+      documentType: 'zero-delay-second',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+    // The delay-less rung sorts first either way, but has no due date of its
+    // own, so the level opens with none armed yet.
+    for (const i of [first, second]) {
+      expect(i.levels[0]?.escalationDueAt).toBeUndefined();
+      expect(i.levels[0]?.escalationStep).toBe(0);
+    }
+  });
+
   it('records each escalation in the audit trail', async () => {
     const i = await submit();
     clock.advanceDays(2);
