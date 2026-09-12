@@ -137,6 +137,43 @@ describe('purgeInstances', () => {
     expect(result.purged).toHaveLength(2);
   });
 
+  it('ignores a non-terminal instance a loose adapter filter returns anyway', async () => {
+    const i = await submit('po-1');
+    clock.advanceDays(60);
+    const realFilter = adapter.getInstancesByFilter.bind(adapter);
+    adapter.getInstancesByFilter = (async (tenantId, filter, opts) => {
+      const real = await realFilter(tenantId, filter, opts);
+      // A custom adapter with a loose status filter could return live work
+      // alongside the terminal instances it was actually asked for.
+      const pending = await adapter.getInstance(tenantId, i.id);
+      return { items: [...real.items, pending!], total: real.total + 1 };
+    }) as typeof adapter.getInstancesByFilter;
+
+    const result = await engine.purgeInstances({ olderThan: cutoff(), statuses: ['cancelled'] });
+    expect(result.purged).toEqual([]);
+    expect((await engine.getInstance(i.id)).status).toBe('pending');
+  });
+
+  it('ignores an instance newer than the cut-off a loose adapter filter returns anyway', async () => {
+    const i = await submit('po-1');
+    await engine.approve(i.id, { approverId: 'mgr' });
+    const realFilter = adapter.getInstancesByFilter.bind(adapter);
+    adapter.getInstancesByFilter = (async (tenantId, filter, opts) => {
+      // A custom adapter with a loose date filter could return work newer
+      // than the requested cut-off alongside the instances actually asked for.
+      if (filter.status !== 'approved') return realFilter(tenantId, filter, opts);
+      const fresh = await adapter.getInstance(tenantId, i.id);
+      return { items: [fresh!], total: 1 };
+    }) as typeof adapter.getInstancesByFilter;
+
+    const result = await engine.purgeInstances({
+      olderThan: new Date('2025-01-01T00:00:00Z'),
+      statuses: ['approved'],
+    });
+    expect(result.purged).toEqual([]);
+    expect((await engine.getInstance(i.id)).status).toBe('approved');
+  });
+
   it('rejects an invalid cut-off', async () => {
     await expect(engine.purgeInstances({ olderThan: new Date('nonsense') })).rejects.toThrow(
       /valid olderThan date/,
