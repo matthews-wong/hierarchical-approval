@@ -216,6 +216,27 @@ describe('WebhookNotificationAdapter — exhausted retries', () => {
     expect(calls).toBe(4);
   });
 
+  it('stringifies a non-Error network rejection into the delivery error message', async () => {
+    // Every other network-error test throws a real Error; a misbehaving
+    // fetch polyfill can reject with a bare value instead, which must fall
+    // to buildError's String(networkError) branch rather than crashing on
+    // a missing .message.
+    const client: HttpClient = async () => {
+      throw 'boom';
+    };
+    const adapter = new WebhookNotificationAdapter({
+      url: 'https://example.com/hook',
+      httpClient: client,
+      sleep: noSleep,
+      maxAttempts: 1,
+    });
+    await expect(adapter.deliver(makeEvent())).rejects.toMatchObject({
+      name: 'WebhookDeliveryError',
+      message: expect.stringContaining('boom'),
+      cause: 'boom',
+    });
+  });
+
   it('notify() never throws: logs and swallows once retries are exhausted', async () => {
     const logger = spyLogger();
     const client: HttpClient = async () => fakeResponse(503);
