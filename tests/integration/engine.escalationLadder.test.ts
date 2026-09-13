@@ -75,6 +75,19 @@ describe('escalation ladders', () => {
     expect(i.levels[0]?.escalationStep).toBe(0);
   });
 
+  it('treats a level with no escalationStep (predating the field) as rung 0', async () => {
+    // escalationStep is optional on the type — a level persisted before this
+    // field existed has none — so escalateInternal falls back to rung 0
+    // rather than crashing on `undefined` used as an array index.
+    const i = await submit();
+    const stored = await engine.getInstance(i.id);
+    delete stored.levels[0]!.escalationStep;
+    await adapter.updateInstance(stored, stored.version);
+
+    await engine.escalate(i.id, { escalatedBy: 'admin' });
+    expect(await approvers(i.id)).toEqual(['mgr', 'director']);
+  });
+
   it('fires each rung in turn, adding approvers cumulatively', async () => {
     const i = await submit();
 
