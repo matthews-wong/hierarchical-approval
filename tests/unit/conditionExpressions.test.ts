@@ -204,5 +204,13 @@ describe('boolean condition expressions', () => {
       const when: ConditionExpression = { field: 'a', operator: 'starts_with', value: 'x' };
       expect(validateConditionExpression(when, 'when')).toEqual([]);
     });
+
+    it('reports a null node as a leaf missing field and operator, instead of throwing', () => {
+      // The type disallows null, but a template loaded from untyped JSON
+      // (importTemplates, a hand-built fixture) can still hand one in.
+      const when = null as unknown as ConditionExpression;
+      const errors = validateConditionExpression(when, 'when');
+      expect(errors.map((e) => e.field)).toEqual(['when.field', 'when.operator']);
+    });
   });
 });
