@@ -44,7 +44,7 @@ export class InMemorySchedulerAdapter implements ISchedulerAdapter {
   async scheduleAt(id: string, runAt: Date, callback: () => Promise<void>): Promise<string> {
     if (this.shuttingDown) {
       throw new Error(
-        'InMemorySchedulerAdapter: cannot schedule after shutdown() has been called.',
+        `InMemorySchedulerAdapter: cannot schedule "${id}" after shutdown() has been called.`,
       );
     }
 
