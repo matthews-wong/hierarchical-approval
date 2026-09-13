@@ -174,6 +174,32 @@ describe('RetryPolicy', () => {
     await engine.shutdown();
   });
 
+  it('retries with default jitter enabled once the conflicting write clears', async () => {
+    // Every other retry test in this suite sets jitter: false for
+    // determinism, so the default jitter=true delay-padding branch was
+    // never actually exercised by a real retry attempt.
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({
+      adapter,
+      retryPolicy: { maxAttempts: 3, baseDelayMs: 0 },
+    });
+    await engine.defineTemplate(basicTemplate);
+    const instance = await engine.submit({ templateName: 'enterprise-test', documentId: 'doc-1', documentType: 'invoice', submittedBy: 'user1', data: {} });
+
+    let calls = 0;
+    const originalUpdate = adapter.updateInstance.bind(adapter);
+    adapter.updateInstance = async (updated, expectedVersion) => {
+      calls += 1;
+      if (calls === 1) throw new ApprovalConflictError(updated.id);
+      return originalUpdate(updated, expectedVersion);
+    };
+
+    const result = await engine.approve(instance.id, { approverId: 'mgr1' });
+    expect(result.levels[0]?.status).toBe('approved');
+    expect(calls).toBe(2);
+    await engine.shutdown();
+  });
+
   it('refuses to retry into an instance that went terminal between attempts', async () => {
     const adapter = new MemoryAdapter();
     const engine = new ApprovalEngine({
