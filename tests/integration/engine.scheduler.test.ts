@@ -723,6 +723,53 @@ describe('delegation revert', () => {
 
     await localEngine.shutdown();
   });
+
+  it('is a no-op when the targeted level itself has already closed, even while the instance is still pending', async () => {
+    // The instance-level guard above only catches a terminal instance; a
+    // multi-level chain can be "pending" overall while the specific level a
+    // stale timer was armed for has already been decided and moved past.
+    const localEngine = new ApprovalEngine({
+      adapter: new MemoryAdapter(),
+      tenantId: 'delrev-level-closed-tenant',
+      escalationPollIntervalMs: 999999,
+    });
+    await localEngine.defineTemplate({
+      name: 'DelRevLevelClosed',
+      documentType: 'doc',
+      levels: [
+        { level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'mgr1' }], mode: 'any' },
+        { level: 2, name: 'L2', approvers: [{ type: 'user', userId: 'mgr2' }], mode: 'any' },
+      ],
+    });
+    const instance = await localEngine.submit({
+      templateName: 'DelRevLevelClosed',
+      documentId: 'DR-LVLCLOSED-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+    await localEngine.delegate(instance.id, {
+      fromApprover: 'mgr1',
+      toApprover: 'temp-mgr',
+      reason: 'temp',
+      until: new Date(Date.now() + 60_000),
+    });
+    await localEngine.approve(instance.id, { approverId: 'temp-mgr' });
+
+    await (
+      localEngine as unknown as {
+        revertDelegation: (id: string, level: number, from: string) => Promise<void>;
+      }
+    ).revertDelegation(instance.id, 1, 'mgr1');
+
+    const after = await localEngine.getInstance(instance.id);
+    expect(after.status).toBe('pending'); // still open on level 2
+    const level1 = after.levels.find((l) => l.level === 1);
+    expect(level1?.status).toBe('approved');
+    expect(level1?.delegatedTo).toBe('temp-mgr'); // untouched by the no-op guard
+
+    await localEngine.shutdown();
+  });
 });
 
 // ─── Escalation via scheduler ─────────────────────────────────────────────────
