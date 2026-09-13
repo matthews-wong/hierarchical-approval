@@ -231,6 +231,28 @@ describe('ApprovalEngine — getStatistics cycleTime', () => {
     await engine.shutdown();
   });
 
+  it('pages past fetchAllByFilter\'s internal batch size to cover every completed instance', async () => {
+    // fetchAllByFilter fetches CYCLE_TIME_FETCH_BATCH_SIZE (500) rows per page;
+    // every other test here stays under that, so the "fetch another page"
+    // loop branch was never driven. One more than the batch size forces it.
+    const engine = makeEngine();
+    await engine.defineTemplate(template);
+    const total = 501;
+    for (let i = 0; i < total; i++) {
+      const inst = await engine.submit({
+        templateName: 'Simple',
+        documentId: `CT-PAGE-${i}`,
+        documentType: 'doc',
+        submittedBy: 'sub',
+      });
+      await engine.approve(inst.id, { approverId: 'appr' });
+    }
+
+    const stats = await engine.getStatistics();
+    expect(stats.cycleTime.count).toBe(total);
+    await engine.shutdown();
+  });
+
   it('returns zeroed cycleTime (never NaN) when there are no completed instances', async () => {
     const engine = makeEngine();
     const stats = await engine.getStatistics();
