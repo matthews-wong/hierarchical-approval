@@ -467,6 +467,54 @@ describe('escalation ladders', () => {
     }
   });
 
+  it("escalationLadder's own sort orders an hours-based rung ahead of a days-based one, with a delay-less rung first", async () => {
+    // firstRungOf (covered above) and escalationLadder each carry an
+    // identically-shaped comparator but are separate call sites; closing one
+    // does not close the other. This drives escalationLadder's directly, via
+    // escalateInternal, with a mix that also exercises the outer
+    // `afterHours ?? ...` branch's "value present" side (every other test in
+    // this file leaves afterHours undefined throughout the whole ladder).
+    const e = new ApprovalEngine({ adapter: new MemoryAdapter(), clock });
+    await e.defineTemplate({
+      name: 'MIXED-LADDER',
+      documentType: 'mixed-ladder',
+      levels: [{ level: 1, name: 'L', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' }],
+      escalationSteps: [
+        { afterDays: 3, escalateTo: { type: 'user', userId: 'late' } },
+        { afterHours: 5, escalateTo: { type: 'user', userId: 'soon' } },
+        { escalateTo: { type: 'user', userId: 'immediate' } },
+      ],
+    });
+    const i = await e.submit({
+      templateName: 'MIXED-LADDER',
+      documentId: 'ml-1',
+      documentType: 'mixed-ladder',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+    const escalateOnce = (targetLevel: number) =>
+      (
+        e as unknown as {
+          escalateInternal: (
+            id: string,
+            by: string,
+            c: undefined,
+            l?: number,
+          ) => Promise<{ auditLog: { action: string; delegateTo?: string }[] }>;
+        }
+      ).escalateInternal(i.id, 'system', undefined, targetLevel);
+
+    await escalateOnce(1);
+    await escalateOnce(1);
+    await escalateOnce(1);
+
+    const targets = (await e.getInstance(i.id)).auditLog
+      .filter((a) => a.action === 'escalated')
+      .map((a) => a.delegateTo);
+    expect(targets).toEqual(['immediate', 'soon', 'late']);
+  });
+
   it('records each escalation in the audit trail', async () => {
     const i = await submit();
     clock.advanceDays(2);
