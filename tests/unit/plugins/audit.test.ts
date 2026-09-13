@@ -436,6 +436,29 @@ describe('HashChainAuditAdapter — never throws', () => {
     expect(await adapter.getChain('t', 'i')).toHaveLength(0);
   });
 
+  it('an unexpected canonicalization failure (not a circular reference) logs the generic message', async () => {
+    // The circular-reference case above only drives the CircularReferenceError
+    // branch of the outer catch; a throwing getter surfaces some other error
+    // out of canonicalize() (property access, not the cycle check), which
+    // must fall to the "unexpected error" branch instead.
+    const logger = spyLogger();
+    const adapter = new HashChainAuditAdapter({ logger });
+    const poisoned = makeEntry() as unknown as Record<string, unknown>;
+    Object.defineProperty(poisoned, 'newValue', {
+      enumerable: true,
+      get() {
+        throw new Error('getter exploded');
+      },
+    });
+    await expect(adapter.append('t', 'i', poisoned as never, INST)).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledWith(
+      'HashChainAuditAdapter: unexpected error during append',
+      expect.objectContaining({ message: 'getter exploded' }),
+      { tenantId: 't', instanceId: 'i' },
+    );
+    expect(await adapter.getChain('t', 'i')).toHaveLength(0);
+  });
+
   it('handles Date / nested objects in the entry without throwing', async () => {
     const adapter = new HashChainAuditAdapter();
     await adapter.append(
