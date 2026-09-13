@@ -67,13 +67,13 @@ describe('InMemorySchedulerAdapter', () => {
     await expect(adapter.shutdown()).resolves.toBeUndefined();
   });
 
-  it('rejects scheduleAt() once shutdown() has run', async () => {
+  it('rejects scheduleAt() once shutdown() has run, naming the offending job id', async () => {
     const adapter = new InMemorySchedulerAdapter();
     await adapter.shutdown();
 
     await expect(
       adapter.scheduleAt('job-4', new Date(Date.now() + 1000), async () => {}),
-    ).rejects.toThrow(/shutdown/);
+    ).rejects.toThrow('InMemorySchedulerAdapter: cannot schedule "job-4" after shutdown() has been called.');
   });
 
   it('logs and swallows an error thrown by the scheduled callback (never crashes the process)', async () => {
