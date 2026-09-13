@@ -765,6 +765,50 @@ describe('delegation revert', () => {
     await localEngine.shutdown();
   });
 
+  it('is a no-op when the targeted level number no longer exists on the instance at all', async () => {
+    // Distinct from the already-closed-level case below: this drives the
+    // `!level` half of the guard's `!level || level.status !== 'pending'`
+    // OR, where the level number a stale timer was armed for does not map
+    // to any level on the instance.
+    const localEngine = new ApprovalEngine({
+      adapter: new MemoryAdapter(),
+      tenantId: 'delrev-no-level-tenant',
+      escalationPollIntervalMs: 999999,
+    });
+    await localEngine.defineTemplate({
+      name: 'DelRevNoLevel',
+      documentType: 'doc',
+      levels: [
+        { level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'mgr1' }], mode: 'any' },
+      ],
+    });
+    const instance = await localEngine.submit({
+      templateName: 'DelRevNoLevel',
+      documentId: 'DR-NOLEVEL-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+    await localEngine.delegate(instance.id, {
+      fromApprover: 'mgr1',
+      toApprover: 'temp-mgr',
+      reason: 'temp',
+      until: new Date(Date.now() + 60_000),
+    });
+
+    await (
+      localEngine as unknown as {
+        revertDelegation: (id: string, level: number, from: string) => Promise<void>;
+      }
+    ).revertDelegation(instance.id, 99, 'mgr1');
+
+    const after = await localEngine.getInstance(instance.id);
+    expect(after.status).toBe('pending');
+    expect(after.levels[0]?.delegatedTo).toBe('temp-mgr'); // untouched by the no-op guard
+
+    await localEngine.shutdown();
+  });
+
   it('is a no-op when the targeted level itself has already closed, even while the instance is still pending', async () => {
     // The instance-level guard above only catches a terminal instance; a
     // multi-level chain can be "pending" overall while the specific level a
