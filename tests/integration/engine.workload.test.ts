@@ -84,6 +84,25 @@ describe('getWorkload', () => {
     expect(workload.map((w) => `${w.approverId}:${w.pending}`)).toEqual(['alice:2', 'carol:1']);
   });
 
+  it('breaks a tied pending count by approverId', async () => {
+    await engine.defineTemplate({
+      name: 'ZEBRA',
+      documentType: 'other',
+      levels: [one(1, 'Solo', 'zack')],
+    });
+    await engine.defineTemplate({
+      name: 'ANT',
+      documentType: 'other',
+      levels: [one(1, 'Solo', 'amy')],
+    });
+    await submit('z-1', 'other', 'ZEBRA');
+    await submit('a-1', 'other', 'ANT');
+
+    const workload = await engine.getWorkload();
+    // Both approvers are tied at 1 pending item each, so the tiebreak sorts by id.
+    expect(workload.map((w) => w.approverId)).toEqual(['amy', 'zack']);
+  });
+
   it('reports the age of the oldest item', async () => {
     await submit('po-1');
     clock.advanceDays(3);
