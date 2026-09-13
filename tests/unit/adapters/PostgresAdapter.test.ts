@@ -85,6 +85,11 @@ describe('PostgresAdapter — constructor validation', () => {
     expect(() => new PostgresAdapter({ schema: 'Public' })).toThrow(ApprovalValidationError);
     expect(() => new PostgresAdapter({ schema: '' })).toThrow(ApprovalValidationError);
   });
+
+  it('without an injected pool, lazily falls back to the `pg` dynamic import', async () => {
+    const adapter = new PostgresAdapter({});
+    await expect(adapter.migrate()).rejects.toThrow();
+  });
 });
 
 describe('PostgresAdapter — migrate()', () => {
