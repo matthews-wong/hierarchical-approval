@@ -148,6 +148,22 @@ describe('RetryPolicy', () => {
     await engine2.shutdown();
   });
 
+  it('throws ApprovalConflictError immediately when maxAttempts is configured to 0', async () => {
+    // With no iterations of the retry loop, lastError is never assigned —
+    // this is the only way to reach the `?? new ApprovalConflictError(...)`
+    // fallback that guards against that (structurally impossible in the
+    // normal maxAttempts >= 1 case) empty-loop scenario.
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({ adapter, retryPolicy: { maxAttempts: 0, baseDelayMs: 0 } });
+    await engine.defineTemplate(basicTemplate);
+    const instance = await engine.submit({ templateName: 'enterprise-test', documentId: 'doc-1', documentType: 'invoice', submittedBy: 'user1', data: {} });
+
+    await expect(engine.approve(instance.id, { approverId: 'mgr1' })).rejects.toThrow(
+      ApprovalConflictError,
+    );
+    await engine.shutdown();
+  });
+
   it('retries and succeeds once the conflicting write clears', async () => {
     const adapter = new MemoryAdapter();
     const engine = new ApprovalEngine({
