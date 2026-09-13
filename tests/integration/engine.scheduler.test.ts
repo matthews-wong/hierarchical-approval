@@ -172,6 +172,47 @@ describe('instance expiry', () => {
     await localEngine.shutdown();
   });
 
+  it("is a no-op when the instance resolved between the scheduler's query and the expiry handler firing", async () => {
+    // EscalationScheduler.tick() only queries pending instances, but a
+    // decision can land between that read and onExpire actually running.
+    // expireInstance re-checks status itself for exactly this race; call it
+    // directly (bypassing the scheduler) on an already-approved instance to
+    // drive that guard.
+    const localEngine = new ApprovalEngine({
+      adapter: new MemoryAdapter(),
+      tenantId: 'exp-noop-tenant',
+      escalationPollIntervalMs: 999999,
+    });
+    await localEngine.defineTemplate(simpleTemplate);
+
+    const events: string[] = [];
+    localEngine.on('approval:expired', (p) => events.push(p.instanceId));
+
+    const instance = await localEngine.submit({
+      templateName: 'Simple',
+      documentId: 'EX-NOOP-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+      expiresAt: new Date(Date.now() - 1000),
+      deadlineAction: 'reject',
+    });
+    await localEngine.approve(instance.id, { approverId: 'mgr1' });
+
+    await (
+      localEngine as unknown as {
+        expireInstance: (id: string, a: 'cancel' | 'reject') => Promise<void>;
+      }
+    ).expireInstance(instance.id, 'reject');
+
+    const updated = await localEngine.getInstance(instance.id);
+    expect(updated.status).toBe('approved');
+    expect(events).toHaveLength(0);
+    expect(updated.auditLog.some((e) => e.action === 'expired')).toBe(false);
+
+    await localEngine.shutdown();
+  });
+
   it('logs and swallows a failure from the internal expireInstance handler instead of throwing out of tick()', async () => {
     const adapter = new MemoryAdapter();
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
