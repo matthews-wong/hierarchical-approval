@@ -96,6 +96,17 @@ describe('MemoryAdapter', () => {
     expect(noMatch.items).toHaveLength(0);
   });
 
+  it('a data filter never throws on an instance whose data field is missing (legacy row)', async () => {
+    // `data` is required on ApprovalInstance, but a row persisted before the
+    // field existed — or hand-built storage — can still lack it.
+    const adapter = new MemoryAdapter();
+    await adapter.saveInstance(makeInstance({ id: 'legacy', data: undefined as never }));
+    await adapter.saveInstance(makeInstance({ id: 'current', data: { vendor: 'acme' } }));
+
+    const result = await adapter.getInstancesByFilter('t1', { data: { vendor: 'acme' } });
+    expect(result.items.map((i) => i.id)).toEqual(['current']);
+  });
+
   it('getInstancesByFilter respects fromDate/toDate bounds', async () => {
     const adapter = new MemoryAdapter();
     await adapter.saveInstance(
