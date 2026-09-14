@@ -464,6 +464,46 @@ describe('SLA tracking', () => {
     await localEngine.shutdown();
   });
 
+  it('markSlaBreached falls back to the current time when the instance has no slaDeadlineAt', async () => {
+    // The scheduler only ever calls this handler for instances whose
+    // slaDeadlineAt has already passed, so every reachable-through-the-public-API
+    // case has one set. A template with no SLA configured never sets it, so the
+    // only way to exercise the `?? now` fallback is to call the handler directly.
+    const adapter = new MemoryAdapter();
+    const localEngine = new ApprovalEngine({
+      adapter,
+      tenantId: 'sla-missing-deadline-tenant',
+      escalationPollIntervalMs: 999999,
+    });
+    await localEngine.defineTemplate({
+      name: 'NoSLA',
+      documentType: 'doc',
+      levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'u1' }], mode: 'any' }],
+    });
+    const instance = await localEngine.submit({
+      templateName: 'NoSLA',
+      documentId: 'SLA-MISSING-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+    expect(instance.slaDeadlineAt).toBeUndefined();
+
+    const breached: Array<{ slaDeadlineAt: Date }> = [];
+    localEngine.on('approval:sla_breached', (p) => breached.push(p));
+
+    await (
+      localEngine as unknown as { markSlaBreached: (id: string) => Promise<void> }
+    ).markSlaBreached(instance.id);
+
+    const updated = await localEngine.getInstance(instance.id);
+    expect(updated.slaBreachedAt).toBeDefined();
+    expect(breached).toHaveLength(1);
+    expect(breached[0]!.slaDeadlineAt).toEqual(updated.slaBreachedAt);
+
+    await localEngine.shutdown();
+  });
+
   it('logs and swallows a failure from the internal markSlaBreached handler', async () => {
     const adapter = new MemoryAdapter();
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
