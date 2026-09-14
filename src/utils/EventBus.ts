@@ -22,9 +22,9 @@ type Wrapped = (...args: unknown[]) => void;
  * swallow-and-log contract the notification and audit adapter paths already use.
  */
 export class EventBus {
-  private emitter = new EventEmitter();
+  private readonly emitter = new EventEmitter();
   /** Per-event map of caller-supplied listener to the wrapper actually registered, so `off` can find it. */
-  private wrappers = new Map<ApprovalEventName, Map<unknown, Wrapped>>();
+  private readonly wrappers = new Map<ApprovalEventName, Map<unknown, Wrapped>>();
   private onListenerError?: ListenerErrorHandler;
 
   /** Route listener failures somewhere. Without this they are swallowed silently. */
