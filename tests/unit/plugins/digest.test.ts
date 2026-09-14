@@ -84,6 +84,20 @@ describe('DigestNotificationAdapter', () => {
     expect(adapter.pendingRecipients).toBe(0);
   });
 
+  it('never double-delivers a recipient caught by two overlapping flush() calls', async () => {
+    // flush() snapshots its recipient list up front, then awaits each delivery
+    // in turn. Two concurrent flush() calls both take a snapshot before either
+    // finishes delivering, so the second one to reach a given recipient must
+    // find its buffer already gone rather than re-sending it.
+    const { adapter, sent } = build();
+    await adapter.notify(event({ recipients: ['alice', 'bob'] }));
+
+    const [p1, p2] = [adapter.flush(), adapter.flush()];
+    await Promise.all([p1, p2]);
+
+    expect(sent.map((d) => d.recipient).sort()).toEqual(['alice', 'bob']);
+  });
+
   describe('urgent events bypass the buffer', () => {
     it.each([
       'approval:rejected',
