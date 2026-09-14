@@ -1,3 +1,10 @@
+## 4.0.1 - 2026-09-14
+
+- fix(resilience): include the offending value in RateLimitMiddleware errors
+- fix(scheduler): include the job id in InMemorySchedulerAdapter's post-shutdown error
+- fix(postgres): test the null-rowCount fallback via a dedicated fake pool
+- fix(postgres): let FakePool pass an explicit null rowCount through
+
 # Changelog
 
 All notable changes to `hierarchical-approval` are documented here. This project
