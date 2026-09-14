@@ -92,10 +92,22 @@ describe('EventBus — listener failure isolation', () => {
   it('swallows a rejecting async listener when no handler is registered', async () => {
     const bus = new EventBus();
     bus.on('approval:completed', () => Promise.reject(new Error('async-nobody-listening')) as unknown as void);
-    expect(() => bus.emit('approval:completed', {} as never)).not.toThrow();
 
-    // No unhandledRejection should escape once the promise settles.
-    await new Promise((resolve) => setImmediate(resolve));
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown): void => {
+      unhandledRejections.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandledRejection);
+
+    try {
+      expect(() => bus.emit('approval:completed', {} as never)).not.toThrow();
+      // Only a real process-level listener proves the rejection was caught,
+      // not merely that emit() itself didn't throw synchronously.
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(unhandledRejections).toHaveLength(0);
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+    }
   });
 });
 
