@@ -88,6 +88,15 @@ describe('EventBus — listener failure isolation', () => {
     });
     expect(() => bus.emit('approval:completed', {} as never)).not.toThrow();
   });
+
+  it('swallows a rejecting async listener when no handler is registered', async () => {
+    const bus = new EventBus();
+    bus.on('approval:completed', () => Promise.reject(new Error('async-nobody-listening')) as unknown as void);
+    expect(() => bus.emit('approval:completed', {} as never)).not.toThrow();
+
+    // No unhandledRejection should escape once the promise settles.
+    await new Promise((resolve) => setImmediate(resolve));
+  });
 });
 
 describe('engine — a throwing engine.on() listener no longer breaks the operation', () => {
