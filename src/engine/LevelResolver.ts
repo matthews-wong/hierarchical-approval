@@ -47,8 +47,8 @@ export type ApproverResolverFn = (
 ) => Promise<string[]> | string[];
 
 export class LevelResolver {
-  private resolvers = new Map<string, ResolverFn>();
-  private approverTypes = new Map<string, ApproverResolverFn>();
+  private readonly resolvers = new Map<string, ResolverFn>();
+  private readonly approverTypes = new Map<string, ApproverResolverFn>();
 
   register(name: string, fn: ResolverFn): void {
     this.resolvers.set(name, fn);

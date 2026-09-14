@@ -104,9 +104,9 @@ function applyFilter(instance: ApprovalInstance, filter: InstanceFilter): boolea
 
 export class MemoryAdapter implements IStorageAdapter {
   // keyed by `${tenantId}:${template.name}`
-  private templates = new Map<string, ApprovalTemplate>();
+  private readonly templates = new Map<string, ApprovalTemplate>();
   // keyed by `${tenantId}:${instance.id}`
-  private instances = new Map<string, ApprovalInstance>();
+  private readonly instances = new Map<string, ApprovalInstance>();
 
   async saveTemplate(template: ApprovalTemplate): Promise<void> {
     this.templates.set(`${template.tenantId}:${template.name}`, deepClone(template));
