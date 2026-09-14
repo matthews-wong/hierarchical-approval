@@ -66,6 +66,26 @@ describe('template inheritance', () => {
     expect(t.conditions).toHaveLength(1);
   });
 
+  it('inherits the base escalation config when the child declares none', async () => {
+    await engine.defineTemplate({
+      name: 'PO-Escalating',
+      documentType: 'purchase_order',
+      levels: [lvl(1, 'Manager', 'mgr')],
+      escalation: { afterDays: 2, escalateTo: { type: 'user', userId: 'director' } },
+    });
+    await engine.defineTemplate({
+      name: 'PO-Escalating-EU',
+      extends: 'PO-Escalating',
+      documentType: 'purchase_order',
+      levels: [],
+    });
+    const t = await engine.getTemplate('PO-Escalating-EU');
+    expect(t.escalation).toEqual({
+      afterDays: 2,
+      escalateTo: { type: 'user', userId: 'director' },
+    });
+  });
+
   it('overrides a single inherited level field by field', async () => {
     await engine.defineTemplate({
       name: 'PO-EU',
