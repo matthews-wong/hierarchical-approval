@@ -5,7 +5,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- `InMemorySchedulerAdapter.scheduleAt()`'s post-shutdown error now names the
+  rejected job id, so a caller can tell which scheduled job was dropped
+  without adding their own logging around every call.
 
 ## [4.0.0] - 2026-09-04
 
