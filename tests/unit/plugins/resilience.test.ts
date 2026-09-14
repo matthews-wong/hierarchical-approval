@@ -278,26 +278,26 @@ describe('CompositeAuthorizationPolicy — child normalization', () => {
 describe('RateLimitMiddleware — constructor validation', () => {
   it('rejects a non-positive capacity', () => {
     expect(() => new RateLimitMiddleware({ capacity: 0, refillTokensPerSecond: 1 })).toThrow(
-      /capacity must be a positive finite number/,
+      /capacity must be a positive finite number, got 0/,
     );
   });
 
   it('rejects a negative refill rate', () => {
     expect(() => new RateLimitMiddleware({ capacity: 5, refillTokensPerSecond: -1 })).toThrow(
-      /refillTokensPerSecond must be a non-negative finite number/,
+      /refillTokensPerSecond must be a non-negative finite number, got -1/,
     );
   });
 
   it('rejects a non-positive costPerRequest', () => {
     expect(
       () => new RateLimitMiddleware({ capacity: 5, refillTokensPerSecond: 1, costPerRequest: 0 }),
-    ).toThrow(/costPerRequest must be a positive finite number/);
+    ).toThrow(/costPerRequest must be a positive finite number, got 0/);
   });
 
   it('rejects a costPerRequest larger than capacity', () => {
     expect(
       () => new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 1, costPerRequest: 3 }),
-    ).toThrow(/costPerRequest cannot exceed capacity/);
+    ).toThrow(/costPerRequest \(3\) cannot exceed capacity \(2\)/);
   });
 });
 

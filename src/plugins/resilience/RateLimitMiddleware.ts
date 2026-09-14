@@ -97,17 +97,25 @@ export class RateLimitMiddleware implements IOperationMiddleware {
 
   constructor(options: RateLimitOptions) {
     if (!Number.isFinite(options.capacity) || options.capacity <= 0) {
-      throw new Error('RateLimitMiddleware: capacity must be a positive finite number.');
+      throw new Error(
+        `RateLimitMiddleware: capacity must be a positive finite number, got ${options.capacity}.`,
+      );
     }
     if (!Number.isFinite(options.refillTokensPerSecond) || options.refillTokensPerSecond < 0) {
-      throw new Error('RateLimitMiddleware: refillTokensPerSecond must be a non-negative finite number.');
+      throw new Error(
+        `RateLimitMiddleware: refillTokensPerSecond must be a non-negative finite number, got ${options.refillTokensPerSecond}.`,
+      );
     }
     const cost = options.costPerRequest ?? 1;
     if (!Number.isFinite(cost) || cost <= 0) {
-      throw new Error('RateLimitMiddleware: costPerRequest must be a positive finite number.');
+      throw new Error(
+        `RateLimitMiddleware: costPerRequest must be a positive finite number, got ${cost}.`,
+      );
     }
     if (cost > options.capacity) {
-      throw new Error('RateLimitMiddleware: costPerRequest cannot exceed capacity (request could never succeed).');
+      throw new Error(
+        `RateLimitMiddleware: costPerRequest (${cost}) cannot exceed capacity (${options.capacity}) — the request could never succeed.`,
+      );
     }
     this.capacity = options.capacity;
     this.refillTokensPerSecond = options.refillTokensPerSecond;
