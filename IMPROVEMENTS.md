@@ -243,10 +243,3 @@ combined `documentType` filter, and the empty-template case.
 | `ApprovalEngineOptions.calendar` | option | 4 |
 | `ApprovalStatistics.byTemplate` | field | 5 |
 | `InstanceFilter.templateName` | field | 5 |
-
-## Possible future iterations
-- **Parallel branch groups** — true concurrent branches (e.g. Finance *and*
-  Legal) that join before a downstream level.
-- **Per-status analytics** — `byStatus` already ships per status; the per-template
-  breakdown (`byTemplate`) was added in iteration 5.
-- **Cycle-time metrics** (average time-to-decision) in the statistics surface.
