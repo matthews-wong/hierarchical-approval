@@ -96,4 +96,14 @@ describe('businessHoursCalendar', () => {
       /no working day found/,
     );
   });
+
+  it('refuses an hours count that cannot be scheduled within 10 years', () => {
+    // Working days exist (this is an ordinary Mon-Fri, 9-17 calendar), so
+    // toWorkingMoment() itself never throws — but no realistic amount of
+    // working hours ever needs more than 3660 working days to land, so an
+    // absurd request (100,000 working hours) still exhausts that guard.
+    expect(() => cal.addBusinessHours(at('2026-01-05T10:00:00'), 100_000)).toThrow(
+      /could not be scheduled within 10 years/,
+    );
+  });
 });
