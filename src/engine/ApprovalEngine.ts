@@ -3614,6 +3614,7 @@ export class ApprovalEngine {
     };
   }
 
+  /** Stops the escalation scheduler and any scheduler-adapter background loop; call once when tearing the engine down. */
   async shutdown(): Promise<void> {
     this.schedulerStopped = true;
     await this.escalation.stop();
