@@ -652,3 +652,40 @@ describe('syncFrontier — currentLevel is left alone when nothing is open yet',
     await engine.shutdown();
   });
 });
+
+// ─── resolveActorLevel — no candidate level at all ───────────────────────────
+
+describe('resolveActorLevel — instance status is pending but no level is', () => {
+  it('throws INVALID_LEVEL naming the instance status', async () => {
+    // Every real caller reaches this after assertStatus(instance, 'pending'),
+    // and normal operation always keeps exactly one level 'pending' until the
+    // instance itself turns terminal, so this guards a shape that should not
+    // arise rather than one that does. Drive it directly with the levels
+    // corrupted to 'waiting' while the instance status is left 'pending'.
+    const engine = makeEngine();
+    await engine.defineTemplate(twoLevelTemplate);
+    const submitted = await engine.submit({
+      templateName: 'Two Level',
+      documentId: 'doc-3',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+    const instance = await engine.getInstance(submitted.id);
+    instance.levels[0]!.status = 'waiting';
+
+    expect(() =>
+      (
+        engine as unknown as {
+          resolveActorLevel: (
+            inst: typeof instance,
+            actorId: string,
+            explicitLevel?: number,
+          ) => unknown;
+        }
+      ).resolveActorLevel(instance, 'mgr1'),
+    ).toThrow(/Instance has no level awaiting a decision \(status: pending\)/);
+
+    await engine.shutdown();
+  });
+});
