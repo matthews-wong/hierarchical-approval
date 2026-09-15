@@ -177,6 +177,25 @@ describe('WebhookNotificationAdapter — retry on transient failure', () => {
     expect(sleep).toHaveBeenCalledTimes(2);
   });
 
+  it('falls back to the real timer-based sleep when no sleep option is injected', async () => {
+    // Every other retry test injects `sleep` to skip real waiting, so
+    // `defaultSleep` (the setTimeout-backed default) is never exercised. Use a
+    // tiny baseDelayMs to keep the real wait negligible.
+    let calls = 0;
+    const client: HttpClient = async () => {
+      calls++;
+      return calls < 2 ? fakeResponse(500) : fakeResponse(200);
+    };
+    const adapter = new WebhookNotificationAdapter({
+      url: 'https://example.com/hook',
+      httpClient: client,
+      maxAttempts: 3,
+      baseDelayMs: 1,
+    });
+    await adapter.deliver(makeEvent());
+    expect(calls).toBe(2);
+  });
+
   it('treats a network error the same as a retryable status', async () => {
     let calls = 0;
     const client: HttpClient = async () => {
