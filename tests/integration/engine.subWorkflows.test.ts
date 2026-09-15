@@ -233,6 +233,36 @@ describe('sub-workflows', () => {
     expect((await engine.getInstance(top.id)).status).toBe('approved');
   });
 
+  it('refuses to nest sub-workflows past the depth limit', async () => {
+    // A template cannot name itself (validated separately), but nothing stops
+    // two templates naming each other, and that mutual cycle recurses forever
+    // through startSubWorkflows unless the runtime depth guard stops it.
+    await engine.defineTemplate({
+      name: 'PING',
+      documentType: 'ping',
+      levels: [
+        { level: 1, name: 'Ping', mode: 'any', approvers: [], subWorkflow: { templateName: 'PONG' } },
+      ],
+    });
+    await engine.defineTemplate({
+      name: 'PONG',
+      documentType: 'pong',
+      levels: [
+        { level: 1, name: 'Pong', mode: 'any', approvers: [], subWorkflow: { templateName: 'PING' } },
+      ],
+    });
+
+    await expect(
+      engine.submit({
+        templateName: 'PING',
+        documentId: 'ping-1',
+        documentType: 'ping',
+        submittedBy: 'buyer',
+        data: {},
+      }),
+    ).rejects.toThrow(/Sub-workflow nesting exceeded 5 levels/);
+  });
+
   describe('validation', () => {
     const withLevel = (level: Record<string, unknown>) => ({
       name: 'X',
