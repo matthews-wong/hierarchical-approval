@@ -198,6 +198,42 @@ describe('DigestNotificationAdapter', () => {
       }
     });
 
+    it('logs and swallows a scheduled flush that throws outside send()', async () => {
+      // deliver() already catches a throwing send(), so the only way flush()
+      // itself rejects is a failure elsewhere in the call chain — here, the
+      // clock read used to stamp flushedAt, which happens before deliver()'s
+      // try block.
+      vi.useFakeTimers();
+      try {
+        const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+        let calls = 0;
+        const clock: Clock = {
+          now: () => {
+            calls++;
+            if (calls === 2) throw new Error('clock exploded');
+            return new Date('2026-01-01T00:00:00Z');
+          },
+        };
+        const adapter = new DigestNotificationAdapter({
+          intervalMs: 1000,
+          send: () => {},
+          clock,
+          logger,
+        });
+        await adapter.notify(event());
+
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(logger.error).toHaveBeenCalledWith(
+          'DigestNotificationAdapter: scheduled flush failed',
+          expect.objectContaining({ message: 'clock exploded' }),
+        );
+        await adapter.stop();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('rejects a non-positive interval', () => {
       expect(() => new DigestNotificationAdapter({ send: () => {}, intervalMs: 0 })).toThrow(
         /intervalMs must be a positive number/,
