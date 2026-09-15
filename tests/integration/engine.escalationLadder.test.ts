@@ -528,6 +528,43 @@ describe('escalation ladders', () => {
     expect(targets).toEqual(['immediate', 'soon', 'late']);
   });
 
+  it("escalationLadder's sort also drives the days-fallback for the right-hand comparator argument", async () => {
+    // The mixed-ladder test above always compares the delay-less rung as the
+    // sort's left-hand argument; for that step order, insertion sort never
+    // flips it to the right-hand side, so the right-hand `afterDays ?? 0`
+    // fallback (as opposed to the left-hand one) stayed untested. Two steps,
+    // ordered so the delay-less one is already in place when the days-based
+    // one is inserted, forces exactly that comparison.
+    const e = new ApprovalEngine({ adapter: new MemoryAdapter(), clock });
+    await e.defineTemplate({
+      name: 'RHS-LADDER',
+      documentType: 'rhs-ladder',
+      levels: [{ level: 1, name: 'L', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' }],
+      escalationSteps: [
+        { escalateTo: { type: 'user', userId: 'immediate' } },
+        { afterDays: 3, escalateTo: { type: 'user', userId: 'late' } },
+      ],
+    });
+    const i = await e.submit({
+      templateName: 'RHS-LADDER',
+      documentId: 'rhs-1',
+      documentType: 'rhs-ladder',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+    await (
+      e as unknown as {
+        escalateInternal: (id: string, by: string, c: undefined, l?: number) => Promise<void>;
+      }
+    ).escalateInternal(i.id, 'system', undefined, 1);
+
+    const targets = (await e.getInstance(i.id)).auditLog
+      .filter((a) => a.action === 'escalated')
+      .map((a) => a.delegateTo);
+    expect(targets).toEqual(['immediate']);
+  });
+
   it('records each escalation in the audit trail', async () => {
     const i = await submit();
     clock.advanceDays(2);
