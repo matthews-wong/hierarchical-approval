@@ -422,6 +422,35 @@ describe('HashChainAuditAdapter — never throws', () => {
     expect(res.brokenAt).toBe(0);
   });
 
+  it('a rejecting lock tail does not poison the next append to the same chain', async () => {
+    // appendLocked itself is a catch-all and should never reject, but the
+    // `.then(() => undefined, () => undefined)` guard on the stored lock tail
+    // exists precisely so that if it somehow did, the rejection stays local to
+    // this call instead of propagating into every future append on this chain.
+    const adapter = new HashChainAuditAdapter();
+    const internal = adapter as unknown as {
+      appendLocked: (...args: unknown[]) => Promise<void>;
+    };
+    const realAppendLocked = internal.appendLocked.bind(adapter);
+    let calls = 0;
+    internal.appendLocked = async (...args: unknown[]) => {
+      calls++;
+      if (calls === 1) throw new Error('forced rejection');
+      return realAppendLocked(...args);
+    };
+
+    await expect(adapter.append('t', 'i', makeEntry({ actorId: 'a' }), INST)).rejects.toThrow(
+      'forced rejection',
+    );
+    await expect(
+      adapter.append('t', 'i', makeEntry({ actorId: 'b' }), INST),
+    ).resolves.toBeUndefined();
+
+    const chain = await adapter.getChain('t', 'i');
+    expect(chain).toHaveLength(1);
+    expect(chain[0]?.entry.actorId).toBe('b');
+  });
+
   it('circular-reference entry is caught (logged) and append still resolves', async () => {
     const logger = spyLogger();
     const adapter = new HashChainAuditAdapter({ logger });
