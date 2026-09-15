@@ -615,3 +615,40 @@ describe('assertFullyApproved — inconsistent chain tripwire', () => {
     await engine.shutdown();
   });
 });
+
+// ─── syncFrontier — currentLevel survives a momentarily-open instance ────────
+
+describe('syncFrontier — currentLevel is left alone when nothing is open yet', () => {
+  it('does not overwrite currentLevel with undefined while status is still pending', async () => {
+    // Every real caller sets instance.status to a terminal value before the
+    // last level empties out, so persistInstance never actually sees this
+    // shape in production. It is tested directly anyway, the same way
+    // assertFullyApproved above is: without the `open.length > 0` guard,
+    // `open[0]` on an empty array would silently overwrite currentLevel with
+    // undefined instead of leaving it at the level the instance last had open.
+    const engine = makeEngine();
+    await engine.defineTemplate(twoLevelTemplate);
+    const submitted = await engine.submit({
+      templateName: 'Two Level',
+      documentId: 'doc-2',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+    await engine.approve(submitted.id, { approverId: 'mgr1' });
+    const instance = await engine.getInstance(submitted.id);
+    expect(instance.currentLevel).toBe(2);
+    instance.levels[1]!.status = 'approved';
+
+    await (
+      engine as unknown as {
+        persistInstance: (inst: typeof instance, version: number) => Promise<void>;
+      }
+    ).persistInstance(instance, instance.version);
+
+    expect(instance.openLevels).toEqual([]);
+    expect(instance.currentLevel).toBe(2);
+
+    await engine.shutdown();
+  });
+});
