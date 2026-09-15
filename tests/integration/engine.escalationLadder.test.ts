@@ -739,4 +739,62 @@ describe('rungs are measured from when each branch opened', () => {
     // escalation time (which would be submittedAt + 3 days + 5 days instead).
     expect(dueAt).toBe(submittedAt.getTime() + 5 * DAY_MS);
   });
+
+  it("falls back to the audit trail's level_advanced entry for an upper level predating openedAt", async () => {
+    // `submitted`'s audit entry always names the lowest configured level
+    // (`allLevelCfgs[0]?.level`), so a legacy instance's second level can
+    // only be recovered from a `level_advanced` entry — the exact case the
+    // regression comment above this describe block documents. No current
+    // code path pushes that action onto `auditLog`, so a real legacy row is
+    // simulated the same way the `submitted` case above is: submit and
+    // advance for real, then inject the historical entry directly.
+    const clock = new TestClock();
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({ adapter, clock });
+    await engine.defineTemplate({
+      name: 'LEGACY-ADVANCE',
+      documentType: 'legacy-advance',
+      levels: [
+        { level: 1, name: 'One', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' },
+        { level: 2, name: 'Two', approvers: [{ type: 'user', userId: 'b' }], mode: 'any' },
+      ],
+      escalationSteps: [
+        { afterDays: 2, escalateTo: { type: 'user', userId: 'boss' } },
+        { afterDays: 5, escalateTo: { type: 'user', userId: 'bigBoss' } },
+      ],
+    });
+    const i = await engine.submit({
+      templateName: 'LEGACY-ADVANCE',
+      documentId: 'legacy-adv-1',
+      documentType: 'legacy-advance',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    await engine.approve(i.id, { approverId: 'a' });
+    const advancedAt = clock.now();
+
+    const stored = await adapter.getInstance('default', i.id);
+    const level2 = stored!.levels.find((l) => l.level === 2)!;
+    level2.openedAt = undefined;
+    stored!.auditLog.push({
+      action: 'level_advanced',
+      actorId: 'system',
+      level: 2,
+      timestamp: advancedAt,
+    });
+    await adapter.updateInstance(stored!, stored!.version);
+
+    clock.advanceDays(3);
+    await (
+      engine as unknown as {
+        escalateInternal: (id: string, by: string, c: undefined, l?: number) => Promise<unknown>;
+      }
+    ).escalateInternal(i.id, 'system', undefined, 2);
+
+    const after = await engine.getInstance(i.id);
+    const dueAt = after.levels[1]?.escalationDueAt?.getTime();
+    // Measured from the recovered advancedAt (+5 days), not from `now` at
+    // escalation time (which would be advancedAt + 3 days + 5 days instead).
+    expect(dueAt).toBe(advancedAt.getTime() + 5 * DAY_MS);
+  });
 });
