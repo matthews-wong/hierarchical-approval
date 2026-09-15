@@ -176,6 +176,25 @@ describe('approval reminders', () => {
     expect(events).toHaveLength(1);
   });
 
+  it('does not fire once the instance is cancelled, even though the level itself is untouched', async () => {
+    // Cancellation deliberately leaves level statuses alone, so a cancelled
+    // instance still has a 'pending' level with a due reminderDueAt. That also
+    // means getOverdueInstances (scoped to status: 'pending') never hands this
+    // instance to the scheduler any more, so sendReminder is invoked directly
+    // to prove it is the instance-status check, not the level-status one,
+    // that stops it.
+    await define({ reminderAfterDays: 1 });
+    const i = await submit();
+    await engine.cancel(i.id, { cancelledBy: 'buyer', reason: 'no longer needed' });
+    clock.advanceDays(1);
+
+    await (
+      engine as unknown as { sendReminder: (id: string, n: number) => Promise<void> }
+    ).sendReminder(i.id, 1);
+
+    expect(events).toHaveLength(0);
+  });
+
   it('excludes approvers who already voted on a quorum level', async () => {
     await engine.defineTemplate({
       name: 'PO',
