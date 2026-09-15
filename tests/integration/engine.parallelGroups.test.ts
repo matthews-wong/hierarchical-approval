@@ -215,6 +215,18 @@ describe('parallel branch groups', () => {
         /Level 4 is not awaiting a decision/,
       );
     });
+
+    it('reports the usual not-an-approver error for someone on neither branch', async () => {
+      await engine.defineTemplate(forked());
+      const i = await submit();
+      await engine.approve(i.id, { approverId: 'mgr' });
+      // Finance and Legal are both open now and 'stranger' sits on neither, so
+      // resolveActorLevel finds zero candidates and hands back the lowest open
+      // level rather than guessing -- membership is then checked as usual.
+      await expect(engine.approve(i.id, { approverId: 'stranger' })).rejects.toThrow(
+        /User "stranger" is not an approver for level 2/,
+      );
+    });
   });
 
   describe('validation', () => {
