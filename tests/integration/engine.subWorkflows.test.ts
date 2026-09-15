@@ -12,9 +12,11 @@ const u = (n: number, name: string, userId: string) => ({
 
 describe('sub-workflows', () => {
   let engine: ApprovalEngine;
+  let adapter: MemoryAdapter;
 
   beforeEach(async () => {
-    engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+    adapter = new MemoryAdapter();
+    engine = new ApprovalEngine({ adapter });
 
     // The child: a small board approval.
     await engine.defineTemplate({
@@ -261,6 +263,27 @@ describe('sub-workflows', () => {
         data: {},
       }),
     ).rejects.toThrow(/Sub-workflow nesting exceeded 5 levels/);
+  });
+
+  it('leaves an already-terminal parent alone when its child finishes late', async () => {
+    // cancel()/reject() normally cascade to the child through
+    // cancelOrphanedChildren, so this simulates the parent leaving 'pending'
+    // by some other means -- the child's own completion racing a parent
+    // decision, say -- and proves propagateToParent no-ops rather than
+    // reviving or corrupting a parent that already finished.
+    const i = await submit();
+    await engine.approve(i.id, { approverId: 'mgr' });
+    const child = await childOf(i.id);
+
+    const stored = await adapter.getInstance('default', i.id);
+    stored!.status = 'rejected';
+    await adapter.updateInstance(stored!, stored!.version);
+
+    await engine.approve(child!.id, { approverId: 'chair' });
+
+    const parent = await engine.getInstance(i.id);
+    expect(parent.status).toBe('rejected');
+    expect(parent.levels.find((l) => l.level === 2)?.status).toBe('pending');
   });
 
   describe('validation', () => {
