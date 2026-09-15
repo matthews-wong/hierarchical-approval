@@ -4808,12 +4808,6 @@ export class ApprovalEngine {
     );
   }
 
-  private findNextLevel(instance: ApprovalInstance): ApprovalLevelInstance | null {
-    return (
-      instance.levels.find((l) => l.level > instance.currentLevel && l.status === 'waiting') ?? null
-    );
-  }
-
   /**
    * The level to send an instance back to, given the level being rejected.
    *
