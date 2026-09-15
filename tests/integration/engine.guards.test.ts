@@ -581,3 +581,37 @@ describe('template not found', () => {
     await engine.shutdown();
   });
 });
+
+// ─── assertFullyApproved tripwire ─────────────────────────────────────────────
+
+describe('assertFullyApproved — inconsistent chain tripwire', () => {
+  it('refuses to complete an instance where a level is neither waiting nor approved/skipped', async () => {
+    // This is meant to be unreachable through the public API (nothing waiting
+    // implies everything decided), but it exists because that state used to be
+    // silently reachable and produced an approved document with a rejected
+    // branch nobody saw. Drive it directly with the exact corrupted shape it
+    // guards against.
+    const engine = makeEngine();
+    await engine.defineTemplate(twoLevelTemplate);
+    const submitted = await engine.submit({
+      templateName: 'Two Level',
+      documentId: 'doc-1',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+    await engine.approve(submitted.id, { approverId: 'mgr1' });
+    const instance = await engine.getInstance(submitted.id);
+    instance.levels[1]!.status = 'rejected';
+
+    expect(() =>
+      (
+        engine as unknown as {
+          assertFullyApproved: (inst: typeof instance) => void;
+        }
+      ).assertFullyApproved(instance),
+    ).toThrow(/not approved: 2 \("L2": rejected\)/);
+
+    await engine.shutdown();
+  });
+});
