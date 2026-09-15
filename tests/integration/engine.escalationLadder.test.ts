@@ -692,4 +692,51 @@ describe('rungs are measured from when each branch opened', () => {
     });
     expect((await engine.getInstance(i.id)).levels[0]?.openedAt).toBeInstanceOf(Date);
   });
+
+  it("falls back to the audit trail's submitted entry when a level predates openedAt", async () => {
+    // openedAt has been recorded on the level itself since 3.1.0; every test
+    // above submits fresh, so it is always present and the audit-log scan
+    // this function falls back to for older in-flight instances never runs.
+    // Strip it from a freshly-submitted instance to simulate that legacy
+    // shape and prove the scan recovers the real open time from the
+    // `submitted` audit entry rather than misreporting `now`.
+    const clock = new TestClock();
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({ adapter, clock });
+    await engine.defineTemplate({
+      name: 'LEGACY-OPEN',
+      documentType: 'legacy-open',
+      levels: [{ level: 1, name: 'One', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' }],
+      escalationSteps: [
+        { afterDays: 2, escalateTo: { type: 'user', userId: 'boss' } },
+        { afterDays: 5, escalateTo: { type: 'user', userId: 'bigBoss' } },
+      ],
+    });
+    const i = await engine.submit({
+      templateName: 'LEGACY-OPEN',
+      documentId: 'legacy-1',
+      documentType: 'legacy-open',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    const submittedAt = clock.now();
+
+    const stored = await adapter.getInstance('default', i.id);
+    const level1 = stored!.levels.find((l) => l.level === 1)!;
+    level1.openedAt = undefined;
+    await adapter.updateInstance(stored!, stored!.version);
+
+    clock.advanceDays(3);
+    await (
+      engine as unknown as {
+        escalateInternal: (id: string, by: string, c: undefined, l?: number) => Promise<unknown>;
+      }
+    ).escalateInternal(i.id, 'system', undefined, 1);
+
+    const after = await engine.getInstance(i.id);
+    const dueAt = after.levels[0]?.escalationDueAt?.getTime();
+    // Measured from the recovered submittedAt (+5 days), not from `now` at
+    // escalation time (which would be submittedAt + 3 days + 5 days instead).
+    expect(dueAt).toBe(submittedAt.getTime() + 5 * DAY_MS);
+  });
 });
