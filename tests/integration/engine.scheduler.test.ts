@@ -895,6 +895,47 @@ describe('delegation revert', () => {
 
     await localEngine.shutdown();
   });
+
+  it('clears an already-empty delegation without touching approverIds when the level was never delegated', async () => {
+    // Every other direct-invocation case above delegates first, so `delegateTo`
+    // is always set going in. A stale timer can still fire against a level
+    // that was reset (e.g. by a separate admin action) before it ran, leaving
+    // `delegatedTo` undefined — this drives that `if (delegateTo)` arm's false
+    // side, which must still no-op cleanly rather than push a spurious approver.
+    const localEngine = new ApprovalEngine({
+      adapter: new MemoryAdapter(),
+      tenantId: 'delrev-no-delegate-tenant',
+      escalationPollIntervalMs: 999999,
+    });
+    await localEngine.defineTemplate({
+      name: 'DelRevNoDelegate',
+      documentType: 'doc',
+      levels: [
+        { level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'mgr1' }], mode: 'any' },
+      ],
+    });
+    const instance = await localEngine.submit({
+      templateName: 'DelRevNoDelegate',
+      documentId: 'DR-NODELEGATE-001',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+
+    await (
+      localEngine as unknown as {
+        revertDelegation: (id: string, level: number, from: string) => Promise<void>;
+      }
+    ).revertDelegation(instance.id, 1, 'mgr1');
+
+    const after = await localEngine.getInstance(instance.id);
+    expect(after.status).toBe('pending');
+    const level1 = after.levels.find((l) => l.level === 1);
+    expect(level1?.approverIds).toEqual(['mgr1']);
+    expect(level1?.delegatedTo).toBeUndefined();
+
+    await localEngine.shutdown();
+  });
 });
 
 // ─── Escalation via scheduler ─────────────────────────────────────────────────
