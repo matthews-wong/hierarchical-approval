@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ApprovalEngine } from '../../src/engine/ApprovalEngine.js';
+import { ApprovalEngine, compareStepsByDelay } from '../../src/engine/ApprovalEngine.js';
 import { MemoryAdapter } from '../../src/adapters/MemoryAdapter.js';
 import { EscalationScheduler } from '../../src/engine/EscalationScheduler.js';
 import type { Clock } from '../../src/utils/Clock.js';
@@ -563,6 +563,20 @@ describe('escalation ladders', () => {
       .filter((a) => a.action === 'escalated')
       .map((a) => a.delegateTo);
     expect(targets).toEqual(['immediate']);
+  });
+
+  it("compareStepsByDelay's days fallback is exercised on either argument side", () => {
+    // Calling the extracted comparator directly, in both argument orders,
+    // proves both the left- and right-hand `afterDays ?? 0` fallbacks fire —
+    // unlike driving it through Array.prototype.sort, which for a two-element
+    // array only ever calls the comparator with one of the two orderings, and
+    // which ordering that is is an engine implementation detail, not a spec
+    // guarantee.
+    const delayLess = { escalateTo: { type: 'user' as const, userId: 'immediate' } };
+    const daysBased = { afterDays: 3, escalateTo: { type: 'user' as const, userId: 'late' } };
+
+    expect(compareStepsByDelay(delayLess, daysBased)).toBeLessThan(0);
+    expect(compareStepsByDelay(daysBased, delayLess)).toBeGreaterThan(0);
   });
 
   it('records each escalation in the audit trail', async () => {
