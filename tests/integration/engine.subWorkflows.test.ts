@@ -76,6 +76,29 @@ describe('sub-workflows', () => {
     expect(child?.status).toBe('pending');
   });
 
+  it('does not overwrite an already-linked child on a stale re-run', async () => {
+    // startSubWorkflows decides which levels need a child from the instance
+    // it was handed, then re-checks storage before persisting the link. Feed
+    // it a stale copy — as a caller racing another in-flight call would —
+    // where the level still looks unlinked even though storage has already
+    // recorded a child, and confirm the real link survives untouched.
+    const i = await submit();
+    await engine.approve(i.id, { approverId: 'mgr' });
+    const linked = await engine.getInstance(i.id);
+    const firstChildId = linked.levels.find((l) => l.level === 2)?.childInstanceId;
+    expect(firstChildId).toBeDefined();
+
+    const stale = structuredClone(linked);
+    stale.levels.find((l) => l.level === 2)!.childInstanceId = undefined;
+
+    await (
+      engine as unknown as { startSubWorkflows: (inst: typeof linked) => Promise<void> }
+    ).startSubWorkflows(stale);
+
+    const after = await engine.getInstance(i.id);
+    expect(after.levels.find((l) => l.level === 2)?.childInstanceId).toBe(firstChildId);
+  });
+
   it('carries the parent document data into the child', async () => {
     const i = await submit();
     await engine.approve(i.id, { approverId: 'mgr' });
