@@ -1599,6 +1599,21 @@ export class ApprovalEngine {
     });
   }
 
+  /**
+   * Withdraw an approval before it reaches a final decision.
+   *
+   * Cancelling cascades: any sub-workflow children spawned by this instance
+   * are cancelled in turn (an orphaned child left running would eventually
+   * report back to a parent that already moved on), and if this instance is
+   * itself a sub-workflow child, its own parent is unblocked as if this
+   * approval had been rejected.
+   *
+   * @param instanceId - The instance to cancel.
+   * @param raw - Who is cancelling and why.
+   * @param auditCtx - Optional compliance context recorded on the audit entry.
+   * @returns The cancelled instance.
+   * @throws ApprovalError if the instance is already `approved` or `rejected`.
+   */
   async cancel(
     instanceId: string,
     raw: CancelOptions,
