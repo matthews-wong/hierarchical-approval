@@ -796,6 +796,50 @@ describe('rungs are measured from when each branch opened', () => {
     expect(dueAt).toBe(submittedAt.getTime() + 5 * DAY_MS);
   });
 
+  it('skips non-matching audit entries when scanning backward for the submitted entry', async () => {
+    // The scan above always found its match on the very last audit entry, so
+    // it never actually had to skip a mismatch and continue. Append an
+    // unrelated entry after submission — a comment changes nothing about
+    // level 1's open time — so the reverse scan has to pass over it first.
+    const clock = new TestClock();
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({ adapter, clock });
+    await engine.defineTemplate({
+      name: 'LEGACY-OPEN-SKIP',
+      documentType: 'legacy-open-skip',
+      levels: [{ level: 1, name: 'One', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' }],
+      escalationSteps: [
+        { afterDays: 2, escalateTo: { type: 'user', userId: 'boss' } },
+        { afterDays: 5, escalateTo: { type: 'user', userId: 'bigBoss' } },
+      ],
+    });
+    const i = await engine.submit({
+      templateName: 'LEGACY-OPEN-SKIP',
+      documentId: 'legacy-skip-1',
+      documentType: 'legacy-open-skip',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    const submittedAt = clock.now();
+    await engine.addComment(i.id, { actorId: 'a', comment: 'reviewing' });
+
+    const stored = await adapter.getInstance('default', i.id);
+    const level1 = stored!.levels.find((l) => l.level === 1)!;
+    level1.openedAt = undefined;
+    await adapter.updateInstance(stored!, stored!.version);
+
+    clock.advanceDays(3);
+    await (
+      engine as unknown as {
+        escalateInternal: (id: string, by: string, c: undefined, l?: number) => Promise<unknown>;
+      }
+    ).escalateInternal(i.id, 'system', undefined, 1);
+
+    const after = await engine.getInstance(i.id);
+    const dueAt = after.levels[0]?.escalationDueAt?.getTime();
+    expect(dueAt).toBe(submittedAt.getTime() + 5 * DAY_MS);
+  });
+
   it("falls back to the audit trail's level_advanced entry for an upper level predating openedAt", async () => {
     // `submitted`'s audit entry always names the lowest configured level
     // (`allLevelCfgs[0]?.level`), so a legacy instance's second level can
