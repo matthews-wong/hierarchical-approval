@@ -306,6 +306,11 @@ describe('bulkApprove', () => {
     await engine2.shutdown();
   });
 
+  it('is a no-op success on an empty instance list', async () => {
+    const result = await engine.bulkApprove([], { approverId: 'approver1' });
+    expect(result).toEqual({ succeeded: [], failed: [], total: 0 });
+  });
+
   it('wraps a non-ApprovalError failure as UNKNOWN in the failed list', async () => {
     const strictEngine = new ApprovalEngine({
       adapter: new MemoryAdapter(),
@@ -343,6 +348,11 @@ describe('bulkReject', () => {
     expect(result.succeeded).toHaveLength(2);
     expect(result.failed).toHaveLength(1);
     expect(result.succeeded.every((i) => i.status === 'rejected')).toBe(true);
+  });
+
+  it('is a no-op success on an empty instance list', async () => {
+    const result = await engine.bulkReject([], { approverId: 'approver1', reason: 'mass reject' });
+    expect(result).toEqual({ succeeded: [], failed: [], total: 0 });
   });
 
   it('wraps a non-ApprovalError failure as UNKNOWN in the failed list', async () => {
