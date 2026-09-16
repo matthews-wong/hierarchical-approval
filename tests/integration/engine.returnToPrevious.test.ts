@@ -104,6 +104,20 @@ describe('reject with returnTo: previous', () => {
     expect(returned.levels.find((l) => l.name === 'Finance')?.status).toBe('waiting');
   });
 
+  it('refuses to return past the first level', async () => {
+    const i = await engine.submit({
+      templateName: 'PAR',
+      documentId: `c-${Math.random()}`,
+      documentType: 'contract',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+    await expect(
+      engine.reject(i.id, { approverId: 'mgr', reason: 'bad', returnTo: 'previous' }),
+    ).rejects.toThrow(/already at the first level/);
+  });
+
   it('still works on a sequential template', async () => {
     const seq = new ApprovalEngine({ adapter: new MemoryAdapter() });
     await seq.defineTemplate({
