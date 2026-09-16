@@ -90,6 +90,23 @@ describe('canApprove', () => {
     expect(result.reason).toBe('not_an_approver');
   });
 
+  it('falls back to the lowest branch of an open parallel group for a non-approver', async () => {
+    const engineP = makeEngine('parallel-tenant');
+    await engineP.defineTemplate({
+      name: 'Parallel',
+      documentType: 'doc',
+      levels: [
+        { level: 1, name: 'Finance', group: 'rev', approvers: [{ type: 'user', userId: 'mgr1' }], mode: 'any' },
+        { level: 2, name: 'Legal', group: 'rev', approvers: [{ type: 'user', userId: 'fin1' }], mode: 'any' },
+      ],
+    });
+    const instance = await engineP.submit({ templateName: 'Parallel', documentId: 'CA-007', documentType: 'doc', submittedBy: 'alice', data: {} });
+    const result = await engineP.canApprove(instance.id, 'hacker');
+    expect(result.eligible).toBe(false);
+    expect(result.reason).toBe('not_an_approver');
+    await engineP.shutdown();
+  });
+
   it('returns self_approval for the submitter', async () => {
     const engine2 = makeEngine('self-tenant');
     await engine2.defineTemplate({ name: 'Self', documentType: 'doc', levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'alice' }], mode: 'any' }] });
