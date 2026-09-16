@@ -286,6 +286,29 @@ describe('sub-workflows', () => {
     expect(parent.levels.find((l) => l.level === 2)?.status).toBe('pending');
   });
 
+  it('does not re-resolve a parent level the child no longer matches', async () => {
+    // completeSubWorkflowLevel guards on the level itself, not just the parent
+    // status: if the level was already moved off 'pending' by the time the
+    // child's approval reaches it -- some other resolution racing this one --
+    // re-approving it would silently overwrite whatever already happened there.
+    const i = await submit();
+    await engine.approve(i.id, { approverId: 'mgr' });
+    const child = await childOf(i.id);
+
+    const stored = await adapter.getInstance('default', i.id);
+    const level2 = stored!.levels.find((l) => l.level === 2)!;
+    level2.status = 'rejected';
+    await adapter.updateInstance(stored!, stored!.version);
+
+    await engine.approve(child!.id, { approverId: 'chair' });
+
+    const parent = await engine.getInstance(i.id);
+    expect(parent.status).toBe('pending');
+    expect(parent.levels.find((l) => l.level === 2)?.status).toBe('rejected');
+    const history = await engine.getHistory(i.id);
+    expect(history.some((h) => h.action === 'subworkflow_completed')).toBe(false);
+  });
+
   describe('validation', () => {
     const withLevel = (level: Record<string, unknown>) => ({
       name: 'X',
