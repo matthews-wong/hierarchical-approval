@@ -118,6 +118,21 @@ describe('approval reminders', () => {
     expect(events[0]?.reminderNumber).toBe(1);
   });
 
+  it('is a no-op for a level number that does not exist on the instance', async () => {
+    // The scheduler only ever passes a level number it just read off the
+    // instance, so this combined guard is otherwise unreachable through the
+    // public API — drive it directly with a level that was never configured.
+    await define({ reminderAfterDays: 1 });
+    const i = await submit();
+    clock.advanceDays(1);
+
+    await (
+      engine as unknown as { sendReminder: (id: string, n: number) => Promise<void> }
+    ).sendReminder(i.id, 999);
+
+    expect(events).toHaveLength(0);
+  });
+
   it('does not fire before the deadline', async () => {
     await define({ reminderAfterDays: 2 });
     await submit();
