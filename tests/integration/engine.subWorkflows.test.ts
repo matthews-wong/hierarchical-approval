@@ -309,6 +309,28 @@ describe('sub-workflows', () => {
     expect(history.some((h) => h.action === 'subworkflow_completed')).toBe(false);
   });
 
+  it('does not re-resolve a parent level when the child is rejected after it already moved on', async () => {
+    // Same guard as above but for rejectFromSubWorkflow's path: an already
+    // non-pending level must not be forced into 'rejected' just because a
+    // late-arriving child outcome was not 'approved'.
+    const i = await submit();
+    await engine.approve(i.id, { approverId: 'mgr' });
+    const child = await childOf(i.id);
+
+    const stored = await adapter.getInstance('default', i.id);
+    const level2 = stored!.levels.find((l) => l.level === 2)!;
+    level2.status = 'approved';
+    await adapter.updateInstance(stored!, stored!.version);
+
+    await engine.reject(child!.id, { approverId: 'chair', reason: 'over budget' });
+
+    const parent = await engine.getInstance(i.id);
+    expect(parent.status).toBe('pending');
+    expect(parent.levels.find((l) => l.level === 2)?.status).toBe('approved');
+    const history = await engine.getHistory(i.id);
+    expect(history.some((h) => h.action === 'subworkflow_completed')).toBe(false);
+  });
+
   describe('validation', () => {
     const withLevel = (level: Record<string, unknown>) => ({
       name: 'X',
