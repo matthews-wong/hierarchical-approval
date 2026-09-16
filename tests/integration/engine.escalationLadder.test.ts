@@ -707,6 +707,48 @@ describe('rungs are measured from when each branch opened', () => {
     expect((await engine.getInstance(i.id)).levels[0]?.openedAt).toBeInstanceOf(Date);
   });
 
+  it('measures the next rung from the level\'s own openedAt, not the audit trail', async () => {
+    const clock = new TestClock();
+    const adapter = new MemoryAdapter();
+    const engine = new ApprovalEngine({ adapter, clock });
+    await engine.defineTemplate({
+      name: 'OPENED-AT',
+      documentType: 'opened-at',
+      levels: [{ level: 1, name: 'One', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' }],
+      escalationSteps: [
+        { afterDays: 2, escalateTo: { type: 'user', userId: 'boss' } },
+        { afterDays: 5, escalateTo: { type: 'user', userId: 'bigBoss' } },
+      ],
+    });
+    const i = await engine.submit({
+      templateName: 'OPENED-AT',
+      documentId: 'oa-1',
+      documentType: 'opened-at',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+    // Backdate openedAt so it diverges from the audit trail's `submitted`
+    // entry (which still carries the real submit time). If the method fell
+    // back to scanning the audit log instead of reading the level's own
+    // field, the due date below would be measured from the wrong instant.
+    const stored = await adapter.getInstance('default', i.id);
+    const level1 = stored!.levels.find((l) => l.level === 1)!;
+    const backdatedOpenedAt = new Date(clock.now().getTime() - 20 * DAY_MS);
+    level1.openedAt = backdatedOpenedAt;
+    await adapter.updateInstance(stored!, stored!.version);
+
+    await (
+      engine as unknown as {
+        escalateInternal: (i: string, by: string, c: undefined, l?: number) => Promise<unknown>;
+      }
+    ).escalateInternal(i.id, 'system', undefined, 1);
+
+    const after = await engine.getInstance(i.id);
+    const dueAt = after.levels[0]?.escalationDueAt?.getTime();
+    expect(dueAt).toBe(backdatedOpenedAt.getTime() + 5 * DAY_MS);
+  });
+
   it("falls back to the audit trail's submitted entry when a level predates openedAt", async () => {
     // openedAt has been recorded on the level itself since 3.1.0; every test
     // above submits fresh, so it is always present and the audit-log scan
