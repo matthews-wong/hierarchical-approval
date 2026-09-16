@@ -82,6 +82,42 @@ describe('approval reminders', () => {
     expect(i.levels[0]?.remindersSent).toBe(0);
   });
 
+  it('backfills remindersSent for a level that predates the field', async () => {
+    // remindersSent has been set to 0 at level-open time since the field was
+    // introduced, so scheduleReminder's own `?? 0` fallback only matters for a
+    // level stored before that — simulate one by clearing the field on a real
+    // level and re-running the private scheduler directly.
+    await define({ reminderAfterDays: 2 });
+    const i = await submit();
+    const stored = await adapter.getInstance('default', i.id);
+    const level = stored!.levels[0]!;
+    level.remindersSent = undefined as unknown as number;
+
+    (
+      engine as unknown as { scheduleReminder: (l: typeof level, from: Date) => void }
+    ).scheduleReminder(level, clock.now());
+
+    expect(level.remindersSent).toBe(0);
+  });
+
+  it('sends the first reminder for a level that predates remindersSent', async () => {
+    await define({ reminderAfterDays: 1 });
+    const i = await submit();
+    clock.advanceDays(1);
+
+    const stored = await adapter.getInstance('default', i.id);
+    const level = stored!.levels.find((l) => l.level === 1)!;
+    level.remindersSent = undefined as unknown as number;
+    await adapter.updateInstance(stored!, stored!.version);
+
+    await (
+      engine as unknown as { sendReminder: (id: string, n: number) => Promise<void> }
+    ).sendReminder(i.id, 1);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.reminderNumber).toBe(1);
+  });
+
   it('does not fire before the deadline', async () => {
     await define({ reminderAfterDays: 2 });
     await submit();
