@@ -4133,10 +4133,7 @@ export class ApprovalEngine {
   /** First rung of a ladder, sorted by delay, or undefined when there is none. */
   private firstRungOf(steps: EscalationStep[] | undefined): EscalationStep | undefined {
     if (!steps || steps.length === 0) return undefined;
-    return [...steps].sort(
-      (a, b) =>
-        (a.afterHours ?? (a.afterDays ?? 0) * 24) - (b.afterHours ?? (b.afterDays ?? 0) * 24),
-    )[0];
+    return [...steps].sort(compareStepsByDelay)[0];
   }
 
   /**
@@ -4152,10 +4149,7 @@ export class ApprovalEngine {
       snapshot?.escalationSteps ??
       (await this.registry.get(instance.templateName)).escalationSteps ??
       [];
-    return [...steps].sort(
-      (a, b) =>
-        (a.afterHours ?? (a.afterDays ?? 0) * 24) - (b.afterHours ?? (b.afterDays ?? 0) * 24),
-    );
+    return [...steps].sort(compareStepsByDelay);
   }
 
   /**
@@ -4955,6 +4949,16 @@ function toCycleTimeStats(timing: TimingStats): CycleTimeStats {
     minMs: timing.min,
     maxMs: timing.max,
   };
+}
+
+/** An escalation step's delay, normalized to hours (`afterDays` converted, both defaulting to 0). */
+function stepDelayHours(step: EscalationStep): number {
+  return step.afterHours ?? (step.afterDays ?? 0) * 24;
+}
+
+/** Sorts {@link EscalationStep}s ascending by delay. Shared by `firstRungOf` and `escalationLadder`. */
+export function compareStepsByDelay(a: EscalationStep, b: EscalationStep): number {
+  return stepDelayHours(a) - stepDelayHours(b);
 }
 
 function snapshotLevel(level: ApprovalLevelInstance): Record<string, unknown> {
