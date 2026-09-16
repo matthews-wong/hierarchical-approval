@@ -689,3 +689,38 @@ describe('resolveActorLevel — instance status is pending but no level is', () 
     await engine.shutdown();
   });
 });
+
+// ─── currentLevelInstance — currentLevel matches nothing and nothing is pending ──
+
+describe('currentLevelInstance — corrupted currentLevel with no pending fallback', () => {
+  it('throws INVALID_LEVEL naming the available levels', async () => {
+    // Every real caller keeps currentLevel pointing at either a real level or
+    // (transiently) at one that is still pending, so this guards a shape that
+    // should not arise rather than one that does. Drive it directly with
+    // currentLevel pointed at a level number that was never configured and
+    // every level closed out, so neither `??` fallback finds a candidate.
+    const engine = makeEngine();
+    await engine.defineTemplate(twoLevelTemplate);
+    const submitted = await engine.submit({
+      templateName: 'Two Level',
+      documentId: 'doc-4',
+      documentType: 'doc',
+      submittedBy: 'alice',
+      data: {},
+    });
+    const instance = await engine.getInstance(submitted.id);
+    instance.currentLevel = 99;
+    instance.levels[0]!.status = 'approved';
+    instance.levels[1]!.status = 'approved';
+
+    expect(() =>
+      (
+        engine as unknown as {
+          currentLevelInstance: (inst: typeof instance) => unknown;
+        }
+      ).currentLevelInstance(instance),
+    ).toThrow(/Level 99 not found on instance \(available: 1, 2\)/);
+
+    await engine.shutdown();
+  });
+});
