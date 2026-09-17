@@ -118,6 +118,27 @@ describe('reject with returnTo: previous', () => {
     ).rejects.toThrow(/already at the first level/);
   });
 
+  it('falls back to instance.currentLevel when called with no explicit from', async () => {
+    // The only real caller always passes the level being rejected, so the
+    // `from`-omitted branch of the boundary ternary never runs through the
+    // public API. Drive it directly, and pick a moment where currentLevel
+    // has drifted below the group's own minimum (Finance closed, Legal still
+    // open) so the two boundaries disagree — proving the fallback genuinely
+    // reads currentLevel rather than happening to match the group-aware path.
+    const i = await start();
+    await engine.approve(i.id, { approverId: 'fin' });
+    const instance = await engine.getInstance(i.id);
+    expect(instance.currentLevel).toBe(3);
+
+    const previous = (
+      engine as unknown as {
+        findPreviousLevel: (inst: typeof instance) => { level: number; name: string } | null;
+      }
+    ).findPreviousLevel(instance);
+
+    expect(previous?.name).toBe('Finance');
+  });
+
   it('still works on a sequential template', async () => {
     const seq = new ApprovalEngine({ adapter: new MemoryAdapter() });
     await seq.defineTemplate({
