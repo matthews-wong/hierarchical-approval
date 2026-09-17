@@ -840,6 +840,42 @@ describe('rungs are measured from when each branch opened', () => {
     expect(dueAt).toBe(submittedAt.getTime() + 5 * DAY_MS);
   });
 
+  it('skips a hole in the audit log while scanning backward for the submitted entry', async () => {
+    // The scan reads instance.auditLog back to front and guards each slot with
+    // `if (!entry) continue` before inspecting it. Every current write path
+    // only ever pushes a real AuditEntry, so nothing round-trips a hole
+    // through the adapter — call the scan directly with a manually corrupted
+    // in-memory copy and confirm it steps over the hole instead of throwing.
+    const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+    await engine.defineTemplate({
+      name: 'LEGACY-OPEN-HOLE',
+      documentType: 'legacy-open-hole',
+      levels: [{ level: 1, name: 'One', approvers: [{ type: 'user', userId: 'a' }], mode: 'any' }],
+    });
+    const i = await engine.submit({
+      templateName: 'LEGACY-OPEN-HOLE',
+      documentId: 'legacy-hole-1',
+      documentType: 'legacy-open-hole',
+      submittedBy: 'buyer',
+      data: {},
+    });
+
+    const instance = await engine.getInstance(i.id);
+    const submittedEntry = instance.auditLog[0]!;
+    const level1 = instance.levels.find((l) => l.level === 1)!;
+    level1.openedAt = undefined;
+    instance.auditLog.push(undefined as never);
+
+    const fallback = new Date('2099-01-01T00:00:00Z');
+    const opened = (
+      engine as unknown as {
+        levelOpenedAt: (i: typeof instance, l: typeof level1, f: Date) => Date;
+      }
+    ).levelOpenedAt(instance, level1, fallback);
+
+    expect(opened.getTime()).toBe(submittedEntry.timestamp.getTime());
+  });
+
   it("falls back to the audit trail's level_advanced entry for an upper level predating openedAt", async () => {
     // `submitted`'s audit entry always names the lowest configured level
     // (`allLevelCfgs[0]?.level`), so a legacy instance's second level can
