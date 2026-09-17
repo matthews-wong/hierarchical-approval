@@ -3152,10 +3152,16 @@ export class ApprovalEngine {
 
   // ─── Queries ──────────────────────────────────────────────────────────────
 
+  /**
+   * Fetch a single instance by id.
+   *
+   * @throws {@link ApprovalNotFoundError} if no instance exists with that id.
+   */
   async getInstance(instanceId: string): Promise<ApprovalInstance> {
     return this.requireInstance(instanceId);
   }
 
+  /** Page through every instance with an open level assigned to one approver. */
   async getPendingFor(
     approverId: string,
     opts?: PaginationOpts,
@@ -3163,6 +3169,7 @@ export class ApprovalEngine {
     return this.opts.adapter.getInstancesByApprover(this.tenantId, approverId, opts);
   }
 
+  /** Page through instances matching an arbitrary filter (status, document type, date range, ...). */
   async queryInstances(
     filter: InstanceFilter,
     opts?: PaginationOpts,
@@ -3170,6 +3177,14 @@ export class ApprovalEngine {
     return this.opts.adapter.getInstancesByFilter(this.tenantId, filter, opts);
   }
 
+  /**
+   * Cursor-paginated variant of {@link queryInstances}, for stable paging
+   * through large or actively-changing result sets that offset pagination
+   * would skip or duplicate rows in.
+   *
+   * @throws {@link ApprovalError} (`NOT_SUPPORTED`) if the configured storage
+   * adapter does not implement `getInstancesByCursor`.
+   */
   async queryInstancesByCursor(
     filter: InstanceFilter,
     opts: CursorPaginationOpts,
@@ -3183,6 +3198,11 @@ export class ApprovalEngine {
     return this.opts.adapter.getInstancesByCursor(this.tenantId, filter, opts);
   }
 
+  /**
+   * The full audit trail for an instance, in the order it was recorded.
+   *
+   * @throws {@link ApprovalNotFoundError} if no instance exists with that id.
+   */
   async getHistory(instanceId: string): Promise<AuditEntry[]> {
     const instance = await this.requireInstance(instanceId);
     return instance.auditLog;
