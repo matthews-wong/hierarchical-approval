@@ -180,9 +180,11 @@ describe('WebhookNotificationAdapter — retry on transient failure', () => {
   it('falls back to the real timer-based sleep when no sleep option is injected', async () => {
     // Every other retry test injects `sleep` to skip real waiting, so
     // `defaultSleep` (the setTimeout-backed default) is never exercised. Use a
-    // tiny baseDelayMs to keep the real wait negligible, and check the actual
+    // small baseDelayMs to keep the real wait negligible, and check the actual
     // elapsed wall-clock time so the assertion can't pass on a no-op stub that
-    // never waited at all.
+    // never waited at all. A 5ms delay proved too tight in CI — setTimeout can
+    // fire a millisecond or two early under timer coalescing — so the delay
+    // and threshold both carry enough slack to absorb that jitter.
     let calls = 0;
     const client: HttpClient = async () => {
       calls++;
@@ -192,13 +194,13 @@ describe('WebhookNotificationAdapter — retry on transient failure', () => {
       url: 'https://example.com/hook',
       httpClient: client,
       maxAttempts: 3,
-      baseDelayMs: 5,
+      baseDelayMs: 20,
       random: () => 1, // full jitter's [0, cap) is otherwise unbounded below — pin it to the cap
     });
     const start = Date.now();
     await adapter.deliver(makeEvent());
     expect(calls).toBe(2);
-    expect(Date.now() - start).toBeGreaterThanOrEqual(5);
+    expect(Date.now() - start).toBeGreaterThanOrEqual(15);
   });
 
   it('treats a network error the same as a retryable status', async () => {
