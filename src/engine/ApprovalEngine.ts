@@ -3223,6 +3223,16 @@ export class ApprovalEngine {
     return [...instance.openLevels];
   }
 
+  /**
+   * Everyone who currently owes a decision on an instance.
+   *
+   * A union across every open branch, so a parallel group with more than one
+   * level collecting decisions at once still names every approver, not just
+   * the one at {@link ApprovalInstance.currentLevel}. Empty once the instance
+   * is no longer `pending`.
+   *
+   * @throws {@link ApprovalNotFoundError} if no instance exists with that id.
+   */
   async getCurrentApprovers(instanceId: string): Promise<string[]> {
     const instance = await this.requireInstance(instanceId);
     if (instance.status !== 'pending') return [];
@@ -3590,6 +3600,15 @@ export class ApprovalEngine {
     return result;
   }
 
+  /**
+   * Aggregate reporting numbers for a tenant: counts by status, approval
+   * rate, cycle-time stats, and a per-template breakdown.
+   *
+   * `filter.status` is ignored — the breakdown covers every status by
+   * design, so scoping it to one would make the counts misleading.
+   *
+   * @param filter - Optional scoping by document type, submitter, or date range.
+   */
   async getStatistics(filter: Omit<InstanceFilter, 'status'> = {}): Promise<ApprovalStatistics> {
     const statuses: ApprovalInstance['status'][] = [
       'pending',
