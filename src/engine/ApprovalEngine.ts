@@ -808,10 +808,16 @@ export class ApprovalEngine {
     return this.registry.update(resolved);
   }
 
+  /**
+   * Fetch the current version of a defined template.
+   *
+   * @throws {@link ApprovalTemplateNotFoundError} if no template is registered under `name`.
+   */
   async getTemplate(name: string): Promise<ApprovalTemplate> {
     return this.registry.get(name);
   }
 
+  /** List every template currently defined for this tenant. */
   async listTemplates(): Promise<ApprovalTemplate[]> {
     return this.registry.list();
   }
