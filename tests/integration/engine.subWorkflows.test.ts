@@ -134,6 +134,53 @@ describe('sub-workflows', () => {
     expect(parent.status).toBe('pending');
   });
 
+  it('holds the group open while a sibling branch is still pending', async () => {
+    // completeSubWorkflowLevel only opens the next group once every branch of
+    // the sub-workflow's own group has closed. Every other test here gives
+    // the sub-workflow level a group of one, so that guard's still-open arm
+    // never ran. Pair it with a plain-approver sibling in the same group and
+    // confirm approving the child alone does not advance the chain.
+    await engine.defineTemplate({
+      name: 'PO-PAR',
+      documentType: 'purchase_order',
+      levels: [
+        u(1, 'Manager', 'mgr'),
+        {
+          level: 2,
+          name: 'Board approval',
+          mode: 'any',
+          approvers: [],
+          group: 'review',
+          subWorkflow: { templateName: 'BOARD' },
+        },
+        {
+          level: 3,
+          name: 'Legal',
+          mode: 'any',
+          approvers: [{ type: 'user', userId: 'legal' }],
+          group: 'review',
+        },
+        u(4, 'CEO', 'ceo'),
+      ],
+    });
+    const i = await engine.submit({
+      templateName: 'PO-PAR',
+      documentId: 'po-par-1',
+      documentType: 'purchase_order',
+      submittedBy: 'buyer',
+      data: { amount: 2_000_000 },
+    });
+    await engine.approve(i.id, { approverId: 'mgr' });
+    const child = await childOf(i.id, 2);
+    await engine.approve(child!.id, { approverId: 'chair' });
+
+    const parent = await engine.getInstance(i.id);
+    expect(parent.status).toBe('pending');
+    expect(parent.levels.find((l) => l.level === 2)?.status).toBe('approved');
+    expect(parent.levels.find((l) => l.level === 3)?.status).toBe('pending');
+    expect(parent.levels.find((l) => l.level === 4)?.status).toBe('waiting');
+  });
+
   it('completes the parent chain end to end', async () => {
     const i = await submit();
     await engine.approve(i.id, { approverId: 'mgr' });
