@@ -137,6 +137,21 @@ describe('purgeInstances', () => {
     expect(result.purged).toHaveLength(2);
   });
 
+  it('short-circuits before scanning anything when limit is 0', async () => {
+    // `opts.limit ?? DEFAULT_PURGE_LIMIT` only falls back on null/undefined,
+    // so an explicit 0 survives as the real limit. The loop's guard then
+    // trips on its very first check (0 >= 0), before the first adapter call —
+    // confirm nothing gets scanned or purged despite eligible instances existing.
+    const i = await submit('po-1');
+    await engine.approve(i.id, { approverId: 'mgr' });
+    clock.advanceDays(60);
+
+    const result = await engine.purgeInstances({ olderThan: cutoff(), limit: 0 });
+    expect(result.purged).toEqual([]);
+    expect(result.scanned).toBe(0);
+    expect((await engine.getInstance(i.id)).status).toBe('approved');
+  });
+
   it('ignores a non-terminal instance a loose adapter filter returns anyway', async () => {
     const i = await submit('po-1');
     clock.advanceDays(60);
