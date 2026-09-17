@@ -349,6 +349,16 @@ describe('bulkApprove', () => {
     expect(result.failed[0]?.error.message).toBe('Error: policy backend unreachable');
     await strictEngine.shutdown();
   });
+
+  it('processes a duplicate id sequentially, failing the second occurrence once the first has decided it', async () => {
+    const inst = await engine.submit({ templateName: 'Simple', documentId: 'BF-4', documentType: 'doc', submittedBy: 'alice', data: {} });
+
+    const result = await engine.bulkApprove([inst.id, inst.id], { approverId: 'approver1' });
+    expect(result.total).toBe(2);
+    expect(result.succeeded).toHaveLength(1);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0]?.instanceId).toBe(inst.id);
+  });
 });
 
 describe('bulkReject', () => {
