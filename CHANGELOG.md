@@ -1,10 +1,3 @@
-## 4.0.1 - 2026-09-14
-
-- fix(resilience): include the offending value in RateLimitMiddleware errors
-- fix(scheduler): include the job id in InMemorySchedulerAdapter's post-shutdown error
-- fix(postgres): test the null-rowCount fallback via a dedicated fake pool
-- fix(postgres): let FakePool pass an explicit null rowCount through
-
 # Changelog
 
 All notable changes to `hierarchical-approval` are documented here. This project
@@ -12,11 +5,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-09-14
+
 ### Fixed
 
 - `InMemorySchedulerAdapter.scheduleAt()`'s post-shutdown error now names the
   rejected job id, so a caller can tell which scheduled job was dropped
   without adding their own logging around every call.
+- `RateLimitMiddleware` errors now include the offending value that tripped
+  the limit, instead of a message that named the limit but not the input.
 
 ## [4.0.0] - 2026-09-04
 
