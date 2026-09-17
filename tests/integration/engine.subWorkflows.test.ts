@@ -181,25 +181,41 @@ describe('sub-workflows', () => {
     expect(parent.levels.find((l) => l.level === 4)?.status).toBe('waiting');
   });
 
-  it('does not throw when the parent is deleted between the decision and the refetch', async () => {
-    // propagateToParent records the child's outcome on the parent, then
-    // re-fetches it to notify adapters with the up-to-date instance. No real
-    // caller can delete a row out from under that window in this test's
-    // single-threaded flow, so simulate it: piggyback the deletion on the
-    // audit-entry write that happens just before the refetch.
+  it('skips the parent notify when the parent is deleted between the decision and the refetch', async () => {
+    // propagateToParent records the child's outcome on the parent (inside
+    // completeSubWorkflowLevel, which writes the parent's own audit entry),
+    // then re-fetches the parent to notify adapters with the up-to-date
+    // instance. No real caller can delete a row out from under that window
+    // in this test's single-threaded flow, so simulate it: piggyback the
+    // deletion on the parent's audit-entry write specifically — matching on
+    // the parent's id, not just "the first appendAuditEntry call", since the
+    // child's own decision writes its own audit entry first and deleting the
+    // parent there would abort the whole flow before the refetch is ever
+    // reached.
     const i = await submit();
     await engine.approve(i.id, { approverId: 'mgr' });
     const child = await childOf(i.id);
 
     const realAppend = adapter.appendAuditEntry.bind(adapter);
-    vi.spyOn(adapter, 'appendAuditEntry').mockImplementationOnce(async (...args) => {
-      const result = await realAppend(...args);
-      await adapter.deleteInstance('default', i.id);
+    vi.spyOn(adapter, 'appendAuditEntry').mockImplementation(async (tenantId, instanceId, entry) => {
+      const result = await realAppend(tenantId, instanceId, entry);
+      if (instanceId === i.id) {
+        await adapter.deleteInstance('default', i.id);
+      }
       return result;
     });
+    const notifySpy = vi.spyOn(
+      engine as unknown as { notifyAdapters: (...args: unknown[]) => Promise<void> },
+      'notifyAdapters',
+    );
 
     await expect(engine.approve(child!.id, { approverId: 'chair' })).resolves.not.toThrow();
     expect(await adapter.getInstance('default', i.id)).toBeNull();
+    expect(notifySpy).not.toHaveBeenCalledWith(
+      'approval:subworkflow_completed',
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it('completes the parent chain end to end', async () => {
