@@ -2861,6 +2861,17 @@ export class ApprovalEngine {
     }
   }
 
+  /**
+   * Check whether a user could approve an instance right now, without acting.
+   *
+   * The read-only counterpart to calling {@link approve} and handling the
+   * rejection — useful for deciding whether to show an approve button at all.
+   * `eligible: false` never throws; the reason names why: the instance is not
+   * `pending`, the user submitted it, they hold no open level (or delegated
+   * theirs away), or they already voted on it.
+   *
+   * @returns `{ eligible: true }`, or `{ eligible: false, reason }`.
+   */
   async canApprove(instanceId: string, userId: string): Promise<CanApproveResult> {
     let instance: ApprovalInstance;
     try {
