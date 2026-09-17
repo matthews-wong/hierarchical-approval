@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ApprovalEngine } from '../../src/engine/ApprovalEngine.js';
 import { MemoryAdapter } from '../../src/adapters/MemoryAdapter.js';
 import type { SubWorkflowEvent } from '../../src/types/index.js';
@@ -179,6 +179,27 @@ describe('sub-workflows', () => {
     expect(parent.levels.find((l) => l.level === 2)?.status).toBe('approved');
     expect(parent.levels.find((l) => l.level === 3)?.status).toBe('pending');
     expect(parent.levels.find((l) => l.level === 4)?.status).toBe('waiting');
+  });
+
+  it('does not throw when the parent is deleted between the decision and the refetch', async () => {
+    // propagateToParent records the child's outcome on the parent, then
+    // re-fetches it to notify adapters with the up-to-date instance. No real
+    // caller can delete a row out from under that window in this test's
+    // single-threaded flow, so simulate it: piggyback the deletion on the
+    // audit-entry write that happens just before the refetch.
+    const i = await submit();
+    await engine.approve(i.id, { approverId: 'mgr' });
+    const child = await childOf(i.id);
+
+    const realAppend = adapter.appendAuditEntry.bind(adapter);
+    vi.spyOn(adapter, 'appendAuditEntry').mockImplementationOnce(async (...args) => {
+      const result = await realAppend(...args);
+      await adapter.deleteInstance('default', i.id);
+      return result;
+    });
+
+    await expect(engine.approve(child!.id, { approverId: 'chair' })).resolves.not.toThrow();
+    expect(await adapter.getInstance('default', i.id)).toBeNull();
   });
 
   it('completes the parent chain end to end', async () => {
