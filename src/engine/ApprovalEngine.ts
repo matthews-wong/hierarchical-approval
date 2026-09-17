@@ -3087,6 +3087,7 @@ export class ApprovalEngine {
     return result;
   }
 
+  /** Approve multiple instances in one call. Never throws — failures collected in result.failed. */
   async bulkApprove(
     instanceIds: string[],
     raw: ApproveOptions,
