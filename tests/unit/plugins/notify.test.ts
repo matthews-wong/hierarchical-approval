@@ -618,6 +618,15 @@ describe('CompositeNotificationAdapter', () => {
     await c.notify(makeEvent());
     expect(logger.error.mock.calls[0]![2]).toMatchObject({ child: 'child[0]' });
   });
+
+  it('a child that is neither a bare adapter nor a named child is treated as bare and its failure is logged', async () => {
+    const logger = spyLogger();
+    // Neither `notify` (bare adapter) nor `adapter` (named child) is present.
+    const malformed = { foo: 'bar' } as unknown as INotificationAdapter;
+    const c = new CompositeNotificationAdapter({ children: [malformed], logger });
+    await expect(c.notify(makeEvent())).resolves.toBeUndefined();
+    expect(logger.error.mock.calls[0]![2]).toMatchObject({ child: 'child[0]' });
+  });
 });
 
 describe('TemplatedNotificationAdapter', () => {
