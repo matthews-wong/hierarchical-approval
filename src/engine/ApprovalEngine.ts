@@ -1032,6 +1032,23 @@ export class ApprovalEngine {
     return instance;
   }
 
+  /**
+   * Record `opts.approverId`'s approval of their open level on `instanceId`.
+   *
+   * When more than one level is open in parallel and the approver sits on
+   * exactly one of them, that level is inferred; pass `opts.level` explicitly
+   * when it must be disambiguated (e.g. the approver sits on several).
+   *
+   * @throws {@link ApprovalNotFoundError} if `instanceId` does not exist.
+   * @throws {@link ApprovalError} (code `INVALID_STATUS`) if the instance is not `pending`,
+   *   (code `INVALID_LEVEL`) if no level (or the explicit `opts.level`) is awaiting a decision,
+   *   or (code `ALREADY_ACTED`) if this approver already approved or rejected that level.
+   * @throws {@link ApprovalForbiddenError} if `opts.approverId` submitted the instance
+   *   (self-approval), is not an approver on the resolved level, or is denied by the
+   *   configured {@link IAuthorizationPolicy}.
+   * @throws {@link ApprovalValidationError} if `opts.approverId` sits on more than one
+   *   open parallel level and `opts.level` was not supplied to disambiguate.
+   */
   async approve(
     instanceId: string,
     raw: ApproveOptions,
