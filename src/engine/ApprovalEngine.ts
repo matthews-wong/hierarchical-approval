@@ -541,11 +541,26 @@ export class ApprovalEngine {
     }
   }
 
+  /**
+   * Subscribe to a lifecycle event (see {@link ApprovalEventMap} for the full
+   * catalog and each payload's shape). A listener that throws, or returns a
+   * rejecting promise, cannot abort the operation that emitted the event or
+   * block the remaining listeners — the failure is reported via the engine's
+   * logger instead.
+   *
+   * @returns `this`, for chaining multiple subscriptions.
+   */
   on<K extends ApprovalEventName>(event: K, listener: (payload: ApprovalEventMap[K]) => void) {
     this.bus.on(event, listener);
     return this;
   }
 
+  /**
+   * Unsubscribe a listener previously registered with {@link on}. A no-op if
+   * `listener` was never registered for `event`.
+   *
+   * @returns `this`, for chaining.
+   */
   off<K extends ApprovalEventName>(event: K, listener: (payload: ApprovalEventMap[K]) => void) {
     this.bus.off(event, listener);
     return this;
