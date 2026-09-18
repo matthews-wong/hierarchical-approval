@@ -551,14 +551,32 @@ export class ApprovalEngine {
     return this;
   }
 
+  /**
+   * Register a dynamic-approver resolver under `name`, for use by a level whose
+   * approver config is `{ type: 'dynamic', resolver: name }`. Overwrites any
+   * resolver already registered under the same name.
+   */
   registerResolver(name: string, fn: ResolverFn): void {
     this.resolver.register(name, fn);
   }
 
+  /**
+   * Register a custom approver type under `typeName`, for use by a level whose
+   * approver config carries `{ type: typeName, ... }`. Overwrites any resolver
+   * already registered under the same type name.
+   */
   registerApproverType(typeName: string, fn: ApproverResolverFn): void {
     this.resolver.registerApproverType(typeName, fn);
   }
 
+  /**
+   * Register a custom condition operator under `name`, for use by template
+   * condition rules whose `operator` is `name`. Operators are shared process-wide
+   * across every engine instance, not scoped to this tenant.
+   *
+   * @throws {@link ApprovalValidationError} if `name` is already taken by a
+   * built-in operator (`>`, `<`, `>=`, `<=`, `==`, `!=`, `in`, `not_in`).
+   */
   registerConditionOperator(name: string, fn: ConditionOperatorFn): void {
     registerConditionOperator(name, fn);
   }
