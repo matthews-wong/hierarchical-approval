@@ -824,6 +824,20 @@ export class ApprovalEngine {
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
 
+  /**
+   * Start a new approval instance from a defined template.
+   *
+   * Evaluates the template's conditions against `raw.data` first, so the
+   * levels an instance opens with can differ from the template's static
+   * declaration (added, skipped, or reordered). If a prior call with the
+   * same tenant, document, template and data produced a non-terminal
+   * instance, that instance is returned unchanged instead of creating a
+   * duplicate — safe to retry on network failure.
+   *
+   * @throws {@link ApprovalTemplateNotFoundError} if `raw.templateName` is not defined.
+   * @throws {@link ApprovalValidationError} if `raw` fails schema validation, or if
+   *   condition evaluation leaves no levels (or a duplicate level number) to open.
+   */
   async submit(
     raw: SubmitOptions,
     auditCtx?: AuditContext,
