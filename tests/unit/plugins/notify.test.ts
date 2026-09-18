@@ -382,6 +382,44 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect(record.nextAttemptAt).toBe(12_345);
   });
 
+  it('computeBackoff collapses a finite negative intermediate value to maxDelayMs', async () => {
+    const clock = new ManualClock(0);
+    const record: OutboxRecord = {
+      id: 'r1',
+      partitionKey: 'tenant-1:inst-1',
+      tenantId: 'tenant-1',
+      event: makeEvent(),
+      status: 'pending',
+      // attemptDelivery increments to 2 before computeBackoff(2) runs, so
+      // Math.pow(-3, 1) is negative but still finite — a different guard arm
+      // than the Infinity case above.
+      attempts: 1,
+      nextAttemptAt: 0,
+      enqueuedAt: 0,
+    };
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [record],
+      update: async () => {},
+      remove: async () => {},
+      pending: async () => [],
+      deadLettered: async () => [],
+    };
+    const adapter = new OutboxNotificationAdapter({
+      transport: async () => {
+        throw new Error('fail');
+      },
+      store,
+      clock,
+      maxAttempts: 5,
+      baseDelayMs: 1000,
+      backoffFactor: -3,
+      maxDelayMs: 12_345,
+    });
+    await adapter.drain();
+    expect(record.nextAttemptAt).toBe(12_345);
+  });
+
   it('store read error during drain is logged, not thrown', async () => {
     const logger = spyLogger();
     const store: IOutboxStore = {
