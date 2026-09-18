@@ -243,6 +243,29 @@ describe('HashChainAuditAdapter — verify', () => {
     expect(res.ok).toBe(false);
     expect(res.brokenAt).toBe(1);
   });
+
+  it('reports the record as broken when its content cannot be re-canonicalized', async () => {
+    const store = new Map<string, ChainRecord[]>();
+    const adapter = new HashChainAuditAdapter({
+      writer: async (t, i, r) => {
+        const k = `${t}:${i}`;
+        (store.get(k) ?? store.set(k, []).get(k)!).push(r);
+      },
+      reader: async (t, i) => store.get(`${t}:${i}`) ?? [],
+    });
+    await adapter.append('t', 'i', makeEntry(), INST);
+    const chain = store.get('t:i')!;
+    // The stored record's linkage and hash are untouched — only its nested
+    // content becomes unhashable, so recomputing the hash throws instead of
+    // simply mismatching.
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    (chain[0]!.entry as { newValue?: Record<string, unknown> }).newValue = circular;
+
+    const res = await adapter.verify('t', 'i');
+    expect(res.ok).toBe(false);
+    expect(res.brokenAt).toBe(0);
+  });
 });
 
 describe('HashChainAuditAdapter — tail truncation', () => {
