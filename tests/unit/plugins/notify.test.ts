@@ -105,6 +105,18 @@ describe('OutboxNotificationAdapter — notify/enqueue', () => {
     expect(pending[0]!.nextAttemptAt).toBe(1234);
   });
 
+  it('uses a caller-supplied idGenerator instead of the default counter', async () => {
+    const store = new InMemoryOutboxStore();
+    const adapter = new OutboxNotificationAdapter({
+      transport: () => {},
+      store,
+      idGenerator: () => 'fixed-id',
+    });
+    await adapter.notify(makeEvent());
+    const pending = await adapter.pending();
+    expect(pending[0]!.id).toBe('fixed-id');
+  });
+
   it('enqueue failure is caught, logged, and swallowed', async () => {
     const logger = spyLogger();
     const store: IOutboxStore = {
