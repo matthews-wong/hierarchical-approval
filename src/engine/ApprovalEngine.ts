@@ -1460,6 +1460,23 @@ export class ApprovalEngine {
     return decided;
   }
 
+  /**
+   * Reassign `opts.fromApprover`'s seat on their open level to `opts.toApprover`,
+   * carrying across any 'weighted'-mode vote weight. When `opts.until` is set,
+   * the level records `delegatedFrom`/`delegatedTo`/`delegatedUntil`, and the
+   * scheduled escalation tick reassigns the seat back to `opts.fromApprover`
+   * once that time passes (still pending); omit `opts.until` for a permanent
+   * handoff.
+   *
+   * @throws {@link ApprovalNotFoundError} if `instanceId` does not exist.
+   * @throws {@link ApprovalError} (code `INVALID_STATUS`) if the instance is not `pending`,
+   *   or (code `INVALID_LEVEL`) if no level (or the explicit `opts.level`) is awaiting a decision.
+   * @throws {@link ApprovalForbiddenError} if `opts.fromApprover` equals `opts.toApprover`,
+   *   is not an approver on the resolved level, already acted on it, or is denied by the
+   *   configured {@link IAuthorizationPolicy}.
+   * @throws {@link ApprovalValidationError} if `opts.fromApprover` sits on more than one
+   *   open parallel level and `opts.level` was not supplied to disambiguate.
+   */
   async delegate(instanceId: string, raw: DelegateOptions, auditCtx?: AuditContext): Promise<void> {
     const opts = parseOrThrow(() => DelegateOptionsSchema.parse(raw));
     await this.withOptimisticRetry(instanceId, async (instance) => {
