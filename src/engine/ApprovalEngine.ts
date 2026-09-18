@@ -1293,6 +1293,27 @@ export class ApprovalEngine {
     return decided;
   }
 
+  /**
+   * Record `opts.approverId`'s rejection of their open level on `instanceId`.
+   *
+   * A single rejection does not necessarily fail the level — under `'quorum'`
+   * or `'weighted'` mode it only fails once the remaining approvers can no
+   * longer reach threshold. When the level does fail, `opts.returnTo`
+   * controls what happens next: `'originator'` (default) fails the whole
+   * instance; `'previous'` resets every level after the prior one and sends
+   * the instance back there to replay.
+   *
+   * @throws {@link ApprovalNotFoundError} if `instanceId` does not exist.
+   * @throws {@link ApprovalError} (code `INVALID_STATUS`) if the instance is not `pending`,
+   *   (code `INVALID_LEVEL`) if no level (or the explicit `opts.level`) is awaiting a decision,
+   *   or (code `ALREADY_ACTED`) if this approver already approved or rejected that level.
+   * @throws {@link ApprovalForbiddenError} if `opts.approverId` submitted the instance
+   *   (self-rejection), is not an approver on the resolved level, or is denied by the
+   *   configured {@link IAuthorizationPolicy}.
+   * @throws {@link ApprovalValidationError} if `opts.approverId` sits on more than one
+   *   open parallel level with `opts.level` unset, or if `opts.returnTo === 'previous'`
+   *   but the failing level is already the first level in the chain.
+   */
   async reject(
     instanceId: string,
     raw: RejectOptions,
