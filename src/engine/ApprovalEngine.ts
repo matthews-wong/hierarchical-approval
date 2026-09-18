@@ -1767,6 +1767,20 @@ export class ApprovalEngine {
     return result;
   }
 
+  /**
+   * Manually escalate the instance's current (lowest pending) level to the
+   * next rung of its escalation ladder, adding whatever the rung's
+   * `escalateTo` resolves to as extra approvers on that level. This is the
+   * same path the scheduled tick uses for a deadline-driven escalation — call
+   * it directly to escalate on demand instead of waiting for the ladder timer.
+   *
+   * A no-op (returns the instance unchanged, does not throw) when: the
+   * instance is not `pending`; the ladder has no rung configured for the
+   * current step; or every resolved approver turns out to be the submitter
+   * (nobody new to add).
+   *
+   * @throws {@link ApprovalNotFoundError} if `instanceId` does not exist.
+   */
   async escalate(
     instanceId: string,
     raw: EscalateOptions,
