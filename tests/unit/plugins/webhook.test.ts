@@ -403,6 +403,29 @@ describe('WebhookNotificationAdapter — 429 Retry-After', () => {
     // Second attempt's exponent is 1, so baseDelayMs * Infinity^1 overflows.
     expect(sleep).toHaveBeenLastCalledWith(1000);
   });
+
+  it('collapses a finite negative backoff to the cap instead of going negative', async () => {
+    let calls = 0;
+    const client: HttpClient = async () => {
+      calls++;
+      return calls <= 2 ? fakeResponse(500) : fakeResponse(200);
+    };
+    const sleep = vi.fn(noSleep);
+    const adapter = new WebhookNotificationAdapter({
+      url: 'https://example.com/hook',
+      httpClient: client,
+      sleep,
+      maxAttempts: 3,
+      random: () => 1, // deterministic upper bound of the jitter window
+      baseDelayMs: 1000,
+      backoffFactor: -3,
+      maxDelayMs: 1000,
+    });
+    await adapter.deliver(makeEvent());
+    // Second attempt's exponent is 1, so baseDelayMs * (-3)^1 = -3000 — finite
+    // but negative, a different guard arm than the Infinity overflow above.
+    expect(sleep).toHaveBeenLastCalledWith(1000);
+  });
 });
 
 describe('WebhookNotificationAdapter — timeout', () => {
