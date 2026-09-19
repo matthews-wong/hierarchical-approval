@@ -957,4 +957,21 @@ describe('rungs are measured from when each branch opened', () => {
 
     expect(opened).toBe(fallback);
   });
+
+  it('falls back to the given fallback date for a completely empty audit log', () => {
+    // The strictest form of "no audit entry names the level": there is
+    // nothing to scan at all, not even an entry for a different level.
+    const instance = { auditLog: [] } as unknown as ApprovalInstance;
+    const level = { level: 1 } as unknown as ApprovalLevelInstance;
+    const fallback = new Date('2099-01-01T00:00:00Z');
+
+    const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+    const opened = (
+      engine as unknown as {
+        levelOpenedAt: (i: typeof instance, l: typeof level, f: Date) => Date;
+      }
+    ).levelOpenedAt(instance, level, fallback);
+
+    expect(opened).toBe(fallback);
+  });
 });
