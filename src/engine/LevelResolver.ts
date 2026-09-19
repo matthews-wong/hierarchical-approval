@@ -50,10 +50,20 @@ export class LevelResolver {
   private readonly resolvers = new Map<string, ResolverFn>();
   private readonly approverTypes = new Map<string, ApproverResolverFn>();
 
+  /**
+   * Register a dynamic-approver resolver under `name`, for use by an approver
+   * config of `{ type: 'dynamic', resolver: name }`. Overwrites any resolver
+   * already registered under the same name.
+   */
   register(name: string, fn: ResolverFn): void {
     this.resolvers.set(name, fn);
   }
 
+  /**
+   * Register a custom approver type under `typeName`, for use by an approver
+   * config of `{ type: typeName, ... }`. Overwrites any approver type already
+   * registered under the same name.
+   */
   registerApproverType(typeName: string, fn: ApproverResolverFn): void {
     this.approverTypes.set(typeName, fn);
   }
