@@ -1169,6 +1169,38 @@ describe('graceful shutdown', () => {
     await stopPromise;
     expect(stopped).toBe(true);
   });
+
+  it("logs an error from start()'s own interval when tick() rejects outright", async () => {
+    // tick() wraps getOverdueInstances and every per-instance step in its own
+    // try/catch, so nothing routed through it ever reaches start()'s outer
+    // .catch(). The one line before any try — reading the clock — can still
+    // throw synchronously, which is the only way to drive that outer handler.
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+    const failure = new Error('clock unavailable');
+    const adapter = new MemoryAdapter();
+    const scheduler = new EscalationScheduler({
+      adapter,
+      tenantId: 'tick-throws',
+      onEscalate: async () => {},
+      pollIntervalMs: 5,
+      logger,
+      clock: {
+        now: () => {
+          throw failure;
+        },
+      },
+    });
+
+    scheduler.start();
+    await new Promise((r) => setTimeout(r, 20));
+    await scheduler.stop();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'EscalationScheduler: unhandled error in tick',
+      failure,
+      expect.objectContaining({ tenantId: 'tick-throws' }),
+    );
+  });
 });
 
 // ─── schedulerAdapter wiring (B9) ─────────────────────────────────────────────
