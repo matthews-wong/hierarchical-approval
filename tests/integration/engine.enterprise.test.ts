@@ -12,6 +12,7 @@ import {
   ApprovalValidationError,
   ApprovalError,
   ApprovalConflictError,
+  ApprovalTemplateNotFoundError,
 } from '../../src/errors.js';
 import type { AuditEntry, ApprovalInstance } from '../../src/types/index.js';
 
@@ -710,6 +711,11 @@ describe('Error utilities', () => {
   it('unknown code returns 500', () => {
     const err = new ApprovalError('internal', 'INTERNAL_ERROR');
     expect(err.toHttpStatus()).toBe(500);
+  });
+
+  it('ApprovalTemplateNotFoundError.toHttpStatus() returns 404', () => {
+    const err = new ApprovalTemplateNotFoundError('Approval');
+    expect(err.toHttpStatus()).toBe(404);
   });
 
   it('toJSON() returns plain object with code, message, name', () => {
