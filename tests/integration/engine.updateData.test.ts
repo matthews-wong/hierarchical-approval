@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ApprovalEngine } from '../../src/engine/ApprovalEngine.js';
 import { MemoryAdapter } from '../../src/adapters/MemoryAdapter.js';
-import type { ApprovalTemplateConfig, DataUpdatedEvent } from '../../src/types/index.js';
+import type {
+  ApprovalInstance,
+  ApprovalTemplateConfig,
+  DataUpdatedEvent,
+} from '../../src/types/index.js';
 
 const level = (n: number, name: string, userId: string) => ({
   level: n,
@@ -74,8 +78,14 @@ describe('updateData', () => {
         documentType: 'purchase_order',
         levels: [level(1, 'Manager', 'mgr')],
         conditions: [
-          { when: { field: 'amount', operator: '>', value: 10000 }, addLevels: [level(3, 'CFO', 'cfo')] },
-          { when: { field: 'needsLegal', operator: '==', value: true }, addLevels: [level(2, 'Legal', 'legal')] },
+          {
+            when: { field: 'amount', operator: '>', value: 10000 },
+            addLevels: [level(3, 'CFO', 'cfo')],
+          },
+          {
+            when: { field: 'needsLegal', operator: '==', value: true },
+            addLevels: [level(2, 'Legal', 'legal')],
+          },
         ],
       });
       const instance = await submit({ amount: 20000, needsLegal: true });
@@ -265,6 +275,36 @@ describe('updateData', () => {
         data: { skipAll: true },
       });
       expect(names(updated.levels)).toEqual(['Manager']);
+    });
+
+    it('rejects a recompute that would leave no frozen and no future levels', async () => {
+      // Reachable in principle only when currentLevel predates every level the
+      // instance has ever recorded, which no public flow produces — submit()
+      // always seeds at least the lowest configured level as current. Drive
+      // the guard directly with a hand-built instance whose single level is
+      // skipped outright, so both `frozen` and `futureCfgs` come back empty.
+      await engine.defineTemplate({
+        name: 'PO',
+        documentType: 'purchase_order',
+        levels: [level(1, 'Manager', 'mgr')],
+        conditions: [{ when: { field: 'skipAll', operator: '==', value: true }, skipLevels: [1] }],
+      });
+      const instance = {
+        templateName: 'PO',
+        currentLevel: 0,
+        levels: [],
+      } as unknown as ApprovalInstance;
+
+      await expect(
+        (
+          engine as unknown as {
+            recomputeFutureChain: (
+              i: typeof instance,
+              d: Record<string, unknown>,
+            ) => Promise<unknown>;
+          }
+        ).recomputeFutureChain(instance, { skipAll: true }),
+      ).rejects.toThrow(/would leave the instance with no levels/);
     });
 
     it('is rejected by an authorization policy that denies updateData', async () => {
