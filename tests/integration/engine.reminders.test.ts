@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ApprovalEngine } from '../../src/engine/ApprovalEngine.js';
 import { MemoryAdapter } from '../../src/adapters/MemoryAdapter.js';
 import type { Clock } from '../../src/utils/Clock.js';
@@ -281,6 +281,31 @@ describe('approval reminders', () => {
     const entry = history.find((h) => h.action === 'reminded');
     expect(entry?.actorId).toBe('system');
     expect(entry?.newValue?.['reminderNumber']).toBe(1);
+  });
+
+  it('logs and swallows a persistence failure instead of throwing out of sendReminder', async () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+    const localEngine = new ApprovalEngine({ adapter, clock, logger });
+    await define({ reminderAfterDays: 1 });
+    const i = await submit();
+    clock.advanceDays(1);
+
+    const failure = new Error('storage unavailable');
+    adapter.updateInstance = async () => {
+      throw failure;
+    };
+
+    await expect(
+      (
+        localEngine as unknown as { sendReminder: (id: string, n: number) => Promise<void> }
+      ).sendReminder(i.id, 1),
+    ).resolves.toBeUndefined();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'reminder: failed to send',
+      failure,
+      expect.objectContaining({ tenantId: 'default', instanceId: i.id }),
+    );
   });
 
   it("the engine's own internal scheduler sends a reminder", async () => {
