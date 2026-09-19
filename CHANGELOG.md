@@ -5,6 +5,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `EventBus` (and therefore `engine.on()`/`off()`) no longer leaks a listener
+  when the same function is registered twice with `on()`: each registration
+  now needs its own `off()` call to undo, instead of the second registration
+  silently overwriting the bookkeeping for the first and leaving it permanently
+  attached.
+
 ## [4.0.1] - 2026-09-14
 
 ### Fixed
