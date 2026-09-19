@@ -3,6 +3,7 @@ import { ApprovalEngine, compareStepsByDelay } from '../../src/engine/ApprovalEn
 import { MemoryAdapter } from '../../src/adapters/MemoryAdapter.js';
 import { EscalationScheduler } from '../../src/engine/EscalationScheduler.js';
 import type { Clock } from '../../src/utils/Clock.js';
+import type { ApprovalInstance, ApprovalLevelInstance } from '../../src/types/index.js';
 
 class TestClock implements Clock {
   constructor(private current = new Date('2026-01-01T00:00:00Z')) {}
@@ -932,5 +933,26 @@ describe('rungs are measured from when each branch opened', () => {
     // Measured from the recovered advancedAt (+5 days), not from `now` at
     // escalation time (which would be advancedAt + 3 days + 5 days instead).
     expect(dueAt).toBe(advancedAt.getTime() + 5 * DAY_MS);
+  });
+
+  it('falls back to the given fallback date when no audit entry names the level', () => {
+    // A legacy instance predating both openedAt and a recorded
+    // level_advanced/submitted entry for this level has nothing to recover
+    // the open time from; the scan exhausts the log and the caller's own
+    // fallback (typically `instance.createdAt`) is used instead.
+    const instance = {
+      auditLog: [{ action: 'approved', actorId: 'a', level: 1, timestamp: new Date() }],
+    } as unknown as ApprovalInstance;
+    const level = { level: 1 } as unknown as ApprovalLevelInstance;
+    const fallback = new Date('2099-01-01T00:00:00Z');
+
+    const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
+    const opened = (
+      engine as unknown as {
+        levelOpenedAt: (i: typeof instance, l: typeof level, f: Date) => Date;
+      }
+    ).levelOpenedAt(instance, level, fallback);
+
+    expect(opened).toBe(fallback);
   });
 });
