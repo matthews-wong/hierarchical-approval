@@ -21,6 +21,7 @@ export interface Digest {
 /** Delivers one recipient's digest. Must not throw — failures are logged and swallowed. */
 export type DigestSendFn = (digest: Digest) => Promise<void> | void;
 
+/** Configuration for {@link DigestNotificationAdapter}. */
 export interface DigestNotificationAdapterOptions {
   /** Called once per recipient per flush. */
   send: DigestSendFn;
