@@ -577,8 +577,8 @@ export class ApprovalEngine {
 
   /**
    * Register a custom approver type under `typeName`, for use by a level whose
-   * approver config carries `{ type: typeName, ... }`. Overwrites any resolver
-   * already registered under the same type name.
+   * approver config carries `{ type: typeName, ... }`. Overwrites any approver
+   * type already registered under the same type name.
    */
   registerApproverType(typeName: string, fn: ApproverResolverFn): void {
     this.resolver.registerApproverType(typeName, fn);
