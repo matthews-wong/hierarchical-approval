@@ -56,6 +56,23 @@ describe('PostgresAdapter persists every mutable field', () => {
     expect(lastUpdate(pool)?.params).toContain('{"source":"erp"}');
   });
 
+  it('falls back to {} for data/metadata when a caller bypasses the type and passes null', async () => {
+    const { pool, adapter } = fresh();
+    pool.queueResult({ rows: [{ id: 'inst-1' }], rowCount: 1 });
+    await adapter.updateInstance(
+      makeInstance({
+        data: null as unknown as Record<string, unknown>,
+        metadata: null as unknown as Record<string, unknown>,
+      }),
+      1,
+    );
+
+    const params = lastUpdate(pool)?.params;
+    // $10 = data, $11 = metadata (1-indexed in SQL => params[9]/params[10]).
+    expect(params?.[9]).toBe('{}');
+    expect(params?.[10]).toBe('{}');
+  });
+
   it('writes info_request, so a hold survives a round trip', async () => {
     const { pool, adapter } = fresh();
     pool.queueResult({ rows: [{ id: 'inst-1' }], rowCount: 1 });
