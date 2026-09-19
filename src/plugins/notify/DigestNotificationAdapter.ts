@@ -9,6 +9,7 @@ import type {
 
 /** One recipient's accumulated events, handed to {@link DigestSendFn} on flush. */
 export interface Digest {
+  /** Empty for a passthrough event — it carries no per-recipient batching. */
   recipient: string;
   /** Events for this recipient, oldest first. */
   events: NotificationEvent[];

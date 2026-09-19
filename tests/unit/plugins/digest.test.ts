@@ -110,6 +110,8 @@ describe('DigestNotificationAdapter', () => {
       expect(sent).toHaveLength(1);
       expect(sent[0]?.events[0]?.type).toBe(type);
       expect(adapter.pendingRecipients).toBe(0);
+      // A passthrough digest isn't batched per-recipient, so it carries none.
+      expect(sent[0]?.recipient).toBe('');
     });
 
     it('respects a custom passthrough list', async () => {
