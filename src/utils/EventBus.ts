@@ -23,8 +23,15 @@ type Wrapped = (...args: unknown[]) => void;
  */
 export class EventBus {
   private readonly emitter = new EventEmitter();
-  /** Per-event map of caller-supplied listener to the wrapper actually registered, so `off` can find it. */
-  private readonly wrappers = new Map<ApprovalEventName, Map<unknown, Wrapped>>();
+  /**
+   * Per-event map of caller-supplied listener to every wrapper actually
+   * registered for it, so `off` can find one. A stack rather than a single
+   * wrapper: registering the same listener twice must register it twice on
+   * the underlying emitter too, and each `off` call should only undo one of
+   * those registrations, matching the standard EventEmitter contract instead
+   * of losing track of (and permanently leaking) the earlier wrapper.
+   */
+  private readonly wrappers = new Map<ApprovalEventName, Map<unknown, Wrapped[]>>();
   private onListenerError?: ListenerErrorHandler;
 
   /** Route listener failures somewhere. Without this they are swallowed silently. */
@@ -48,10 +55,15 @@ export class EventBus {
     event: K,
     listener: (payload: ApprovalEventMap[K]) => void,
   ): this {
-    const wrapped = this.wrappers.get(event)?.get(listener);
+    const perEvent = this.wrappers.get(event);
+    const perListener = perEvent?.get(listener);
+    const wrapped = perListener?.pop();
     if (wrapped) {
       this.emitter.off(event, wrapped);
-      this.forget(event, listener);
+      if (perListener && perListener.length === 0) {
+        perEvent!.delete(listener);
+        if (perEvent!.size === 0) this.wrappers.delete(event);
+      }
     }
     return this;
   }
@@ -87,23 +99,34 @@ export class EventBus {
         this.onListenerError?.(err, event);
       } finally {
         // eventemitter3 removes a `once` registration itself; drop our bookkeeping too.
-        if (once) this.forget(event, listener);
+        if (once) this.forget(event, listener, wrapped);
       }
     };
 
     let perEvent = this.wrappers.get(event);
     if (!perEvent) {
-      perEvent = new Map<unknown, Wrapped>();
+      perEvent = new Map<unknown, Wrapped[]>();
       this.wrappers.set(event, perEvent);
     }
-    perEvent.set(listener, wrapped);
+    let perListener = perEvent.get(listener);
+    if (!perListener) {
+      perListener = [];
+      perEvent.set(listener, perListener);
+    }
+    perListener.push(wrapped);
     return wrapped;
   }
 
-  private forget(event: ApprovalEventName, listener: unknown): void {
+  /** Drop the bookkeeping for one specific wrapper, identified by reference. */
+  private forget(event: ApprovalEventName, listener: unknown, wrapped: Wrapped): void {
     const perEvent = this.wrappers.get(event);
-    if (!perEvent) return;
-    perEvent.delete(listener);
-    if (perEvent.size === 0) this.wrappers.delete(event);
+    const perListener = perEvent?.get(listener);
+    if (!perListener) return;
+    const idx = perListener.indexOf(wrapped);
+    if (idx !== -1) perListener.splice(idx, 1);
+    if (perListener.length === 0) {
+      perEvent!.delete(listener);
+      if (perEvent!.size === 0) this.wrappers.delete(event);
+    }
   }
 }
