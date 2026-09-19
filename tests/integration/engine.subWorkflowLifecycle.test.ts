@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ApprovalEngine } from '../../src/engine/ApprovalEngine.js';
 import { MemoryAdapter } from '../../src/adapters/MemoryAdapter.js';
 
@@ -95,6 +95,60 @@ describe('sub-workflow child lifecycle', () => {
     expect((await engine.getInstance(parent.id)).status).toBe('rejected');
     // The already-approved child is untouched.
     expect((await engine.getInstance(childId)).status).toBe('approved');
+  });
+
+  it('logs and swallows a failure to cancel an orphaned child instead of undoing the parent decision', async () => {
+    // cancelOrphanedChildren must not let one bad child cancellation unwind
+    // the parent's own already-recorded decision, so force the child's
+    // cancel() to fail and prove it only gets logged.
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+    const localEngine = new ApprovalEngine({ adapter: new MemoryAdapter(), logger });
+    await localEngine.defineTemplate({
+      name: 'CHILD',
+      documentType: 'child',
+      levels: [
+        { level: 1, name: 'Board', approvers: [{ type: 'user', userId: 'chair' }], mode: 'any' },
+      ],
+    });
+    await localEngine.defineTemplate({
+      name: 'PO',
+      documentType: 'purchase_order',
+      levels: [
+        {
+          level: 1,
+          name: 'Sub',
+          mode: 'any',
+          approvers: [],
+          subWorkflow: { templateName: 'CHILD' },
+        },
+        { level: 2, name: 'CEO', approvers: [{ type: 'user', userId: 'ceo' }], mode: 'any' },
+      ],
+    });
+    const parent = await localEngine.submit({
+      templateName: 'PO',
+      documentId: 'po-fail',
+      documentType: 'purchase_order',
+      submittedBy: 'buyer',
+      data: {},
+    });
+    const childId = (await localEngine.getInstance(parent.id)).levels[0]?.childInstanceId as string;
+
+    const failure = new Error('storage unavailable');
+    const realCancel = localEngine.cancel.bind(localEngine);
+    vi.spyOn(localEngine, 'cancel').mockImplementation(async (id, opts) => {
+      if (id === childId) throw failure;
+      return realCancel(id, opts);
+    });
+
+    await expect(
+      localEngine.cancel(parent.id, { cancelledBy: 'buyer', reason: 'withdrawn' }),
+    ).resolves.not.toThrow();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'subWorkflow: failed to cancel orphaned child',
+      failure,
+      expect.objectContaining({ parentInstanceId: parent.id, childInstanceId: childId }),
+    );
   });
 
   describe('purge takes the family together', () => {
