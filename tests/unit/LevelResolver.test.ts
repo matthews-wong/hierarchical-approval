@@ -69,6 +69,21 @@ describe('LevelResolver', () => {
     ]);
   });
 
+  it('copyRegistrationsTo copies registered approver types, not just dynamic resolvers', async () => {
+    const source = new LevelResolver();
+    const target = new LevelResolver();
+    source.registerApproverType('dept', async () => ['d1']);
+    const approvers: ApproverConfig[] = [{ type: 'dept' }];
+
+    await expect(target.resolveApprovers(approvers, 'submitter', {})).rejects.toThrow(
+      /Unknown approver type "dept"/,
+    );
+
+    source.copyRegistrationsTo(target);
+
+    await expect(target.resolveApprovers(approvers, 'submitter', {})).resolves.toEqual(['d1']);
+  });
+
   it('custom type — throws ApprovalValidationError naming the unknown type', async () => {
     const resolver = new LevelResolver();
     const approvers: ApproverConfig[] = [{ type: 'not-registered' }];
