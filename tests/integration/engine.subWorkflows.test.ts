@@ -134,6 +134,34 @@ describe('sub-workflows', () => {
     expect(parent.status).toBe('pending');
   });
 
+  it('logs and swallows a failure to propagate the outcome to the parent', async () => {
+    // propagateToParent must not let a parent-side failure undo the child's
+    // own already-recorded decision, so force the parent's persist to fail
+    // and prove it only gets logged.
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+    const localEngine = new ApprovalEngine({ adapter, logger });
+    const i = await submit();
+    await engine.approve(i.id, { approverId: 'mgr' });
+    const child = await childOf(i.id);
+
+    const failure = new Error('storage unavailable');
+    const realUpdate = adapter.updateInstance.bind(adapter);
+    vi.spyOn(adapter, 'updateInstance').mockImplementation(async (instance, expectedVersion) => {
+      if (instance.id === i.id) throw failure;
+      return realUpdate(instance, expectedVersion);
+    });
+
+    await expect(
+      localEngine.approve(child!.id, { approverId: 'chair' }),
+    ).resolves.not.toThrow();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'subWorkflow: failed to propagate outcome to parent',
+      failure,
+      expect.objectContaining({ childInstanceId: child!.id, parentInstanceId: i.id }),
+    );
+  });
+
   it('holds the group open while a sibling branch is still pending', async () => {
     // completeSubWorkflowLevel only opens the next group once every branch of
     // the sub-workflow's own group has closed. Every other test here gives
