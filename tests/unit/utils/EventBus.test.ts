@@ -58,6 +58,24 @@ describe('EventBus', () => {
     expect(kept).toHaveBeenCalledTimes(1);
   });
 
+  it('registering the same listener with on twice requires two off calls to fully remove it', () => {
+    // Each on() call registers its own wrapper on the underlying emitter, so a
+    // single off() must only undo one of them — otherwise the first wrapper is
+    // left permanently attached with no way to reference it again.
+    const bus = new EventBus();
+    const listener = vi.fn();
+    bus.on('approval:submitted', listener);
+    bus.on('approval:submitted', listener);
+
+    bus.off('approval:submitted', listener);
+    bus.emit('approval:submitted', submittedEvent());
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    bus.off('approval:submitted', listener);
+    bus.emit('approval:submitted', submittedEvent());
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
   it('off is a no-op for a listener that was never registered', () => {
     const bus = new EventBus();
     const never = vi.fn();
