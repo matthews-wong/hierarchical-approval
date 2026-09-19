@@ -939,9 +939,11 @@ describe('rungs are measured from when each branch opened', () => {
     // A legacy instance predating both openedAt and a recorded
     // level_advanced/submitted entry for this level has nothing to recover
     // the open time from; the scan exhausts the log and the caller's own
-    // fallback (typically `instance.createdAt`) is used instead.
+    // fallback (typically `instance.createdAt`) is used instead. The decoy
+    // entry has the right action but the wrong level, so it can't produce a
+    // false match — no entry in this log names level 1 at all.
     const instance = {
-      auditLog: [{ action: 'approved', actorId: 'a', level: 1, timestamp: new Date() }],
+      auditLog: [{ action: 'level_advanced', actorId: 'a', level: 2, timestamp: new Date() }],
     } as unknown as ApprovalInstance;
     const level = { level: 1 } as unknown as ApprovalLevelInstance;
     const fallback = new Date('2099-01-01T00:00:00Z');
