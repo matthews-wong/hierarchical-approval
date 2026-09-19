@@ -676,6 +676,11 @@ describe('CompositeNotificationAdapter', () => {
     const c = new CompositeNotificationAdapter({ children: [malformed], logger });
     await expect(c.notify(makeEvent())).resolves.toBeUndefined();
     expect(logger.error.mock.calls[0]![2]).toMatchObject({ child: 'child[0]' });
+    // Distinguishes this from the sibling "bare adapter" test above: that one
+    // rejects with the adapter's own thrown Error, while falling through
+    // isNamed's `adapter` check wraps the malformed object itself, so calling
+    // `.adapter.notify(event)` on it throws a TypeError for a missing method.
+    expect(logger.error.mock.calls[0]![1]).toBeInstanceOf(TypeError);
   });
 });
 
