@@ -4,9 +4,14 @@ import type { ApprovalEngineOptions } from '../engine/ApprovalEngine.js';
 import { ApprovalEngine } from '../engine/ApprovalEngine.js';
 import { MemoryAdapter } from '../adapters/MemoryAdapter.js';
 
+/**
+ * A `Clock` a test controls directly, so escalation/reminder/SLA deadlines
+ * can be crossed deterministically instead of waiting on real time.
+ */
 export class ManualClock implements Clock {
   private current: Date;
 
+  /** @param start - The initial time. Defaults to the Unix epoch. */
   constructor(start?: Date) {
     this.current = start ? new Date(start.getTime()) : new Date(0);
   }
@@ -15,20 +20,31 @@ export class ManualClock implements Clock {
     return new Date(this.current.getTime());
   }
 
+  /** Move the clock forward by `ms` milliseconds. */
   advance(ms: number): void {
     this.current = new Date(this.current.getTime() + ms);
   }
 
+  /** Move the clock forward by `days` days. */
   advanceDays(days: number): void {
     this.advance(days * 86_400_000);
   }
 
+  /** Jump the clock to an absolute point in time. */
   set(date: Date): void {
     this.current = new Date(date.getTime());
   }
 }
 
 export class ApprovalTestKit {
+  /**
+   * Build an `ApprovalEngine` wired to a `MemoryAdapter` and a `ManualClock`
+   * fixed at 2025-01-01, with escalation polling disabled so a test controls
+   * every tick itself.
+   *
+   * @param opts - Overrides merged over the defaults; pass your own
+   *   `MemoryAdapter` via `opts.adapter` to reuse one across engines.
+   */
   static create(opts?: Partial<ApprovalEngineOptions>): {
     engine: ApprovalEngine;
     adapter: MemoryAdapter;
