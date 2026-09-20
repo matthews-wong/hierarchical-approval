@@ -4,7 +4,7 @@ This document summarizes the enhancements made to **hierarchical-approval** on t
 of its initial feature set. Each section maps to one focused, independently
 committed iteration, with rationale, the public API it adds, and how it is tested.
 
-> **Status:** 382 tests passing · clean dual ESM/CJS build (`.d.ts` included) · `src` type-checks and lints clean.
+> **Status:** 1256 tests passing · clean dual ESM/CJS build (`.d.ts` included) · `src` type-checks and lints clean.
 
 ---
 
