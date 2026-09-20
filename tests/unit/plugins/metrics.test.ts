@@ -29,6 +29,7 @@ describe('internal helpers', () => {
       ['a', '1'],
       ['b', '2'],
     ]);
+    expect(norm.map(([key]) => key)).not.toContain('d');
   });
 
   it('normalizeLabels returns [] for undefined input', () => {
