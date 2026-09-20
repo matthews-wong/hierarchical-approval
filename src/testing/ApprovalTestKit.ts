@@ -36,6 +36,11 @@ export class ManualClock implements Clock {
   }
 }
 
+/**
+ * Static helpers for standing up an `ApprovalEngine` and driving it through
+ * an approval chain in tests, without repeating the same `MemoryAdapter` +
+ * `ManualClock` wiring in every test file.
+ */
 export class ApprovalTestKit {
   /**
    * Build an `ApprovalEngine` wired to a `MemoryAdapter` and a `ManualClock`
