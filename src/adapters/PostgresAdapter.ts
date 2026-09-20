@@ -77,6 +77,22 @@ function toPgTextArray(path: string): string {
     .join(',')}}`;
 }
 
+/**
+ * {@link IStorageAdapter} backed by PostgreSQL, storing templates and
+ * instances as JSONB rows under a configurable schema and table prefix.
+ *
+ * Lazily opens its connection pool on first use unless {@link
+ * PostgresAdapterOptions.pool} supplies one to share, and enforces the same
+ * optimistic-concurrency contract (`ApprovalConflictError` on a version
+ * mismatch or a missing row) that {@link MemoryAdapter} does.
+ *
+ * @example
+ * ```ts
+ * const adapter = new PostgresAdapter({ connectionString: '...' });
+ * await adapter.migrate();
+ * const engine = new ApprovalEngine({ adapter, tenantId: 'acme' });
+ * ```
+ */
 export class PostgresAdapter implements IStorageAdapter {
   private _pool: import('pg').Pool | null = null;
   private readonly prefix: string;
