@@ -941,7 +941,10 @@ describe('rungs are measured from when each branch opened', () => {
     // the open time from; the scan exhausts the log and the caller's own
     // fallback (typically `instance.createdAt`) is used instead. The decoy
     // entry has the right action but the wrong level, so it can't produce a
-    // false match — no entry in this log names level 1 at all.
+    // false match — no entry in this log names level 1 at all. A completely
+    // empty auditLog exhausts the same loop the same way (zero iterations vs.
+    // zero matching iterations is not a distinct branch), so that case isn't
+    // a separate test — see the sibling below for the other half of the AND.
     const instance = {
       auditLog: [{ action: 'level_advanced', actorId: 'a', level: 2, timestamp: new Date() }],
     } as unknown as ApprovalInstance;
@@ -958,10 +961,13 @@ describe('rungs are measured from when each branch opened', () => {
     expect(opened).toBe(fallback);
   });
 
-  it('falls back to the given fallback date for a completely empty audit log', () => {
-    // The strictest form of "no audit entry names the level": there is
-    // nothing to scan at all, not even an entry for a different level.
-    const instance = { auditLog: [] } as unknown as ApprovalInstance;
+  it('falls back to the given fallback date when the only matching-level entry is not an opening action', () => {
+    // The other half of the same AND: an entry that names level 1 but was
+    // recorded for an action that doesn't open a level (an approval, here)
+    // must not be mistaken for the level's open marker either.
+    const instance = {
+      auditLog: [{ action: 'approved', actorId: 'a', level: 1, timestamp: new Date() }],
+    } as unknown as ApprovalInstance;
     const level = { level: 1 } as unknown as ApprovalLevelInstance;
     const fallback = new Date('2099-01-01T00:00:00Z');
 
