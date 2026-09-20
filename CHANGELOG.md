@@ -12,6 +12,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   now needs its own `off()` call to undo, instead of the second registration
   silently overwriting the bookkeeping for the first and leaving it permanently
   attached.
+- `DigestNotificationAdapter`'s `intervalMs` validation error now names the
+  offending value, instead of a message that gave no clue which value failed.
 
 ## [4.0.1] - 2026-09-14
 
