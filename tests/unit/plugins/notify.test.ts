@@ -928,6 +928,31 @@ describe('TemplatedNotificationAdapter', () => {
     expect(sent[0]!.body).toBe('|');
   });
 
+  it('a field whose value is directly null resolves to the unknown token', async () => {
+    const sent: { body: string }[] = [];
+    const adapter = new TemplatedNotificationAdapter({
+      send: (m) => {
+        sent.push(m);
+      },
+      templates: { 'approval:approved': { subject: '', body: 'c={comment}' } },
+    });
+    await adapter.notify(
+      makeEvent({
+        payload: {
+          instanceId: 'i',
+          documentId: 'd',
+          documentType: 't',
+          timestamp: new Date(),
+          approverId: 'a',
+          level: 1,
+          isFinal: false,
+          comment: null,
+        } as unknown as NotificationEvent['payload'],
+      }),
+    );
+    expect(sent[0]!.body).toBe('c=');
+  });
+
   it('a malformed event with no payload at all interpolates safely (no throw)', async () => {
     const sent: { body: string }[] = [];
     const adapter = new TemplatedNotificationAdapter({
