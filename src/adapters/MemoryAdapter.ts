@@ -102,6 +102,24 @@ function applyFilter(instance: ApprovalInstance, filter: InstanceFilter): boolea
   return true;
 }
 
+/**
+ * In-process {@link IStorageAdapter} backed by two `Map`s, keyed by
+ * `${tenantId}:${id}`. No persistence, no network: state lives only for the
+ * life of the process holding the instance, which makes it the reference
+ * implementation for tests and the quickest way to try the engine without a
+ * real database.
+ *
+ * Every read and write round-trips through `deepClone`, so callers can never
+ * mutate stored state through a returned object, and `updateInstance` enforces
+ * the same optimistic-concurrency contract (`ApprovalConflictError` on a
+ * version mismatch or a missing row) that {@link PostgresAdapter} does.
+ *
+ * @example
+ * ```ts
+ * const adapter = new MemoryAdapter();
+ * const engine = new ApprovalEngine({ adapter, tenantId: 'acme' });
+ * ```
+ */
 export class MemoryAdapter implements IStorageAdapter {
   // keyed by `${tenantId}:${template.name}`
   private readonly templates = new Map<string, ApprovalTemplate>();
