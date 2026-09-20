@@ -288,7 +288,12 @@ describe('EscalationScheduler — reminders', () => {
   });
 
   it('skips reminders entirely when no onRemind handler is configured', async () => {
-    const { scheduler, adapter } = makeScheduler();
+    // Without the outer `if (this.onRemind)` guard, a due reminder would still
+    // reach the try/catch around the call, invoke undefined, and get caught
+    // and logged as a failure — resolving without throwing either way. The
+    // guard's actual effect is that the attempt (and its error log) never
+    // happens at all.
+    const { scheduler, adapter, calls } = makeScheduler();
     adapter.getOverdueInstances.mockResolvedValue([
       makeInstance({
         levels: [
@@ -304,6 +309,12 @@ describe('EscalationScheduler — reminders', () => {
     ]);
 
     await expect(scheduler.tick()).resolves.not.toThrow();
+
+    expect(calls.error).not.toHaveBeenCalledWith(
+      expect.stringContaining('failed to send reminder'),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 });
 
