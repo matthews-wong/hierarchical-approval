@@ -236,9 +236,12 @@ describe('DigestNotificationAdapter', () => {
       }
     });
 
-    it('rejects a non-positive interval', () => {
+    it('rejects a non-positive interval, naming the offending value', () => {
       expect(() => new DigestNotificationAdapter({ send: () => {}, intervalMs: 0 })).toThrow(
-        /intervalMs must be a positive number/,
+        /intervalMs must be a positive number, got 0\./,
+      );
+      expect(() => new DigestNotificationAdapter({ send: () => {}, intervalMs: -500 })).toThrow(
+        /intervalMs must be a positive number, got -500\./,
       );
     });
 
