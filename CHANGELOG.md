@@ -1,3 +1,9 @@
+## 4.0.2 - 2026-09-20
+
+- fix(notify): name the offending value in DigestNotificationAdapter's error
+- fix(engine): stop leaking a listener when on() double-registers it
+- fix(webhook): give the real-timer sleep test slack for CI jitter
+
 # Changelog
 
 All notable changes to `hierarchical-approval` are documented here. This project
