@@ -19,7 +19,12 @@ import { spyLogger } from './_helpers.js';
 
 describe('internal helpers', () => {
   it('normalizeLabels sorts by key and drops null/undefined', () => {
-    const norm = normalizeLabels({ b: '2', a: '1', c: undefined as unknown as string });
+    const norm = normalizeLabels({
+      b: '2',
+      a: '1',
+      c: undefined as unknown as string,
+      d: null as unknown as string,
+    });
     expect(norm).toEqual([
       ['a', '1'],
       ['b', '2'],
