@@ -86,6 +86,15 @@ describe('filtering instances by document data', () => {
       expect(r.items.map((i) => i.documentId)).toEqual(['a']);
     });
 
+    it('does not match a stored null against a non-null object filter value', async () => {
+      const engine = await buildEngine();
+      await submit(engine, 'a', { amount: null });
+      await submit(engine, 'b', { amount: { min: 0 } });
+
+      const r = await engine.queryInstances({ data: { amount: { min: 0 } } });
+      expect(r.items.map((i) => i.documentId)).toEqual(['b']);
+    });
+
     it('does not match through the prototype chain', async () => {
       const engine = await buildEngine();
       await submit(engine, 'a', { amount: 1 });
