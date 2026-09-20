@@ -110,6 +110,49 @@ describe('EventBus', () => {
     expect(() => bus.off('approval:submitted', listener)).not.toThrow();
   });
 
+  it('forgets a once listener that unregisters itself from within its own callback', () => {
+    // The wrapper's cleanup runs in a `finally` after the caller's listener
+    // returns. If that listener already called off() on itself, the bucket it
+    // would look up is gone entirely — the cleanup must recognize that and
+    // return instead of indexing into an undefined array.
+    const bus = new EventBus();
+    const listener = vi.fn(() => {
+      bus.off('approval:submitted', listener);
+    });
+    bus.once('approval:submitted', listener);
+
+    expect(() => bus.emit('approval:submitted', submittedEvent())).not.toThrow();
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    bus.emit('approval:submitted', submittedEvent());
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let a stale once-cleanup evict a listener re-registered from within its own callback', () => {
+    // `reregistering` unsubscribes and immediately resubscribes itself before
+    // returning, so by the time its own wrapper's cleanup runs, the bucket it
+    // finds under its name belongs to the *new* registration, not the one
+    // currently cleaning up. That cleanup must recognize its own wrapper is no
+    // longer present and leave the fresh registration alone. It must also not
+    // wipe out `kept`'s unrelated bucket in the same shared per-event map.
+    const bus = new EventBus();
+    const kept = vi.fn();
+    const reregistering = vi.fn(() => {
+      bus.off('approval:submitted', reregistering);
+      bus.once('approval:submitted', reregistering);
+    });
+    bus.once('approval:submitted', reregistering);
+    bus.once('approval:submitted', kept);
+
+    expect(() => bus.emit('approval:submitted', submittedEvent())).not.toThrow();
+    expect(reregistering).toHaveBeenCalledTimes(1);
+    expect(kept).toHaveBeenCalledTimes(1);
+
+    bus.emit('approval:submitted', submittedEvent());
+    expect(reregistering).toHaveBeenCalledTimes(2);
+    expect(kept).toHaveBeenCalledTimes(1);
+  });
+
   it('on, off, and once return the bus for chaining', () => {
     const bus = new EventBus();
     const listener = vi.fn();
