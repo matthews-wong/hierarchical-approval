@@ -682,6 +682,17 @@ describe('CompositeNotificationAdapter', () => {
     // `.adapter.notify(event)` on it throws a TypeError for a missing method.
     expect(logger.error.mock.calls[0]![1]).toBeInstanceOf(TypeError);
   });
+
+  it('a child whose adapter property is explicitly null is treated as bare, not named', async () => {
+    const logger = spyLogger();
+    // typeof null === 'object', so isNamed needs its own `adapter !== null`
+    // check independent of the `typeof adapter === 'object'` one above it.
+    const malformed = { adapter: null } as unknown as INotificationAdapter;
+    const c = new CompositeNotificationAdapter({ children: [malformed], logger });
+    await expect(c.notify(makeEvent())).resolves.toBeUndefined();
+    expect(logger.error.mock.calls[0]![2]).toMatchObject({ child: 'child[0]' });
+    expect(logger.error.mock.calls[0]![1]).toBeInstanceOf(TypeError);
+  });
 });
 
 describe('TemplatedNotificationAdapter', () => {
