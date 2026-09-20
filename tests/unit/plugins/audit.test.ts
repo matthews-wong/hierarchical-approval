@@ -79,8 +79,10 @@ describe('canonicalize', () => {
   });
 
   it('does not treat the same object appearing twice (non-cyclic) as a cycle', () => {
+    // `seen` tracks ancestry, not "ever visited" — the same object at two
+    // sibling positions is fine; only a true ancestor-of-itself cycle throws.
     const shared = { x: 1 };
-    expect(() => canonicalize({ a: shared, b: shared })).not.toThrow();
+    expect(canonicalize({ a: shared, b: shared })).toBe('{"a":{"x":1},"b":{"x":1}}');
   });
 
   it('correctly canonicalizes primitives and empty structures', () => {
