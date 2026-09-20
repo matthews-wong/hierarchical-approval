@@ -109,7 +109,9 @@ export class DigestNotificationAdapter implements INotificationAdapter {
 
     if (this.intervalMs !== undefined) {
       if (this.intervalMs <= 0) {
-        throw new Error('DigestNotificationAdapter: intervalMs must be a positive number.');
+        throw new Error(
+          `DigestNotificationAdapter: intervalMs must be a positive number, got ${this.intervalMs}.`,
+        );
       }
       this.timer = setInterval(() => {
         void this.flush().catch((err) => {
