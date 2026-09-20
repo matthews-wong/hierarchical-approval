@@ -965,8 +965,9 @@ describe('rungs are measured from when each branch opened', () => {
     // The other half of the same AND: an entry that names level 1 but was
     // recorded for an action that doesn't open a level (an approval, here)
     // must not be mistaken for the level's open marker either.
+    const approvedAt = new Date('2026-01-01T00:00:00Z');
     const instance = {
-      auditLog: [{ action: 'approved', actorId: 'a', level: 1, timestamp: new Date() }],
+      auditLog: [{ action: 'approved', actorId: 'a', level: 1, timestamp: approvedAt }],
     } as unknown as ApprovalInstance;
     const level = { level: 1 } as unknown as ApprovalLevelInstance;
     const fallback = new Date('2099-01-01T00:00:00Z');
@@ -979,5 +980,6 @@ describe('rungs are measured from when each branch opened', () => {
     ).levelOpenedAt(instance, level, fallback);
 
     expect(opened).toBe(fallback);
+    expect(opened.getTime()).not.toBe(approvedAt.getTime());
   });
 });
