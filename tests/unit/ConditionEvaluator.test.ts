@@ -75,6 +75,12 @@ describe('ConditionEvaluator', () => {
     expect(evaluateConditions(rules, { amount: 6000, dept: 'finance' }).addLevels).toHaveLength(0);
   });
 
+  it('a bare empty condition array is vacuously true and always matches', () => {
+    const rules: ConditionRule[] = [{ when: [], addLevels: [extraLevel] }];
+    expect(evaluateConditions(rules, {}).addLevels).toHaveLength(1);
+    expect(evaluateConditions(rules, { anything: 'at all' }).addLevels).toHaveLength(1);
+  });
+
   it('resolves nested dot-path fields', () => {
     const rules: ConditionRule[] = [
       { when: { field: 'vendor.country', operator: '==', value: 'US' }, addLevels: [extraLevel] },
