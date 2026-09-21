@@ -117,6 +117,17 @@ describe('OutboxNotificationAdapter — notify/enqueue', () => {
     expect(pending[0]!.id).toBe('fixed-id');
   });
 
+  it('the default idGenerator disambiguates two records enqueued at the same clock time', async () => {
+    const clock = new ManualClock(1234);
+    const store = new InMemoryOutboxStore();
+    const adapter = new OutboxNotificationAdapter({ transport: () => {}, store, clock });
+    await adapter.notify(makeEvent());
+    await adapter.notify(makeEvent());
+    const pending = await adapter.pending();
+    expect(pending).toHaveLength(2);
+    expect(pending[0]!.id).not.toBe(pending[1]!.id);
+  });
+
   it('enqueue failure is caught, logged, and swallowed', async () => {
     const logger = spyLogger();
     const store: IOutboxStore = {
