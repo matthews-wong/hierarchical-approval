@@ -177,6 +177,28 @@ describe('WebhookNotificationAdapter — retry on transient failure', () => {
     expect(sleep).toHaveBeenCalledTimes(2);
   });
 
+  it('uses the default Math.random source when no random option is injected', async () => {
+    let calls = 0;
+    const client: HttpClient = async () => {
+      calls++;
+      return calls < 2 ? fakeResponse(500) : fakeResponse(200);
+    };
+    const sleep = vi.fn(noSleep);
+    const adapter = new WebhookNotificationAdapter({
+      url: 'https://example.com/hook',
+      httpClient: client,
+      sleep,
+      baseDelayMs: 100,
+      maxDelayMs: 1000,
+      maxAttempts: 5,
+    });
+    await adapter.deliver(makeEvent());
+    expect(sleep).toHaveBeenCalledOnce();
+    const delay = sleep.mock.calls[0]![0] as number;
+    expect(delay).toBeGreaterThanOrEqual(0);
+    expect(delay).toBeLessThan(100);
+  });
+
   it('falls back to the real timer-based sleep when no sleep option is injected', async () => {
     // Every other retry test injects `sleep` to skip real waiting, so
     // `defaultSleep` (the setTimeout-backed default) is never exercised. Use a
