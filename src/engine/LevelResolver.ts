@@ -5,6 +5,7 @@ import { ApprovalValidationError } from '../errors.js';
 const MAX_OOO_HOPS = 5;
 
 export interface OrgProvider {
+  /** Required: resolve users holding a named role. */
   getUsersByRole(role: string, tenantId?: string): Promise<string[]> | string[];
   /** Optional: resolve users by department name. */
   getUsersByDepartment?(dept: string, tenantId?: string): Promise<string[]> | string[];
