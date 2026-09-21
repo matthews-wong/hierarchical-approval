@@ -361,6 +361,17 @@ describe('RateLimitMiddleware — token bucket', () => {
     expect(mw.peekTokens(authCtx())).toBe(2);
   });
 
+  it('never refills once drained when refillTokensPerSecond is zero', () => {
+    const clock = new ManualClock(0);
+    const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 0, clock });
+
+    mw.before(authCtx()); // 1 -> 0, exhausted
+    clock.advance(1_000_000); // no rate configured: elapsed time buys nothing
+
+    expect(mw.peekTokens(authCtx())).toBe(0);
+    expect(() => mw.before(authCtx())).toThrow(ApprovalForbiddenError);
+  });
+
   it('treats a backwards-moving clock as zero elapsed time (balance never goes negative)', () => {
     const clock = new ManualClock(0);
     const mw = new RateLimitMiddleware({ capacity: 1, refillTokensPerSecond: 1, clock });
