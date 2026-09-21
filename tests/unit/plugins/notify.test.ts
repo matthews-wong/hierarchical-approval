@@ -669,6 +669,15 @@ describe('CompositeNotificationAdapter', () => {
     expect(logger.error.mock.calls[0]![2]).toMatchObject({ child: 'child[0]' });
   });
 
+  it('a bare adapter that also carries a stray adapter property is still treated as bare', async () => {
+    const decoy = { notify: vi.fn(async () => {}) };
+    const bare = { notify: vi.fn(async () => {}), adapter: decoy };
+    const c = new CompositeNotificationAdapter({ children: [bare] });
+    await c.notify(makeEvent());
+    expect(bare.notify).toHaveBeenCalledOnce();
+    expect(decoy.notify).not.toHaveBeenCalled();
+  });
+
   it('a child that is neither a bare adapter nor a named child is treated as bare and its failure is logged', async () => {
     const logger = spyLogger();
     // Neither `notify` (bare adapter) nor `adapter` (named child) is present.
