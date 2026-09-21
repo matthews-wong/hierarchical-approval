@@ -134,8 +134,11 @@ export interface ConditionRule {
   skipLevels?: number[];
 }
 
+/** A single-rung escalation. See {@link EscalationStep} for a multi-rung ladder. */
 export interface EscalationConfig {
+  /** Delay from the level opening, in calendar or business days. */
   afterDays: number;
+  /** Who is added to the level once `afterDays` elapses. */
   escalateTo: ApproverConfig;
 }
 
