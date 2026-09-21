@@ -55,15 +55,19 @@ export interface IStorageAdapter {
   listTemplates(tenantId: string): Promise<ApprovalTemplate[]>;
 
   // Instances
+  /** Create a new instance. Callers own uniqueness of `instance.id`. */
   saveInstance(instance: ApprovalInstance): Promise<void>;
   /** Conditional update — throws ApprovalConflictError if stored version !== expectedVersion. */
   updateInstance(instance: ApprovalInstance, expectedVersion: number): Promise<void>;
+  /** Fetch one instance by id, scoped to a tenant. Returns null if absent. */
   getInstance(tenantId: string, id: string): Promise<ApprovalInstance | null>;
+  /** Instances where `approverId` is a current approver on any pending level. */
   getInstancesByApprover(
     tenantId: string,
     approverId: string,
     opts?: PaginationOpts,
   ): Promise<PaginatedResult<ApprovalInstance>>;
+  /** Instances matching an {@link InstanceFilter}. Ordering is adapter-specific. */
   getInstancesByFilter(
     tenantId: string,
     filter: InstanceFilter,
@@ -75,6 +79,7 @@ export interface IStorageAdapter {
     filter: InstanceFilter,
     opts: CursorPaginationOpts,
   ): Promise<CursorPaginatedResult<ApprovalInstance>>;
+  /** Pending instances overdue as of `asOf` on any open level, not just the current one. */
   getOverdueInstances(
     tenantId: string,
     asOf: Date,
@@ -114,6 +119,7 @@ export interface IStorageAdapter {
    * @since 2.3.0
    */
   deleteInstance?(tenantId: string, id: string): Promise<boolean>;
+  /** Look up an instance by `idempotencyKey`, unique within a tenant, not globally. */
   getIdempotentInstance(tenantId: string, idempotencyKey: string): Promise<ApprovalInstance | null>;
 
   // Audit (append-only)
