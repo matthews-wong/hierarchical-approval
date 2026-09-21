@@ -144,6 +144,14 @@ describe('DigestNotificationAdapter', () => {
       expect(sent.map((d) => d.recipient)).toEqual(['alice']);
       expect(adapter.pendingRecipients).toBe(1);
     });
+
+    it('a cap of zero flushes every event immediately, disabling batching', async () => {
+      const { adapter, sent } = build({ maxBatchSize: 0 });
+      await adapter.notify(event());
+      expect(sent).toHaveLength(1);
+      expect(sent[0]?.events).toHaveLength(1);
+      expect(adapter.pendingRecipients).toBe(0);
+    });
   });
 
   describe('failure handling', () => {
