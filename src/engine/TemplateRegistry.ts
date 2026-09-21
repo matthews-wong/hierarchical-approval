@@ -91,6 +91,7 @@ export class TemplateRegistry {
     return resolved;
   }
 
+  /** Register a new template. Throws if a template with this name already exists for the tenant. */
   async define(config: ApprovalTemplateConfig): Promise<string> {
     const existing = await this.adapter.getTemplate(this.tenantId, config.name);
     if (existing) {
@@ -129,12 +130,14 @@ export class TemplateRegistry {
     return newId;
   }
 
+  /** Fetch a template by name. Throws if no template with this name exists for the tenant. */
   async get(name: string): Promise<ApprovalTemplate> {
     const template = await this.adapter.getTemplate(this.tenantId, name);
     if (!template) throw new ApprovalTemplateNotFoundError(name);
     return template;
   }
 
+  /** List every template registered for the tenant. */
   async list(): Promise<ApprovalTemplate[]> {
     return this.adapter.listTemplates(this.tenantId);
   }
