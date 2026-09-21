@@ -1,8 +1,24 @@
 import type { ApprovalInstance } from '../types/index.js';
 import type { ApprovalError } from '../errors.js';
 
+export type EngineOperation =
+  | 'submit'
+  | 'approve'
+  | 'reject'
+  | 'delegate'
+  | 'reassign'
+  | 'cancel'
+  | 'updateData'
+  | 'requestInfo'
+  | 'provideInfo'
+  | 'addAttachment'
+  | 'removeAttachment'
+  | 'addComment'
+  | 'resubmit'
+  | 'override';
+
 export interface OperationContext<T = unknown> {
-  operation: string;
+  operation: EngineOperation;
   instanceId?: string;
   actorId?: string;
   tenantId: string;
