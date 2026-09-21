@@ -248,10 +248,10 @@ describe('state guards', () => {
     expect(() => assertStatus(makeInstance(), 'pending')).not.toThrow();
   });
 
-  it('assertStatus throws ApprovalError INVALID_STATUS naming both statuses', () => {
+  it('assertStatus throws ApprovalError INVALID_STATUS naming the instance and both statuses', () => {
     const error = (): void => assertStatus(makeInstance({ status: 'approved' }), 'pending');
     expect(error).toThrow(ApprovalError);
-    expect(error).toThrow(/Expected instance status "pending" but got "approved"/);
+    expect(error).toThrow(/Instance "inst-1": expected status "pending" but got "approved"/);
     expect(error).toThrow(expect.objectContaining({ code: 'INVALID_STATUS' }));
   });
 

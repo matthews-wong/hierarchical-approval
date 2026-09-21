@@ -9,7 +9,7 @@ export function assertStatus(
 ): void {
   if (instance.status !== expected) {
     throw new ApprovalError(
-      `Expected instance status "${expected}" but got "${instance.status}".`,
+      `Instance "${instance.id}": expected status "${expected}" but got "${instance.status}".`,
       'INVALID_STATUS',
     );
   }
