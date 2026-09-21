@@ -1124,6 +1124,19 @@ describe('graceful shutdown', () => {
     expect(scheduler.isRunning).toBe(false);
   });
 
+  it('stop() on a scheduler that was never started is a no-op', async () => {
+    const adapter = new MemoryAdapter();
+    const scheduler = new EscalationScheduler({
+      adapter,
+      tenantId: 'never-started',
+      onEscalate: async () => {},
+      pollIntervalMs: 999999,
+    });
+    expect(scheduler.isRunning).toBe(false);
+    await expect(scheduler.stop()).resolves.toBeUndefined();
+    expect(scheduler.isRunning).toBe(false);
+  });
+
   it('scheduler does not start twice', () => {
     const adapter = new MemoryAdapter();
     const scheduler = new EscalationScheduler({
