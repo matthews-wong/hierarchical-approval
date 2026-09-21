@@ -1,10 +1,22 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { PostgresAdapter } from '../../../src/adapters/PostgresAdapter.js';
 import { MemoryAdapter } from '../../../src/adapters/MemoryAdapter.js';
 import { ApprovalConflictError, ApprovalValidationError } from '../../../src/errors.js';
 import type { ApprovalInstance, ApprovalTemplate } from '../../../src/types/index.js';
 import { makeInstance, makeEntry } from '../plugins/_helpers.js';
 import { FakePool } from './_fakePg.js';
+
+// `pg` is only an optional peer dependency and is not installed in this repo,
+// so this is the only way to observe what getPool() passes to `new pg.Pool()`.
+const poolCtorMock = vi.hoisted(() => vi.fn());
+vi.mock('pg', () => ({
+  default: {
+    Pool: poolCtorMock.mockImplementation(() => ({
+      query: vi.fn().mockRejectedValue(new Error('mock pg.Pool: no real connection')),
+      end: vi.fn(),
+    })),
+  },
+}));
 
 function makeTemplate(over: Partial<ApprovalTemplate> = {}): ApprovalTemplate {
   return {
@@ -86,9 +98,17 @@ describe('PostgresAdapter — constructor validation', () => {
     expect(() => new PostgresAdapter({ schema: '' })).toThrow(ApprovalValidationError);
   });
 
-  it('without an injected pool, lazily falls back to the `pg` dynamic import', async () => {
-    const adapter = new PostgresAdapter({});
+  it('without an injected pool, lazily falls back to the `pg` dynamic import and constructs a Pool from connectionString/ssl', async () => {
+    poolCtorMock.mockClear();
+    const adapter = new PostgresAdapter({
+      connectionString: 'postgres://user:pass@host/db',
+      ssl: false,
+    });
     await expect(adapter.migrate()).rejects.toThrow();
+    expect(poolCtorMock).toHaveBeenCalledWith({
+      connectionString: 'postgres://user:pass@host/db',
+      ssl: false,
+    });
   });
 });
 
