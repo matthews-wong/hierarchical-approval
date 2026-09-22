@@ -1,3 +1,9 @@
+## 4.0.3 - 2026-09-22
+
+- fix(engine): name the level in assertApproverOnLevel's error
+- fix(utils): name the offending start date in businessHoursCalendar's error
+- fix(engine): name the offending instance id in assertStatus's error
+
 # Changelog
 
 All notable changes to `hierarchical-approval` are documented here. This project
