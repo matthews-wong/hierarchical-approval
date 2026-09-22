@@ -152,7 +152,7 @@ export function businessHoursCalendar(
     }
     // Every day for ten years was a holiday; a caller misconfigured the calendar.
     throw new Error(
-      'businessHoursCalendar: no working day found within 10 years of the start date.',
+      `businessHoursCalendar: no working day found within 10 years of ${from.toISOString()} — check weekendDays and holidays.`,
     );
   };
 
