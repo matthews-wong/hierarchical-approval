@@ -26,19 +26,33 @@ export type AuditAction =
   | 'subworkflow_completed'
   | 'expired';
 
+/** One row of an {@link ApprovalInstance}'s audit log, recording a single state change. */
 export interface AuditEntry {
+  /** What happened. */
   action: AuditAction;
+  /** Id of the user or system that performed the action. */
   actorId: string;
+  /** Role the actor held at the time, when supplied via {@link AuditContext}. */
   actorRole?: string;
+  /** IP address the action originated from, when supplied via {@link AuditContext}. */
   actorIp?: string;
+  /** User agent the action originated from, when supplied via {@link AuditContext}. */
   actorUserAgent?: string;
+  /** Level the action applied to, or the current level for instance-wide actions. */
   level: number;
+  /** When the action happened. */
   timestamp: Date;
+  /** Caller-supplied trace id for correlating this entry with external logs. */
   traceId?: string;
+  /** Free-text comment attached to the action, if any. */
   comment?: string;
+  /** Reason given for the action (e.g. a rejection or override reason), if any. */
   reason?: string;
+  /** Id of the user this action routed to, for `'delegated'`/`'reassigned'`/`'escalated'` actions. */
   delegateTo?: string;
+  /** State the action changed from, shaped differently per {@link action}. */
   oldValue?: Record<string, unknown>;
+  /** State the action changed to, shaped differently per {@link action}. */
   newValue?: Record<string, unknown>;
 }
 
