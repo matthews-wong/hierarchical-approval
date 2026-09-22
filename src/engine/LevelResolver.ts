@@ -81,6 +81,32 @@ export class LevelResolver {
     for (const [name, fn] of this.approverTypes) target.registerApproverType(name, fn);
   }
 
+  /**
+   * Resolve a level's `approvers` config down to a deduplicated list of user
+   * ids, applying out-of-office cover last so a substitute never sees a stale
+   * approver id.
+   *
+   * @param approvers - The level's approver configs (`user`, `role`,
+   *   `dynamic`, or a custom type registered via {@link registerApproverType}).
+   * @param submittedBy - Passed through to `dynamic` resolvers and custom
+   *   approver-type functions as routing context.
+   * @param data - The instance's document data, passed through the same way.
+   * @param orgProvider - Required to resolve `role` approvers; omit only when
+   *   the template uses no `role` approvers.
+   * @param outOfOffice - Optional cover lookup, consulted after every other
+   *   approver type has resolved.
+   * @param at - The moment out-of-office cover is resolved for. Defaults to
+   *   now.
+   * @param substitutions - Filled with `original -> stand-in` for each
+   *   approver replaced by out-of-office cover, so the caller can carry
+   *   anything keyed by the original id (such as a weighted level's vote
+   *   weight) across to the substitute.
+   * @returns The resolved, deduplicated approver ids (post-substitution).
+   * @throws {ApprovalValidationError} If no approvers resolve at all, a
+   *   `role` approver is configured without an `orgProvider`, a `dynamic`
+   *   approver names a resolver that was never registered, or a custom
+   *   approver type was never registered.
+   */
   async resolveApprovers(
     approvers: ApproverConfig[],
     submittedBy: string,
@@ -88,12 +114,6 @@ export class LevelResolver {
     orgProvider?: OrgProvider,
     outOfOffice?: OutOfOfficeProvider,
     at?: Date,
-    /**
-     * Filled with `original -> stand-in` for each approver replaced by
-     * out-of-office cover, so the caller can carry anything keyed by the
-     * original id (such as a weighted level's vote weight) across to the
-     * substitute.
-     */
     substitutions?: Map<string, string>,
   ): Promise<string[]> {
     const resolved: string[] = [];
