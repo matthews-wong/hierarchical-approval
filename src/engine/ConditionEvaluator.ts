@@ -233,11 +233,22 @@ export function validateConditionExpression(
   return errors;
 }
 
+/** Level changes to apply to a template, accumulated from every matching {@link ConditionRule}. */
 export interface LevelMutations {
+  /** Levels to insert, in the order their triggering rules matched. */
   addLevels: ApprovalLevelConfig[];
+  /** Level numbers to skip. A `Set`, unlike the config-level `skipLevels?: number[]` it's built from, since duplicate rule matches must not skip a level twice. */
   skipLevels: Set<number>;
 }
 
+/**
+ * Evaluate a template's condition rules against submitted data, collecting
+ * the level additions/skips of every rule whose `when` expression matches.
+ *
+ * @param conditions - The template's condition rules, evaluated in order.
+ * @param data - The instance's document data the rules match against.
+ * @returns The combined level mutations from every matching rule.
+ */
 export function evaluateConditions(
   conditions: ConditionRule[],
   data: Record<string, unknown>,
