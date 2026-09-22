@@ -8,13 +8,18 @@ import { FakePool } from './_fakePg.js';
 
 // `pg` is only an optional peer dependency and is not installed in this repo,
 // so this is the only way to observe what getPool() passes to `new pg.Pool()`.
+// Must be a `function`, not an arrow, because getPool() invokes it with `new` —
+// an arrow-function implementation isn't constructible and throws, which
+// `.rejects.toThrow()` masks without ever exercising the pool-caching branch.
 const poolCtorMock = vi.hoisted(() => vi.fn());
 vi.mock('pg', () => ({
   default: {
-    Pool: poolCtorMock.mockImplementation(() => ({
-      query: vi.fn().mockRejectedValue(new Error('mock pg.Pool: no real connection')),
-      end: vi.fn(),
-    })),
+    Pool: poolCtorMock.mockImplementation(function () {
+      return {
+        query: vi.fn().mockRejectedValue(new Error('mock pg.Pool: no real connection')),
+        end: vi.fn(),
+      };
+    }),
   },
 }));
 
@@ -109,6 +114,16 @@ describe('PostgresAdapter — constructor validation', () => {
       connectionString: 'postgres://user:pass@host/db',
       ssl: false,
     });
+  });
+
+  it('reuses the lazily-constructed Pool across calls instead of building a new one each time', async () => {
+    poolCtorMock.mockClear();
+    const adapter = new PostgresAdapter({
+      connectionString: 'postgres://user:pass@host/db',
+    });
+    await expect(adapter.migrate()).rejects.toThrow();
+    await expect(adapter.migrate()).rejects.toThrow();
+    expect(poolCtorMock).toHaveBeenCalledTimes(1);
   });
 });
 
