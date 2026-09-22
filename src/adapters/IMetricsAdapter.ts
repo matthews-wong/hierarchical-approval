@@ -1,3 +1,4 @@
+/** Closed set of metric names an {@link IMetricsAdapter} may be called with, namespaced `approval.<verb>`. */
 export type MetricName =
   | 'approval.submitted'
   | 'approval.approved'
