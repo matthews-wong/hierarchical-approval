@@ -1,15 +1,22 @@
-## 4.0.2 - 2026-09-20
-
-- fix(notify): name the offending value in DigestNotificationAdapter's error
-- fix(engine): stop leaking a listener when on() double-registers it
-- fix(webhook): give the real-timer sleep test slack for CI jitter
-
 # Changelog
 
 All notable changes to `hierarchical-approval` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Fixed
+
+- `assertStatus`'s `INVALID_STATUS` error now names the instance that failed
+  the check, instead of a message that gave no clue which instance it was.
+- `businessHoursCalendar`'s "no working day found" error now names the start
+  date that triggered it, instead of a message that gave no clue which call
+  misconfigured the calendar.
+- `assertApproverOnLevel`'s forbidden-approver error now names the level,
+  matching every sibling guard in `StateMachine.ts`, instead of a bare level
+  number with no human-readable name.
+
+## [4.0.2] - 2026-09-20
 
 ### Fixed
 
@@ -20,11 +27,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   attached.
 - `DigestNotificationAdapter`'s `intervalMs` validation error now names the
   offending value, instead of a message that gave no clue which value failed.
-- `assertStatus`'s `INVALID_STATUS` error now names the instance that failed
-  the check, instead of a message that gave no clue which instance it was.
-- `businessHoursCalendar`'s "no working day found" error now names the start
-  date that triggered it, instead of a message that gave no clue which call
-  misconfigured the calendar.
+- The default-sleep regression test for `WebhookNotificationAdapter` no longer
+  flakes under CI's timer coalescing, which could report elapsed time a
+  millisecond or two short of the asserted floor.
 
 ## [4.0.1] - 2026-09-14
 
