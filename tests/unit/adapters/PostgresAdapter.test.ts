@@ -619,6 +619,16 @@ describe('PostgresAdapter — getOverdueInstances', () => {
     expect(sql).toMatch(/data #> \$\d+::text\[\] = \$\d+::jsonb/);
     expect(params).toContain('null');
   });
+
+  it('maps returned rows back into ApprovalInstance objects rather than passing raw rows through', async () => {
+    const { pool, adapter } = freshAdapter();
+    const instance = makeInstance({ id: 'overdue-1', status: 'pending' });
+    pool.queueResult({ rows: [instanceToRow(instance)] });
+    const result = await adapter.getOverdueInstances('tenant-1', new Date('2026-07-01T00:00:00.000Z'));
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe('overdue-1');
+    expect(result[0]!.createdAt).toBeInstanceOf(Date);
+  });
 });
 
 describe('PostgresAdapter — getInstancesByCursor', () => {
