@@ -363,6 +363,27 @@ describe('WebhookNotificationAdapter — 429 Retry-After', () => {
     expect(sleep).toHaveBeenCalledWith(5000);
   });
 
+  it('clamps a past-due HTTP-date Retry-After to 0 instead of a negative delay', async () => {
+    const clock = new ManualClock(Date.parse('2026-01-01T00:00:10.000Z'));
+    let calls = 0;
+    const client: HttpClient = async () => {
+      calls++;
+      return calls === 1
+        ? fakeResponse(429, { 'Retry-After': 'Thu, 01 Jan 2026 00:00:05 GMT' })
+        : fakeResponse(200);
+    };
+    const sleep = vi.fn(noSleep);
+    const adapter = new WebhookNotificationAdapter({
+      url: 'https://example.com/hook',
+      httpClient: client,
+      sleep,
+      clock,
+      maxAttempts: 3,
+    });
+    await adapter.deliver(makeEvent());
+    expect(sleep).toHaveBeenCalledWith(0);
+  });
+
   it('falls back to the computed backoff when a 429 carries no Retry-After', async () => {
     let calls = 0;
     const client: HttpClient = async () => {
