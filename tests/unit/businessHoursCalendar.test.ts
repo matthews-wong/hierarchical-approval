@@ -92,8 +92,9 @@ describe('businessHoursCalendar', () => {
 
   it('refuses a calendar where no day is ever a working day', () => {
     const never = businessHoursCalendar({ weekendDays: [0, 1, 2, 3, 4, 5, 6] });
-    expect(() => never.addBusinessHours(at('2026-01-05T10:00:00'), 1)).toThrow(
-      /no working day found/,
+    const start = at('2026-01-05T10:00:00');
+    expect(() => never.addBusinessHours(start, 1)).toThrow(
+      new RegExp(`no working day found within 10 years of ${start.toISOString()}`),
     );
   });
 

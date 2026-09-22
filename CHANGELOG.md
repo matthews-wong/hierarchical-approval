@@ -22,6 +22,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   offending value, instead of a message that gave no clue which value failed.
 - `assertStatus`'s `INVALID_STATUS` error now names the instance that failed
   the check, instead of a message that gave no clue which instance it was.
+- `businessHoursCalendar`'s "no working day found" error now names the start
+  date that triggered it, instead of a message that gave no clue which call
+  misconfigured the calendar.
 
 ## [4.0.1] - 2026-09-14
 
