@@ -260,7 +260,7 @@ describe('state guards', () => {
     expect(() => assertApproverOnLevel(level, 'alice')).not.toThrow();
     const error = (): void => assertApproverOnLevel(level, 'carol');
     expect(error).toThrow(ApprovalForbiddenError);
-    expect(error).toThrow(/User "carol" is not an approver for level 1/);
+    expect(error).toThrow(/User "carol" is not an approver for level 1 \("Test"\)/);
   });
 
   it('hasAlreadyActed is true for approvers in approvedBy or rejectedBy', () => {

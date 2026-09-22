@@ -18,7 +18,7 @@ export function assertStatus(
 export function assertApproverOnLevel(level: ApprovalLevelInstance, approverId: string): void {
   if (!level.approverIds.includes(approverId)) {
     throw new ApprovalForbiddenError(
-      `User "${approverId}" is not an approver for level ${level.level}.`,
+      `User "${approverId}" is not an approver for level ${level.level} ("${level.name}").`,
     );
   }
 }
