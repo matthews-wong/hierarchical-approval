@@ -2582,7 +2582,15 @@ export class ApprovalEngine {
 
     const levelNums = new Set(allLevelCfgs.map((l) => l.level));
     if (levelNums.size !== allLevelCfgs.length) {
-      throw new ApprovalValidationError('Duplicate level numbers after condition evaluation.');
+      const seen = new Set<number>();
+      const duplicates = new Set<number>();
+      for (const l of allLevelCfgs) {
+        if (seen.has(l.level)) duplicates.add(l.level);
+        seen.add(l.level);
+      }
+      throw new ApprovalValidationError(
+        `Duplicate level numbers after condition evaluation: ${[...duplicates].join(', ')}.`,
+      );
     }
 
     const now = this.clock.now();

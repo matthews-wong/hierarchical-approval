@@ -244,7 +244,7 @@ describe('resubmit rebuilds a complete chain', () => {
 
     await expect(
       engine.resubmit(i.id, { resubmittedBy: 'buyer', updatedData: { addA: true, addB: true } }),
-    ).rejects.toThrow(/Duplicate level numbers/);
+    ).rejects.toThrow('Duplicate level numbers after condition evaluation: 2.');
   });
 
   it('leaves approverIds empty for a sub-workflow level that opens immediately on resubmit', async () => {
