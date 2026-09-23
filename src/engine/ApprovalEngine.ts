@@ -3650,7 +3650,9 @@ export class ApprovalEngine {
     const limit = opts.limit ?? DEFAULT_PURGE_LIMIT;
 
     if (!(opts.olderThan instanceof Date) || Number.isNaN(opts.olderThan.getTime())) {
-      throw new ApprovalValidationError('purgeInstances requires a valid olderThan date.');
+      throw new ApprovalValidationError(
+        `purgeInstances requires a valid olderThan date, got ${String(opts.olderThan)}.`,
+      );
     }
 
     const requested = opts.statuses ?? [...TERMINAL_STATUSES];

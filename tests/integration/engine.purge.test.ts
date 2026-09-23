@@ -191,7 +191,7 @@ describe('purgeInstances', () => {
 
   it('rejects an invalid cut-off', async () => {
     await expect(engine.purgeInstances({ olderThan: new Date('nonsense') })).rejects.toThrow(
-      /valid olderThan date/,
+      'purgeInstances requires a valid olderThan date, got Invalid Date.',
     );
   });
 
