@@ -14,9 +14,12 @@ export type ConditionOperator =
   | 'not_in'
   | (string & {});
 
+/** A single test comparing a field on the evaluated document against a value. */
 export interface Condition {
+  /** Dot path into the document being evaluated, e.g. `"amount"` or `"header.total"`. */
   field: string;
   operator: ConditionOperator;
+  /** The value `field` is compared against; its shape depends on `operator`. */
   value: unknown;
 }
 
