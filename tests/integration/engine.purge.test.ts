@@ -190,9 +190,9 @@ describe('purgeInstances', () => {
   });
 
   it('rejects an invalid cut-off', async () => {
-    await expect(engine.purgeInstances({ olderThan: new Date('nonsense') })).rejects.toThrow(
-      'purgeInstances requires a valid olderThan date, got Invalid Date.',
-    );
+    await expect(
+      engine.purgeInstances({ olderThan: new Date('nonsense') }),
+    ).rejects.toThrow('purgeInstances requires a valid olderThan date, got Invalid Date.');
   });
 
   it('refuses when the adapter cannot delete', async () => {
