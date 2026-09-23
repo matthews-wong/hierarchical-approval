@@ -24,8 +24,10 @@ export const SpanStatusCode = {
 } as const;
 export type SpanStatusCode = (typeof SpanStatusCode)[keyof typeof SpanStatusCode];
 
+/** Status to set on a span via {@link TraceSpan.setStatus}. */
 export interface SpanStatus {
   code: SpanStatusCode;
+  /** Human-readable detail, typically set alongside `code: SpanStatusCode.ERROR`. */
   message?: string;
 }
 
