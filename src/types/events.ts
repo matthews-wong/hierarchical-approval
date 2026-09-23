@@ -12,11 +12,13 @@ export interface ApprovalEvent {
   timestamp: Date;
 }
 
+/** Emitted as `approval:submitted` when a new instance is raised. */
 export interface SubmittedEvent extends ApprovalEvent {
   submittedBy: string;
   currentApprovers: string[];
 }
 
+/** Emitted as `approval:approved` when an approver accepts a level. */
 export interface ApprovedEvent extends ApprovalEvent {
   approverId: string;
   level: number;
@@ -24,6 +26,7 @@ export interface ApprovedEvent extends ApprovalEvent {
   isFinal: boolean;
 }
 
+/** Emitted as `approval:rejected` when an approver rejects a level. */
 export interface RejectedEvent extends ApprovalEvent {
   approverId: string;
   level: number;
@@ -31,6 +34,7 @@ export interface RejectedEvent extends ApprovalEvent {
   returnTo: 'originator' | 'previous' | null;
 }
 
+/** Emitted as `approval:delegated` when an approver hands their decision to someone else. */
 export interface DelegatedEvent extends ApprovalEvent {
   fromApprover: string;
   toApprover: string;
@@ -38,6 +42,7 @@ export interface DelegatedEvent extends ApprovalEvent {
   reason: string;
 }
 
+/** Emitted as `approval:reassigned` when an admin moves a level to a different approver. */
 export interface ReassignedEvent extends ApprovalEvent {
   reassignedBy: string;
   fromApprover: string;
@@ -46,36 +51,43 @@ export interface ReassignedEvent extends ApprovalEvent {
   reason: string;
 }
 
+/** Emitted as `approval:escalated` when a level's SLA rung hands off to a new approver. */
 export interface EscalatedEvent extends ApprovalEvent {
   level: number;
   escalatedTo: string;
 }
 
+/** Emitted as `approval:cancelled` when the instance is withdrawn before completion. */
 export interface CancelledEvent extends ApprovalEvent {
   cancelledBy: string;
   reason: string;
 }
 
+/** Emitted as `approval:level_advanced` when the chain moves to its next open level. */
 export interface LevelAdvancedEvent extends ApprovalEvent {
   fromLevel: number;
   toLevel: number;
   newApprovers: string[];
 }
 
+/** Emitted as `approval:resubmitted` when a rejected instance is raised again. */
 export interface ResubmittedEvent extends ApprovalEvent {
   resubmittedBy: string;
   originalInstanceId: string;
 }
 
+/** Emitted as `approval:overridden` when an admin force-approves past the normal chain. */
 export interface OverriddenEvent extends ApprovalEvent {
   overriddenBy: string;
   justification: string;
 }
 
+/** Emitted as `approval:expired` when the instance's deadline passes unresolved. */
 export interface ExpiredEvent extends ApprovalEvent {
   deadlineAction: 'cancel' | 'reject';
 }
 
+/** Emitted as `approval:sla_breached` when a level's deadline passes without expiring the instance. */
 export interface SlaBreachedEvent extends ApprovalEvent {
   slaDeadlineAt: Date;
 }
