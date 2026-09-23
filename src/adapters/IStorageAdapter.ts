@@ -5,11 +5,13 @@ import type {
   ApprovalStatus,
 } from '../types/index.js';
 
+/** Offset-based pagination request. */
 export interface PaginationOpts {
   limit: number;
   offset: number;
 }
 
+/** Offset-based pagination response, including the total matching count. */
 export interface PaginatedResult<T> {
   items: T[];
   total: number;
@@ -22,10 +24,14 @@ export interface CursorPaginationOpts {
   direction?: 'forward' | 'backward';
 }
 
+/** Cursor-based pagination response. */
 export interface CursorPaginatedResult<T> {
   items: T[];
+  /** Pass as `cursor` with `direction: 'forward'` to fetch the next page, if any. */
   nextCursor?: string;
+  /** Pass as `cursor` with `direction: 'backward'` to fetch the previous page, if any. */
   prevCursor?: string;
+  /** Whether another page exists in the requested direction. */
   hasMore: boolean;
 }
 
