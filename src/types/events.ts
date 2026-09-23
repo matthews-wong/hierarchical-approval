@@ -1,9 +1,14 @@
 import type { ApprovalInstance, AuditEntry } from './instance.js';
 
+/** Common fields carried by every lifecycle event emitted for an approval instance. */
 export interface ApprovalEvent {
+  /** The `ApprovalInstance.id` this event pertains to. */
   instanceId: string;
+  /** The id of the business document the instance was raised against. */
   documentId: string;
+  /** The document type, matching the template used to raise the instance. */
   documentType: string;
+  /** When the event occurred. */
   timestamp: Date;
 }
 
