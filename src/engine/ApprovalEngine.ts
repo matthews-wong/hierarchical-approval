@@ -135,11 +135,13 @@ const CYCLE_TIME_FETCH_BATCH_SIZE = 500;
 
 // ─── Exported result types ─────────────────────────────────────────────────
 
+/** Outcome of {@link ApprovalEngine.validateTemplate}. */
 export interface ValidationResult {
   valid: boolean;
   errors: Array<{ field: string; message: string }>;
 }
 
+/** Outcome of {@link ApprovalEngine.canApprove}. */
 export interface CanApproveResult {
   eligible: boolean;
   reason?:
@@ -385,6 +387,7 @@ export interface CycleTimeStats {
   maxMs: number;
 }
 
+/** Outcome of {@link ApprovalEngine.healthCheck}. */
 export interface HealthResult {
   status: 'healthy' | 'degraded' | 'unhealthy';
   adapter: 'connected' | 'error';
