@@ -54,6 +54,7 @@ export interface InstanceFilter {
   data?: Record<string, unknown>;
 }
 
+/** The primary persistence contract `ApprovalEngine` reads and writes through — implement this to bring your own store. */
 export interface IStorageAdapter {
   // Templates
   saveTemplate(template: ApprovalTemplate): Promise<void>;
