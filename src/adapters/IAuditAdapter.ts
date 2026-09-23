@@ -1,5 +1,6 @@
 import type { AuditEntry, ApprovalInstance } from '../types/index.js';
 
+/** Secondary write sink for audit entries, alongside the primary storage adapter. */
 export interface IAuditAdapter {
   /**
    * Called after every state-mutating operation, in addition to the primary storage adapter.
