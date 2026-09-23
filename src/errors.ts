@@ -1,3 +1,4 @@
+/** Base class for all errors thrown by this library; carries a stable machine-readable `code`. */
 export class ApprovalError extends Error {
   constructor(
     message: string,
@@ -23,6 +24,7 @@ export class ApprovalError extends Error {
   }
 }
 
+/** Thrown when a requested resource (instance, template, etc.) does not exist. */
 export class ApprovalNotFoundError extends ApprovalError {
   constructor(resource: string, id: string) {
     super(`${resource} "${id}" not found.`, 'NOT_FOUND');
@@ -30,6 +32,7 @@ export class ApprovalNotFoundError extends ApprovalError {
   }
 }
 
+/** Thrown when an instance was modified by another process since it was last read. */
 export class ApprovalConflictError extends ApprovalError {
   constructor(instanceId: string) {
     super(
@@ -40,6 +43,7 @@ export class ApprovalConflictError extends ApprovalError {
   }
 }
 
+/** Thrown when the caller is not authorized to perform the requested action. */
 export class ApprovalForbiddenError extends ApprovalError {
   constructor(message: string) {
     super(message, 'FORBIDDEN');
@@ -47,6 +51,7 @@ export class ApprovalForbiddenError extends ApprovalError {
   }
 }
 
+/** Thrown when input or configuration fails validation; `cause` may hold the originating error. */
 export class ApprovalValidationError extends ApprovalError {
   constructor(
     message: string,
@@ -57,6 +62,7 @@ export class ApprovalValidationError extends ApprovalError {
   }
 }
 
+/** Thrown when a template lookup by name finds no registered template. */
 export class ApprovalTemplateNotFoundError extends ApprovalError {
   constructor(name: string) {
     super(`Template "${name}" not found.`, 'TEMPLATE_NOT_FOUND');
