@@ -3,6 +3,7 @@ import { ApprovalError, ApprovalForbiddenError, ApprovalValidationError } from '
 
 export { ApprovalError };
 
+/** Throw if `instance` is not in the `expected` status. */
 export function assertStatus(
   instance: ApprovalInstance,
   expected: ApprovalInstance['status'],
@@ -15,6 +16,7 @@ export function assertStatus(
   }
 }
 
+/** Throw if `approverId` is not assigned as an approver on `level`. */
 export function assertApproverOnLevel(level: ApprovalLevelInstance, approverId: string): void {
   if (!level.approverIds.includes(approverId)) {
     throw new ApprovalForbiddenError(
@@ -23,6 +25,7 @@ export function assertApproverOnLevel(level: ApprovalLevelInstance, approverId: 
   }
 }
 
+/** True if `approverId` has already approved or rejected `level`. */
 export function hasAlreadyActed(level: ApprovalLevelInstance, approverId: string): boolean {
   return level.approvedBy.includes(approverId) || level.rejectedBy.includes(approverId);
 }
@@ -83,6 +86,7 @@ function weightedThreshold(level: ApprovalLevelInstance, totalWeight: number): n
   return threshold;
 }
 
+/** True if `level` has met its approval mode's threshold (any/all/majority/quorum/weighted). */
 export function isLevelApproved(level: ApprovalLevelInstance): boolean {
   const total = assertHasApprovers(level);
   const { mode, approvedBy } = level;
@@ -106,6 +110,7 @@ export function isLevelApproved(level: ApprovalLevelInstance): boolean {
   }
 }
 
+/** True if `level` can no longer meet its approval mode's threshold given the rejections so far. */
 export function isLevelRejected(level: ApprovalLevelInstance): boolean {
   const total = assertHasApprovers(level);
   const { mode, rejectedBy } = level;
