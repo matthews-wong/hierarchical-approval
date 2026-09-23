@@ -55,6 +55,11 @@ export interface HierarchicalApprovalModuleAsyncOptions extends Pick<ModuleMetad
 export class HierarchicalApprovalModule implements OnModuleDestroy {
   constructor(private readonly engine: ApprovalEngine) {}
 
+  /**
+   * Build the module synchronously from a fixed set of engine options.
+   * @param options - Engine configuration plus {@link HierarchicalApprovalModuleOptions.isGlobal}.
+   * @returns A Nest `DynamicModule` exporting the engine under {@link APPROVAL_ENGINE}.
+   */
   static forRoot(options: HierarchicalApprovalModuleOptions): DynamicModule {
     const { isGlobal, ...engineOptions } = options;
     const engineProvider: Provider = {
@@ -69,6 +74,12 @@ export class HierarchicalApprovalModule implements OnModuleDestroy {
     };
   }
 
+  /**
+   * Build the module with engine options resolved asynchronously, e.g. from a
+   * `ConfigService` injected via {@link HierarchicalApprovalModuleAsyncOptions.inject}.
+   * @param options - Async factory and its imports/injected providers.
+   * @returns A Nest `DynamicModule` exporting the engine under {@link APPROVAL_ENGINE}.
+   */
   static forRootAsync(options: HierarchicalApprovalModuleAsyncOptions): DynamicModule {
     const engineProvider: Provider = {
       provide: APPROVAL_ENGINE,
