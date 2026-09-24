@@ -152,9 +152,11 @@ export interface CanApproveResult {
     | 'delegated_away';
 }
 
+/** One entry in a {@link ApprovalEngine.preview} result, resolved against the given data without persisting anything. */
 export interface PreviewChainLevel {
   level: number;
   name: string;
+  /** Approver ids resolved as of preview time; dynamic/role approvers may resolve differently at submit time. */
   resolvedApprovers: string[];
   mode: ApprovalMode;
 }
@@ -246,9 +248,13 @@ export interface SimulationResult {
   incomplete: boolean;
 }
 
+/** Outcome of a {@link ApprovalEngine.bulkApprove}/{@link ApprovalEngine.bulkReject} sweep. */
 export interface BulkResult {
+  /** Instances that reached the requested decision. */
   succeeded: ApprovalInstance[];
+  /** Instances that could not be decided, with the reason. */
   failed: Array<{ instanceId: string; error: ApprovalError }>;
+  /** Number of instance ids passed in, equal to `succeeded.length + failed.length`. */
   total: number;
 }
 
