@@ -12,6 +12,11 @@ export interface ResolvedApprover {
   source: ApproverConfig;
 }
 
+/**
+ * Resolves a `{ type: 'dynamic' }` approver to a concrete user id, given the
+ * submitter and the document's data. Registered via
+ * {@link ApprovalEngine.registerResolver}.
+ */
 export type ResolverFn = (
   submittedBy: string,
   data: Record<string, unknown>,
