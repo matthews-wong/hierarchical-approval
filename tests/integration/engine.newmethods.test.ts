@@ -448,7 +448,7 @@ describe('override', () => {
   it('throws FORBIDDEN when overriddenBy is the submitter', async () => {
     await engine.defineTemplate({ name: 'Overridable3', documentType: 'doc', allowOverride: true, levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'mgr1' }], mode: 'any' }] });
     const instance = await engine.submit({ templateName: 'Overridable3', documentId: 'OV-004', documentType: 'doc', submittedBy: 'alice', data: {} });
-    await expect(engine.override(instance.id, { overriddenBy: 'alice', justification: 'self override' })).rejects.toThrow(ApprovalForbiddenError);
+    await expect(engine.override(instance.id, { overriddenBy: 'alice', justification: 'self override' })).rejects.toThrow('Override cannot be performed by the original submitter: "alice".');
   });
 
   it('falls back to the current template config when the snapshot predates allowOverride', async () => {
