@@ -2159,7 +2159,7 @@ export class ApprovalEngine {
       const open = instance.infoRequest;
       if (!open) {
         throw new ApprovalError(
-          'No clarification request is open on this approval.',
+          `No clarification request is open on instance "${instance.id}".`,
           'NO_INFO_REQUESTED',
         );
       }
