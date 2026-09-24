@@ -2060,7 +2060,7 @@ export class ApprovalEngine {
       assertStatus(instance, 'pending');
       if (instance.infoRequest) {
         throw new ApprovalError(
-          `A clarification request is already open on this approval (asked by "${instance.infoRequest.askedBy}"). Answer it with provideInfo() first.`,
+          `A clarification request is already open on instance "${instance.id}" (asked by "${instance.infoRequest.askedBy}"). Answer it with provideInfo() first.`,
           'INFO_ALREADY_REQUESTED',
         );
       }
