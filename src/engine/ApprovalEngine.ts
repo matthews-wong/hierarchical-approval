@@ -4454,7 +4454,7 @@ export class ApprovalEngine {
     const pending = this.pendingLevels(instance);
     if (pending.length === 0) {
       throw new ApprovalError(
-        `Instance has no level awaiting a decision (status: ${instance.status}).`,
+        `Instance "${instance.id}" has no level awaiting a decision (status: ${instance.status}).`,
         'INVALID_LEVEL',
       );
     }
