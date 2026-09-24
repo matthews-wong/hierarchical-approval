@@ -4,6 +4,7 @@ import { ApprovalValidationError } from '../errors.js';
 /** Cap on transitive out-of-office substitution, so a cover cycle terminates. */
 const MAX_OOO_HOPS = 5;
 
+/** Backs `{ type: 'role' }` approvers, so a level can name an org role instead of a fixed user id. */
 export interface OrgProvider {
   /** Required: resolve users holding a named role. */
   getUsersByRole(role: string, tenantId?: string): Promise<string[]> | string[];
@@ -42,6 +43,11 @@ export interface OutOfOfficeProvider {
   ): Promise<string | null | undefined> | string | null | undefined;
 }
 
+/**
+ * Resolves a custom approver type's config to concrete user ids. Registered
+ * via {@link ApprovalEngine.registerApproverType} to back a level whose
+ * approver config carries an app-defined `type`.
+ */
 export type ApproverResolverFn = (
   config: Record<string, unknown>,
   ctx: { submittedBy: string; data: Record<string, unknown>; orgProvider?: OrgProvider },
