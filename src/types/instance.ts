@@ -1,6 +1,11 @@
 import type { ApprovalMode, EscalationConfig, EscalationStep } from './template.js';
 import type { ApproverConfig } from './approver.js';
 
+/**
+ * Overall lifecycle status of an approval instance: awaiting a decision
+ * ('pending'), fully approved, rejected by an approver, cancelled by the
+ * submitter or an admin, or past its deadline unresolved ('expired').
+ */
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired';
 export type LevelStatus = 'waiting' | 'pending' | 'approved' | 'rejected' | 'skipped';
 

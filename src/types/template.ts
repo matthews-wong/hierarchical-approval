@@ -1,5 +1,11 @@
 import type { ApproverConfig } from './approver.js';
 
+/**
+ * How a level's approvers combine to reach a decision: every approver ('all'),
+ * the first decision ('any'), more than half ('majority'), a configured minimum
+ * count (`minApprovals`, for 'quorum'), or a configured cumulative weight
+ * (`threshold`, for 'weighted').
+ */
 export type ApprovalMode = 'all' | 'any' | 'majority' | 'quorum' | 'weighted';
 
 /** Built-in operators. Use engine.registerConditionOperator() to add custom ones. */
