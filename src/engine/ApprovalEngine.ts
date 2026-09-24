@@ -436,6 +436,7 @@ export interface ApprovalEngineOptions {
    */
   outOfOfficeProvider?: OutOfOfficeProvider;
   logger?: Logger;
+  /** Interval, in milliseconds, between automatic escalation sweeps. Default: 60000 (1 minute). */
   escalationPollIntervalMs?: number;
   /** Maximum number of instances allowed in a single bulk operation. Default: 200. */
   maxBulkItems?: number;
