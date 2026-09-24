@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [4.0.4] - 2026-09-24
 
+### Fixed
+
+- `resubmit`'s duplicate-level error now names the offending level numbers,
+  instead of a message that gave no clue which levels collided.
+- `purgeInstances`'s date-validation error now names the offending value,
+  instead of a message that gave no clue which value failed.
+- `delegate`'s, `reassign`'s, and `override`'s self-action guards now name
+  the offending id, matching every sibling guard in the same methods that
+  already named theirs.
+
 ## [4.0.3] - 2026-09-22
 
 ### Fixed
