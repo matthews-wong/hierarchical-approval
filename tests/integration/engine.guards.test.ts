@@ -684,7 +684,7 @@ describe('resolveActorLevel — instance status is pending but no level is', () 
           ) => unknown;
         }
       ).resolveActorLevel(instance, 'mgr1'),
-    ).toThrow(/Instance has no level awaiting a decision \(status: pending\)/);
+    ).toThrow(/Instance ".+" has no level awaiting a decision \(status: pending\)/);
 
     await engine.shutdown();
   });
