@@ -3054,7 +3054,9 @@ export class ApprovalEngine {
       }
 
       if (opts.overriddenBy === instance.submittedBy) {
-        throw new ApprovalForbiddenError('Override cannot be performed by the original submitter.');
+        throw new ApprovalForbiddenError(
+          `Override cannot be performed by the original submitter: "${opts.overriddenBy}".`,
+        );
       }
 
       await this.runAuthorizationPolicy({
