@@ -227,7 +227,7 @@ describe('ApprovalEngine — delegate', () => {
     expect(approvers).toContain('manager2');
     expect(approvers).not.toContain('manager1');
 
-    await expect(engine.delegate(instance.id, { fromApprover: 'manager2', toApprover: 'manager2', reason: 'test' })).rejects.toThrow(ApprovalForbiddenError);
+    await expect(engine.delegate(instance.id, { fromApprover: 'manager2', toApprover: 'manager2', reason: 'test' })).rejects.toThrow('Cannot delegate to yourself: "manager2".');
     engine.shutdown();
   });
 });

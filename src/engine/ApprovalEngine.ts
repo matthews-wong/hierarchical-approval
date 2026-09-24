@@ -1519,7 +1519,7 @@ export class ApprovalEngine {
       assertStatus(instance, 'pending');
 
       if (opts.fromApprover === opts.toApprover) {
-        throw new ApprovalForbiddenError('Cannot delegate to yourself.');
+        throw new ApprovalForbiddenError(`Cannot delegate to yourself: "${opts.fromApprover}".`);
       }
 
       const level = this.resolveActorLevel(instance, opts.fromApprover, opts.level);
