@@ -64,6 +64,7 @@ export interface AuditContext {
   traceId?: string;
 }
 
+/** Runtime state of one level within an {@link ApprovalInstance} — its resolved approvers and how far it has progressed. */
 export interface ApprovalLevelInstance {
   level: number;
   name: string;

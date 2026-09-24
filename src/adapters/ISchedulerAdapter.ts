@@ -1,3 +1,4 @@
+/** Pluggable port for escalation-tick scheduling, so the engine can be backed by BullMQ, Temporal, a cron job, or an in-process timer. */
 export interface ISchedulerAdapter {
   /**
    * Schedule a one-shot callback to run at the given date.
