@@ -131,7 +131,7 @@ export class LevelResolver {
           break;
         case 'role': {
           if (!orgProvider) {
-            throw new Error(
+            throw new ApprovalValidationError(
               `Cannot resolve role "${(approver as { type: 'role'; role: string }).role}" without an orgProvider configured on ApprovalEngine.`,
             );
           }
@@ -146,7 +146,7 @@ export class LevelResolver {
             (approver as { type: 'dynamic'; resolver: string }).resolver,
           );
           if (!fn) {
-            throw new Error(
+            throw new ApprovalValidationError(
               `No resolver registered for "${(approver as { type: 'dynamic'; resolver: string }).resolver}". Call engine.registerResolver("${(approver as { type: 'dynamic'; resolver: string }).resolver}", fn) first.`,
             );
           }

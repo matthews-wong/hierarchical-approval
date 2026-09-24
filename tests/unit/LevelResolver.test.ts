@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { LevelResolver, type OrgProvider } from '../../src/engine/LevelResolver.js';
+import { ApprovalValidationError } from '../../src/errors.js';
 import type { ApproverConfig, ResolverFn } from '../../src/types/index.js';
 
 function makeOrgProvider(overrides: Partial<OrgProvider> = {}): OrgProvider {
@@ -19,6 +20,9 @@ describe('LevelResolver', () => {
   it('role — throws without an orgProvider, naming the role', async () => {
     const resolver = new LevelResolver();
     const approvers: ApproverConfig[] = [{ type: 'role', role: 'manager' }];
+    await expect(resolver.resolveApprovers(approvers, 'submitter', {})).rejects.toThrow(
+      ApprovalValidationError,
+    );
     await expect(resolver.resolveApprovers(approvers, 'submitter', {})).rejects.toThrow(
       /Cannot resolve role "manager" without an orgProvider/,
     );
@@ -50,6 +54,9 @@ describe('LevelResolver', () => {
   it('dynamic — throws naming the unregistered resolver', async () => {
     const resolver = new LevelResolver();
     const approvers: ApproverConfig[] = [{ type: 'dynamic', resolver: 'missing' }];
+    await expect(resolver.resolveApprovers(approvers, 'submitter', {})).rejects.toThrow(
+      ApprovalValidationError,
+    );
     await expect(resolver.resolveApprovers(approvers, 'submitter', {})).rejects.toThrow(
       /No resolver registered for "missing"/,
     );
