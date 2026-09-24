@@ -79,7 +79,7 @@ describe('ApprovalEngine — reassign', () => {
     const inst = await submit(engine, 'D-5');
     await expect(
       engine.reassign(inst.id, { reassignedBy: 'admin', fromApprover: 'a', toApprover: 'a', reason: 'x' }),
-    ).rejects.toThrow(/themselves/);
+    ).rejects.toThrow('Cannot reassign an approver to themselves: "a".');
     await engine.shutdown();
   });
 });

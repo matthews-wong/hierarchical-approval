@@ -1614,7 +1614,9 @@ export class ApprovalEngine {
       assertStatus(instance, 'pending');
 
       if (opts.fromApprover === opts.toApprover) {
-        throw new ApprovalForbiddenError('Cannot reassign an approver to themselves.');
+        throw new ApprovalForbiddenError(
+          `Cannot reassign an approver to themselves: "${opts.fromApprover}".`,
+        );
       }
 
       const level = this.resolveActorLevel(instance, opts.fromApprover, opts.level);
