@@ -403,13 +403,19 @@ export interface HealthResult {
   lastTickAt?: Date;
 }
 
+/** Controls how {@link ApprovalEngine}'s optimistic-lock retry backs off on write conflicts. Defaults to 3 attempts with a 50ms base delay. */
 export interface RetryPolicy {
+  /** Number of attempts before giving up and rethrowing the conflict. */
   maxAttempts: number;
+  /** Linear backoff unit; attempt N waits roughly `baseDelayMs * N` before retrying. */
   baseDelayMs: number;
+  /** Upper bound on the computed delay. Defaults to unbounded. */
   maxDelayMs?: number;
+  /** Adds up to one `baseDelayMs` of random jitter to each delay. Defaults to `true`. */
   jitter?: boolean;
 }
 
+/** Derives the idempotency key used to dedupe a {@link ApprovalEngine.submit} call from its tenant and document identity. */
 export type IdempotencyKeyFn = (
   tenantId: string,
   documentType: string,
