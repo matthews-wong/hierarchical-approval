@@ -178,7 +178,7 @@ describe('transferApprovals', () => {
 
   it('refuses a transfer to the same person', async () => {
     await expect(transfer({ toApprover: 'alice' })).rejects.toThrow(
-      /different fromApprover and toApprover/,
+      /different fromApprover and toApprover, got "alice" for both/,
     );
   });
 

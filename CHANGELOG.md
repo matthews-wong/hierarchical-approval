@@ -11,6 +11,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   approver configs were attempted, instead of a message that gave no clue
   whether the level was misconfigured or its role/resolver simply had no
   members.
+- `transferApprovals`'s same-approver guard now names the offending id,
+  instead of a message that gave no clue which approver was passed twice.
 
 ## [4.0.5] - 2026-09-25
 
