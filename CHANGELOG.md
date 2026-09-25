@@ -10,6 +10,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `RateLimitMiddleware`'s constructor validation now throws
   `ApprovalValidationError`, instead of a plain `Error` a caller catching
   `ApprovalValidationError` to distinguish config problems would miss.
+- `DigestNotificationAdapter`'s `intervalMs` validation now throws
+  `ApprovalValidationError` for the same reason.
 
 ## [4.0.4] - 2026-09-24
 
