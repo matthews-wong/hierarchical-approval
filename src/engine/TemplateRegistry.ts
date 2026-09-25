@@ -10,6 +10,10 @@ import { systemClock } from '../utils/Clock.js';
 import type { IdGeneratorFn } from '../utils/IdGenerator.js';
 import { defaultIdGenerator } from '../utils/IdGenerator.js';
 
+/**
+ * Stores and resolves {@link ApprovalTemplateConfig} definitions for a tenant,
+ * flattening `extends` inheritance before a template is persisted.
+ */
 export class TemplateRegistry {
   private readonly clock: Clock;
   private readonly generateId: IdGeneratorFn;
