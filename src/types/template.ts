@@ -65,6 +65,11 @@ export interface ApprovalLevelConfig {
    * directly; the child does.
    */
   subWorkflow?: SubWorkflowConfig;
+  /**
+   * Escalate this level after this many days: adds the escalation ladder's
+   * next rung as extra approvers, rather than merely reminding the current
+   * ones. Mutually exclusive with {@link escalationAfterHours}.
+   */
   escalationAfterDays?: number;
   /**
    * Escalate this level after this many **working hours**, for SLAs quoted in
