@@ -181,7 +181,9 @@ export class LevelResolver {
     const result = [...new Set(resolved)];
     if (result.length === 0) {
       throw new ApprovalValidationError(
-        'No approvers resolved for this level. Check your approver configuration — role may have no members or dynamic resolver returned empty.',
+        `No approvers resolved for this level from ${approvers.length} configured approver ` +
+          `config(s). Check your approver configuration — role may have no members or dynamic ` +
+          `resolver returned empty.`,
       );
     }
     return this.applyOutOfOffice(result, outOfOffice, at, substitutions);
