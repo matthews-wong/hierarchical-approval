@@ -53,6 +53,11 @@ export type ApproverResolverFn = (
   ctx: { submittedBy: string; data: Record<string, unknown>; orgProvider?: OrgProvider },
 ) => Promise<string[]> | string[];
 
+/**
+ * Resolves an {@link ApproverConfig} list to concrete user ids, applying
+ * out-of-office cover and any registered dynamic resolvers or custom
+ * approver types along the way.
+ */
 export class LevelResolver {
   private readonly resolvers = new Map<string, ResolverFn>();
   private readonly approverTypes = new Map<string, ApproverResolverFn>();
