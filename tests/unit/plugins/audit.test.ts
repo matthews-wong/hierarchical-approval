@@ -12,6 +12,7 @@ import {
 } from '../../../src/plugins/audit/index.js';
 import type { IAuditAdapter } from '../../../src/adapters/IAuditAdapter.js';
 import type { AuditEntry } from '../../../src/types/index.js';
+import { ApprovalValidationError } from '../../../src/errors.js';
 import { spyLogger, makeEntry, makeInstance } from './_helpers.js';
 
 const INST = makeInstance();
@@ -410,6 +411,9 @@ describe('HashChainAuditAdapter — concurrency', () => {
 
 describe('HashChainAuditAdapter — never throws', () => {
   it('ctor requires a reader when a custom writer is supplied', () => {
+    expect(() => new HashChainAuditAdapter({ writer: async () => {} })).toThrow(
+      ApprovalValidationError,
+    );
     expect(() => new HashChainAuditAdapter({ writer: async () => {} })).toThrow(/reader/);
   });
 
