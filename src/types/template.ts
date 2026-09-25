@@ -33,11 +33,11 @@ export interface Condition {
 export interface ApprovalLevelConfig {
   /** Position in the chain. Levels activate in ascending order, subject to {@link group}. */
   level: number;
-  /** Human-readable label shown to approvers and in audit trails. */
+  /** Shown verbatim to approvers and in audit trails; not used for lookup or ordering. */
   name: string;
-  /** Who can act on this level. */
+  /** Must be non-empty unless {@link subWorkflow} is set — a level needs someone or something to resolve it. */
   approvers: ApproverConfig[];
-  /** How the approvers' decisions combine to resolve this level. */
+  /** `'quorum'` requires {@link ApprovalLevelConfig.minApprovals}; `'weighted'` requires {@link ApprovalLevelConfig.threshold}. */
   mode: ApprovalMode;
   /**
    * Name of a parallel branch group. Levels sharing a group activate at the
@@ -144,9 +144,12 @@ export interface ConditionRule {
    * every element must hold; use {@link ConditionGroup} for `any` / `not`.
    */
   when: ConditionExpression;
-  /** Levels to insert into the chain when `when` holds. */
+  /**
+   * Inserted when `when` holds. Each `level` number must not collide with a
+   * static level or appear in this rule's own {@link skipLevels}.
+   */
   addLevels?: ApprovalLevelConfig[];
-  /** Level numbers to skip over when `when` holds. */
+  /** Removed from the chain when `when` holds; must not also number-clash with {@link addLevels} in the same rule. */
   skipLevels?: number[];
 }
 
