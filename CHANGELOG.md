@@ -5,6 +5,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `LevelResolver.resolveApprovers`'s empty-result error now names how many
+  approver configs were attempted, instead of a message that gave no clue
+  whether the level was misconfigured or its role/resolver simply had no
+  members.
+
 ## [4.0.5] - 2026-09-25
 
 ### Fixed

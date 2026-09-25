@@ -119,7 +119,7 @@ describe('LevelResolver', () => {
     const approvers: ApproverConfig[] = [{ type: 'role', role: 'manager' }];
     await expect(
       resolver.resolveApprovers(approvers, 'submitter', {}, orgProvider),
-    ).rejects.toThrow(/No approvers resolved for this level/);
+    ).rejects.toThrow(/No approvers resolved for this level from 1 configured approver config\(s\)/);
   });
 
   it('custom type passes orgProvider to context', async () => {
