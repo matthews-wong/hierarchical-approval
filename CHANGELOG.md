@@ -14,6 +14,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `ApprovalValidationError` for the same reason.
 - `HashChainAuditAdapter`'s missing-`reader` validation now throws
   `ApprovalValidationError` for the same reason.
+- `businessHoursCalendar`'s three configuration guards now throw
+  `ApprovalValidationError` for the same reason.
 
 ## [4.0.4] - 2026-09-24
 

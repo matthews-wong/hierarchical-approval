@@ -1,3 +1,5 @@
+import { ApprovalValidationError } from '../errors.js';
+
 /**
  * Computes deadline dates from a number of days. The default engine behaviour
  * treats day offsets (escalationAfterDays, slaDeadlineDays) as plain calendar
@@ -113,7 +115,7 @@ export function businessHoursCalendar(
   const startHour = options.workdayStartHour ?? 9;
   const endHour = options.workdayEndHour ?? 17;
   if (!(endHour > startHour)) {
-    throw new Error(
+    throw new ApprovalValidationError(
       `businessHoursCalendar: workdayEndHour (${endHour}) must be greater than workdayStartHour (${startHour}).`,
     );
   }
@@ -151,7 +153,7 @@ export function businessHoursCalendar(
       return cursor;
     }
     // Every day for ten years was a holiday; a caller misconfigured the calendar.
-    throw new Error(
+    throw new ApprovalValidationError(
       `businessHoursCalendar: no working day found within 10 years of ${from.toISOString()} — check weekendDays and holidays.`,
     );
   };
@@ -182,7 +184,7 @@ export function businessHoursCalendar(
         cursor = toWorkingMoment(next);
       }
 
-      throw new Error(
+      throw new ApprovalValidationError(
         `businessHoursCalendar: ${hours} working hours could not be scheduled within 10 years — check weekendDays and holidays.`,
       );
     },
