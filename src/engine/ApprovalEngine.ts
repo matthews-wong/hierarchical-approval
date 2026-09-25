@@ -3174,7 +3174,7 @@ export class ApprovalEngine {
 
     if (opts.fromApprover === opts.toApprover) {
       throw new ApprovalValidationError(
-        'transferApprovals requires different fromApprover and toApprover.',
+        `transferApprovals requires different fromApprover and toApprover, got "${opts.fromApprover}" for both.`,
       );
     }
 
