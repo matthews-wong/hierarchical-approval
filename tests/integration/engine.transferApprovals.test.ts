@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ApprovalEngine } from '../../src/engine/ApprovalEngine.js';
 import { MemoryAdapter } from '../../src/adapters/MemoryAdapter.js';
+import { ApprovalValidationError } from '../../src/errors.js';
 
 const user = (n: number, name: string, userId: string, group?: string) => ({
   level: n,
@@ -177,6 +178,7 @@ describe('transferApprovals', () => {
   });
 
   it('refuses a transfer to the same person', async () => {
+    await expect(transfer({ toApprover: 'alice' })).rejects.toThrow(ApprovalValidationError);
     await expect(transfer({ toApprover: 'alice' })).rejects.toThrow(
       /different fromApprover and toApprover, got "alice" for both/,
     );
