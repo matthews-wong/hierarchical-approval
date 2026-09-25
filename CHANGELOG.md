@@ -5,6 +5,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `RateLimitMiddleware`'s constructor validation now throws
+  `ApprovalValidationError`, instead of a plain `Error` a caller catching
+  `ApprovalValidationError` to distinguish config problems would miss.
+
 ## [4.0.4] - 2026-09-24
 
 ### Fixed
