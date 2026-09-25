@@ -5,6 +5,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.0.5] - 2026-09-25
+
 ### Fixed
 
 - `RateLimitMiddleware`'s constructor validation now throws
