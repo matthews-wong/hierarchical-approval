@@ -99,7 +99,9 @@ export interface SlaBreachedEvent extends ApprovalEvent {
  * did not affect it.
  */
 export interface DataUpdatedEvent extends ApprovalEvent {
+  /** Who made the change. */
   updatedBy: string;
+  /** Caller-supplied explanation for the change, if any. */
   reason?: string;
   /** Field paths whose values differ after the update. */
   changedFields: string[];
@@ -111,6 +113,7 @@ export interface DataUpdatedEvent extends ApprovalEvent {
 
 /** Emitted when a pending level's approvers are nudged. */
 export interface ReminderEvent extends ApprovalEvent {
+  /** The level number being reminded. */
   level: number;
   /** Approvers who still owe a decision on this level. */
   recipients: string[];
@@ -120,8 +123,11 @@ export interface ReminderEvent extends ApprovalEvent {
 
 /** Emitted when an approver asks the submitter for clarification. */
 export interface InfoRequestedEvent extends ApprovalEvent {
+  /** The approver who asked. */
   askedBy: string;
+  /** What they asked. */
   question: string;
+  /** The level `askedBy` was acting on when they asked. */
   level: number;
   /** Who is expected to answer — the submitter. */
   recipients: string[];
