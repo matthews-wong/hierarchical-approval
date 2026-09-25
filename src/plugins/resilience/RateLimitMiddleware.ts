@@ -3,7 +3,7 @@ import type { Clock } from '../../utils/Clock.js';
 import { systemClock } from '../../utils/Clock.js';
 import type { Logger } from '../../utils/Logger.js';
 import { noopLogger } from '../../utils/Logger.js';
-import { ApprovalForbiddenError } from '../../errors.js';
+import { ApprovalForbiddenError, ApprovalValidationError } from '../../errors.js';
 
 /**
  * Derives the bucket key for an operation. Requests sharing a key share a bucket.
@@ -97,23 +97,23 @@ export class RateLimitMiddleware implements IOperationMiddleware {
 
   constructor(options: RateLimitOptions) {
     if (!Number.isFinite(options.capacity) || options.capacity <= 0) {
-      throw new Error(
+      throw new ApprovalValidationError(
         `RateLimitMiddleware: capacity must be a positive finite number, got ${options.capacity}.`,
       );
     }
     if (!Number.isFinite(options.refillTokensPerSecond) || options.refillTokensPerSecond < 0) {
-      throw new Error(
+      throw new ApprovalValidationError(
         `RateLimitMiddleware: refillTokensPerSecond must be a non-negative finite number, got ${options.refillTokensPerSecond}.`,
       );
     }
     const cost = options.costPerRequest ?? 1;
     if (!Number.isFinite(cost) || cost <= 0) {
-      throw new Error(
+      throw new ApprovalValidationError(
         `RateLimitMiddleware: costPerRequest must be a positive finite number, got ${cost}.`,
       );
     }
     if (cost > options.capacity) {
-      throw new Error(
+      throw new ApprovalValidationError(
         `RateLimitMiddleware: costPerRequest (${cost}) cannot exceed capacity (${options.capacity}) — the request could never succeed.`,
       );
     }

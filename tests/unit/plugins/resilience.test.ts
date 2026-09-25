@@ -8,7 +8,7 @@ import {
 } from '../../../src/plugins/resilience/index.js';
 import type { AuthorizationContext } from '../../../src/engine/IAuthorizationPolicy.js';
 import type { OperationContext } from '../../../src/engine/IOperationMiddleware.js';
-import { ApprovalError, ApprovalForbiddenError } from '../../../src/errors.js';
+import { ApprovalError, ApprovalForbiddenError, ApprovalValidationError } from '../../../src/errors.js';
 import { makeInstance, ManualClock, spyLogger } from './_helpers.js';
 
 /** Context valid for both authorization policies and operation middlewares. */
@@ -277,6 +277,9 @@ describe('CompositeAuthorizationPolicy — child normalization', () => {
 
 describe('RateLimitMiddleware — constructor validation', () => {
   it('rejects a non-positive capacity', () => {
+    expect(() => new RateLimitMiddleware({ capacity: 0, refillTokensPerSecond: 1 })).toThrow(
+      ApprovalValidationError,
+    );
     expect(() => new RateLimitMiddleware({ capacity: 0, refillTokensPerSecond: 1 })).toThrow(
       /capacity must be a positive finite number, got 0/,
     );
