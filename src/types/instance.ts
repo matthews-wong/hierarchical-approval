@@ -110,8 +110,11 @@ export interface ApprovalLevelInstance {
   reminderDueAt?: Date;
   /** How many reminders have already been sent for this level. */
   remindersSent?: number;
+  /** Copied from the template's `ApprovalLevelConfig.reminderAfterDays` when this level opened. */
   reminderAfterDays?: number;
+  /** Copied from the template's `ApprovalLevelConfig.reminderEveryDays` when this level opened. */
   reminderEveryDays?: number;
+  /** Copied from the template's `ApprovalLevelConfig.maxReminders` when this level opened. */
   maxReminders?: number;
   /** Set when a delegation has a time limit — the original approver is restored when this date passes. */
   delegatedUntil?: Date;
