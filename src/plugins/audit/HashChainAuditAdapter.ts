@@ -4,6 +4,7 @@ import type { AuditEntry, ApprovalInstance } from '../../types/index.js';
 import type { Logger } from '../../utils/Logger.js';
 import { noopLogger } from '../../utils/Logger.js';
 import { canonicalize, CircularReferenceError } from './canonicalize.js';
+import { ApprovalValidationError } from '../../errors.js';
 
 /** The fixed sentinel used as the previous-hash of the genesis (first) entry. */
 export const GENESIS_PREV_HASH = '0'.repeat(64);
@@ -130,7 +131,7 @@ export class HashChainAuditAdapter implements IAuditAdapter {
     if (options.writer && !options.reader) {
       // A custom sink with no reader cannot be verified; fail fast at construction
       // rather than silently producing a chain that verify() cannot inspect.
-      throw new Error(
+      throw new ApprovalValidationError(
         'HashChainAuditAdapter: a custom `writer` requires a matching `reader` for verification.',
       );
     }
