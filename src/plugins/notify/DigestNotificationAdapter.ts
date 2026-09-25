@@ -2,6 +2,7 @@ import type { Clock } from '../../utils/Clock.js';
 import { systemClock } from '../../utils/Clock.js';
 import type { Logger } from '../../utils/Logger.js';
 import { noopLogger } from '../../utils/Logger.js';
+import { ApprovalValidationError } from '../../errors.js';
 import type {
   INotificationAdapter,
   NotificationEvent,
@@ -109,7 +110,7 @@ export class DigestNotificationAdapter implements INotificationAdapter {
 
     if (this.intervalMs !== undefined) {
       if (this.intervalMs <= 0) {
-        throw new Error(
+        throw new ApprovalValidationError(
           `DigestNotificationAdapter: intervalMs must be a positive number, got ${this.intervalMs}.`,
         );
       }

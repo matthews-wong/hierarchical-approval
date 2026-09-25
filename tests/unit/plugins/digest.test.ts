@@ -3,6 +3,7 @@ import { DigestNotificationAdapter } from '../../../src/plugins/notify/DigestNot
 import type { Digest } from '../../../src/plugins/notify/DigestNotificationAdapter.js';
 import type { NotificationEvent } from '../../../src/adapters/INotificationAdapter.js';
 import type { Clock } from '../../../src/utils/Clock.js';
+import { ApprovalValidationError } from '../../../src/errors.js';
 
 class TestClock implements Clock {
   constructor(private current = new Date('2026-01-01T00:00:00Z')) {}
@@ -245,6 +246,9 @@ describe('DigestNotificationAdapter', () => {
     });
 
     it('rejects a non-positive interval, naming the offending value', () => {
+      expect(() => new DigestNotificationAdapter({ send: () => {}, intervalMs: 0 })).toThrow(
+        ApprovalValidationError,
+      );
       expect(() => new DigestNotificationAdapter({ send: () => {}, intervalMs: 0 })).toThrow(
         /intervalMs must be a positive number, got 0\./,
       );
