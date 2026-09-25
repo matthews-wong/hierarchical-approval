@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { businessHoursCalendar } from '../../src/utils/BusinessCalendar.js';
+import { ApprovalValidationError } from '../../src/errors.js';
 
 /** Local-time date helper, matching the calendar's own timezone handling. */
 const at = (iso: string) => new Date(iso);
@@ -86,6 +87,9 @@ describe('businessHoursCalendar', () => {
 
   it('rejects a workday that ends before it starts', () => {
     expect(() => businessHoursCalendar({ workdayStartHour: 17, workdayEndHour: 9 })).toThrow(
+      ApprovalValidationError,
+    );
+    expect(() => businessHoursCalendar({ workdayStartHour: 17, workdayEndHour: 9 })).toThrow(
       /must be greater than workdayStartHour/,
     );
   });
@@ -93,6 +97,7 @@ describe('businessHoursCalendar', () => {
   it('refuses a calendar where no day is ever a working day', () => {
     const never = businessHoursCalendar({ weekendDays: [0, 1, 2, 3, 4, 5, 6] });
     const start = at('2026-01-05T10:00:00');
+    expect(() => never.addBusinessHours(start, 1)).toThrow(ApprovalValidationError);
     expect(() => never.addBusinessHours(start, 1)).toThrow(
       new RegExp(`no working day found within 10 years of ${start.toISOString()}`),
     );
@@ -103,6 +108,9 @@ describe('businessHoursCalendar', () => {
     // toWorkingMoment() itself never throws — but no realistic amount of
     // working hours ever needs more than 3660 working days to land, so an
     // absurd request (100,000 working hours) still exhausts that guard.
+    expect(() => cal.addBusinessHours(at('2026-01-05T10:00:00'), 100_000)).toThrow(
+      ApprovalValidationError,
+    );
     expect(() => cal.addBusinessHours(at('2026-01-05T10:00:00'), 100_000)).toThrow(
       /could not be scheduled within 10 years/,
     );
