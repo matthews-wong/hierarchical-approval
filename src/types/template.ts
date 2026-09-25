@@ -24,15 +24,20 @@ export type ConditionOperator =
 export interface Condition {
   /** Dot path into the document being evaluated, e.g. `"amount"` or `"header.total"`. */
   field: string;
+  /** How `field` is compared against `value`. See {@link ConditionOperator}. */
   operator: ConditionOperator;
   /** The value `field` is compared against; its shape depends on `operator`. */
   value: unknown;
 }
 
 export interface ApprovalLevelConfig {
+  /** Position in the chain. Levels activate in ascending order, subject to {@link group}. */
   level: number;
+  /** Human-readable label shown to approvers and in audit trails. */
   name: string;
+  /** Who can act on this level. */
   approvers: ApproverConfig[];
+  /** How the approvers' decisions combine to resolve this level. */
   mode: ApprovalMode;
   /**
    * Name of a parallel branch group. Levels sharing a group activate at the
@@ -139,7 +144,9 @@ export interface ConditionRule {
    * every element must hold; use {@link ConditionGroup} for `any` / `not`.
    */
   when: ConditionExpression;
+  /** Levels to insert into the chain when `when` holds. */
   addLevels?: ApprovalLevelConfig[];
+  /** Level numbers to skip over when `when` holds. */
   skipLevels?: number[];
 }
 
