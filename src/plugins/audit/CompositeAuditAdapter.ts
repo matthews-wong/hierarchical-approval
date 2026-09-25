@@ -6,8 +6,8 @@ import { noopLogger } from '../../utils/Logger.js';
 /** A child adapter, optionally tagged with a stable identity for diagnostics. */
 export interface CompositeChild {
   /** Human-readable identity used in logs when this child rejects (defaults to its index). */
-  id?: string;
-  adapter: IAuditAdapter;
+  readonly id?: string;
+  readonly adapter: IAuditAdapter;
 }
 
 /** Constructor options for {@link CompositeAuditAdapter}. */
