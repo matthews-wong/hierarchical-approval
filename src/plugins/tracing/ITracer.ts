@@ -26,6 +26,7 @@ export type SpanStatusCode = (typeof SpanStatusCode)[keyof typeof SpanStatusCode
 
 /** Status to set on a span via {@link TraceSpan.setStatus}. */
 export interface SpanStatus {
+  /** The outcome to record; see {@link SpanStatusCode}. */
   code: SpanStatusCode;
   /** Human-readable detail, typically set alongside `code: SpanStatusCode.ERROR`. */
   message?: string;
