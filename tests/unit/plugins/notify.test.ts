@@ -73,6 +73,14 @@ describe('InMemoryOutboxStore', () => {
     expect((await store.deadLettered()).map((r) => r.id)).toEqual(['d']);
   });
 
+  it('enqueue with a repeat id overwrites rather than appending', async () => {
+    const store = new InMemoryOutboxStore();
+    await store.enqueue(rec({ id: 'a', attempts: 0 }));
+    await store.enqueue(rec({ id: 'a', attempts: 3 }));
+    expect(store.size).toBe(1);
+    expect((await store.pending()).map((r) => r.attempts)).toEqual([3]);
+  });
+
   it('remove deletes a record; size getter reflects total', async () => {
     const store = new InMemoryOutboxStore();
     await store.enqueue(rec({ id: 'a' }));
