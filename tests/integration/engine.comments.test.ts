@@ -106,6 +106,14 @@ describe('comment threads', () => {
     expect(await engine.getComments(instanceId)).toHaveLength(1);
   });
 
+  it('allows commenting after the instance reaches a terminal state', async () => {
+    await engine.approve(instanceId, { approverId: 'mgr' });
+    await engine.addComment(instanceId, { actorId: 'buyer', comment: 'Thanks!' });
+    const comments = await engine.getComments(instanceId);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]).toMatchObject({ authorId: 'buyer', body: 'Thanks!' });
+  });
+
   it('returns an empty list when nothing has been said', async () => {
     expect(await engine.getComments(instanceId)).toEqual([]);
   });
