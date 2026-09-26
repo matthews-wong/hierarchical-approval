@@ -111,7 +111,7 @@ describe('comment threads', () => {
     await engine.addComment(instanceId, { actorId: 'buyer', comment: 'Thanks!' });
     const comments = await engine.getComments(instanceId);
     expect(comments).toHaveLength(1);
-    expect(comments[0]).toMatchObject({ authorId: 'buyer', body: 'Thanks!' });
+    expect(comments[0]).toMatchObject({ authorId: 'buyer', body: 'Thanks!', level: 1 });
   });
 
   it('returns an empty list when nothing has been said', async () => {
