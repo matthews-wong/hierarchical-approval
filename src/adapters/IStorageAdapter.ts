@@ -7,25 +7,33 @@ import type {
 
 /** Offset-based pagination request. */
 export interface PaginationOpts {
+  /** Maximum number of items to return. */
   limit: number;
+  /** Number of matching items to skip before the page starts. */
   offset: number;
 }
 
 /** Offset-based pagination response, including the total matching count. */
 export interface PaginatedResult<T> {
+  /** The requested page's items. */
   items: T[];
+  /** Total number of items matching the query, across all pages. */
   total: number;
 }
 
 /** Opaque cursor: base64(updatedAt_iso:id). Use the value from nextCursor/prevCursor. */
 export interface CursorPaginationOpts {
+  /** Cursor from a previous page's `nextCursor`/`prevCursor`; omit to start from the first page. */
   cursor?: string;
+  /** Maximum number of items to return. */
   limit: number;
+  /** Which way to page from `cursor`. Defaults to `'forward'`. */
   direction?: 'forward' | 'backward';
 }
 
 /** Cursor-based pagination response. */
 export interface CursorPaginatedResult<T> {
+  /** The requested page's items. */
   items: T[];
   /** Pass as `cursor` with `direction: 'forward'` to fetch the next page, if any. */
   nextCursor?: string;
