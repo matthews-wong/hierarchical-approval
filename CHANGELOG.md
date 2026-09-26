@@ -5,6 +5,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.0.6] - 2026-09-26
+
 ### Fixed
 
 - `LevelResolver.resolveApprovers`'s empty-result error now names how many
