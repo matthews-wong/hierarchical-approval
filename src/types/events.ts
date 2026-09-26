@@ -15,6 +15,7 @@ export interface ApprovalEvent {
 /** Emitted as `approval:submitted` when a new instance is raised. */
 export interface SubmittedEvent extends ApprovalEvent {
   submittedBy: string;
+  /** Deduplicated union of every pending level's approvers in the opening group. */
   currentApprovers: string[];
 }
 
@@ -23,6 +24,7 @@ export interface ApprovedEvent extends ApprovalEvent {
   approverId: string;
   level: number;
   comment?: string;
+  /** True only when this was the last open branch — the instance is now fully approved. */
   isFinal: boolean;
 }
 
@@ -31,6 +33,11 @@ export interface RejectedEvent extends ApprovalEvent {
   approverId: string;
   level: number;
   reason: string;
+  /**
+   * `'previous'` resets the chain to replay from an earlier level — the instance
+   * stays `pending`. `'originator'` and `null` are the same terminal outcome: the
+   * instance becomes `rejected`; `null` is just what an unset `returnTo` produces.
+   */
   returnTo: 'originator' | 'previous' | null;
 }
 
