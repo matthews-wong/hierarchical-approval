@@ -44,11 +44,17 @@ export interface CursorPaginatedResult<T> {
 }
 
 export interface InstanceFilter {
+  /** Match only instances in this status. */
   status?: ApprovalStatus;
+  /** Match only instances of this document type. */
   documentType?: string;
+  /** Match only instances submitted by this user or system id. */
   submittedBy?: string;
+  /** Match only instances created from this template. */
   templateName?: string;
+  /** Match only instances created on or after this date. */
   fromDate?: Date;
+  /** Match only instances created on or before this date. */
   toDate?: Date;
   /**
    * Match instances whose document `data` contains these field/value pairs —
