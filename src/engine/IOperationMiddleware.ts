@@ -20,6 +20,7 @@ export type EngineOperation =
 
 /** Context passed to an {@link IOperationMiddleware} hook for one engine call. */
 export interface OperationContext<T = unknown> {
+  /** Which engine method is running; see {@link EngineOperation}. */
   operation: EngineOperation;
   /** The target instance's id, for operations that act on an existing instance. */
   instanceId?: string;
