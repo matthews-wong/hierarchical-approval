@@ -54,6 +54,14 @@ describe('MemoryAdapter', () => {
     expect(adapter.size).toBe(2);
   });
 
+  it('saveInstance with a repeat tenantId+id overwrites rather than duplicating', async () => {
+    const adapter = new MemoryAdapter();
+    await adapter.saveInstance(makeInstance({ id: 'i1', tenantId: 't1', version: 1 }));
+    await adapter.saveInstance(makeInstance({ id: 'i1', tenantId: 't1', version: 2 }));
+    expect(adapter.size).toBe(1);
+    await expect(adapter.getInstance('t1', 'i1')).resolves.toMatchObject({ version: 2 });
+  });
+
   it('updateInstance throws ApprovalConflictError when the instance is missing', async () => {
     const adapter = new MemoryAdapter();
     await expect(adapter.updateInstance(makeInstance(), 1)).rejects.toThrow(ApprovalConflictError);
