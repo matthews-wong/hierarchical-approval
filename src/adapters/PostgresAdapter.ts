@@ -130,7 +130,7 @@ export class PostgresAdapter implements IStorageAdapter {
     return this._pool;
   }
 
-  private get p() {
+  private get p(): string {
     return `${this.schema}.${this.prefix}`;
   }
 
