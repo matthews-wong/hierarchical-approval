@@ -142,6 +142,38 @@ describe('LevelResolver', () => {
     expect(passedOrg).toBe(mockOrg);
   });
 
+  it('resolves a transitive out-of-office chain and records the substitution', async () => {
+    const resolver = new LevelResolver();
+    const delegates: Record<string, string> = { a: 'b', b: 'c' };
+    const substitutions = new Map<string, string>();
+    const approvers: ApproverConfig[] = [{ type: 'user', userId: 'a' }];
+    await expect(
+      resolver.resolveApprovers(
+        approvers,
+        'submitter',
+        {},
+        undefined,
+        {
+          getDelegateFor: (userId) => delegates[userId] ?? null,
+        },
+        undefined,
+        substitutions,
+      ),
+    ).resolves.toEqual(['c']);
+    expect(substitutions.get('a')).toBe('c');
+  });
+
+  it('stops at the id reached just before a cycle repeats, without looping forever', async () => {
+    const resolver = new LevelResolver();
+    const delegates: Record<string, string> = { a: 'b', b: 'a' };
+    const approvers: ApproverConfig[] = [{ type: 'user', userId: 'a' }];
+    await expect(
+      resolver.resolveApprovers(approvers, 'submitter', {}, undefined, {
+        getDelegateFor: (userId) => delegates[userId] ?? null,
+      }),
+    ).resolves.toEqual(['b']);
+  });
+
   it('defaults the out-of-office resolution time to now when none is given', async () => {
     const resolver = new LevelResolver();
     const seen: Date[] = [];
