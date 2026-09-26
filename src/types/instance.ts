@@ -63,9 +63,13 @@ export interface AuditEntry {
 
 /** Context injected by the caller on each mutating operation (for SOX/SOC2 compliance). */
 export interface AuditContext {
+  /** Role the actor held at the time. Recorded on the {@link AuditEntry} verbatim, never checked against authorization. */
   actorRole?: string;
+  /** IP address the action originated from. */
   actorIp?: string;
+  /** User agent the action originated from. */
   actorUserAgent?: string;
+  /** Caller-supplied trace id for correlating this entry with external logs. */
   traceId?: string;
 }
 
