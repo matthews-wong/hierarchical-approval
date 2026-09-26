@@ -147,6 +147,16 @@ describe('MemoryAdapter', () => {
     expect((await adapter.getInstancesByFilter('t1', {})).items).toHaveLength(3);
   });
 
+  it('getInstancesByFilter with limit 0 returns an empty page but the true total', async () => {
+    const adapter = new MemoryAdapter();
+    for (const id of ['i1', 'i2', 'i3']) {
+      await adapter.saveInstance(makeInstance({ id }));
+    }
+    const page = await adapter.getInstancesByFilter('t1', {}, { offset: 0, limit: 0 });
+    expect(page.items).toEqual([]);
+    expect(page.total).toBe(3);
+  });
+
   it('getInstancesByApprover returns pending instances on any open level', async () => {
     const adapter = new MemoryAdapter();
     await adapter.saveInstance(makeInstance({ id: 'i1', status: 'pending' }));
