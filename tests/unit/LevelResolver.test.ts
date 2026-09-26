@@ -122,6 +122,13 @@ describe('LevelResolver', () => {
     ).rejects.toThrow(/No approvers resolved for this level from 1 configured approver config\(s\)/);
   });
 
+  it('throws naming zero configured approver configs when the list is empty', async () => {
+    const resolver = new LevelResolver();
+    await expect(resolver.resolveApprovers([], 'submitter', {})).rejects.toThrow(
+      /No approvers resolved for this level from 0 configured approver config\(s\)/,
+    );
+  });
+
   it('custom type passes orgProvider to context', async () => {
     const resolver = new LevelResolver();
     const mockOrg = makeOrgProvider();
