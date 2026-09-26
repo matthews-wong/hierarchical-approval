@@ -193,9 +193,10 @@ export class LevelResolver {
    * Replace approvers who are away with their cover.
    *
    * Substitution is transitive up to {@link MAX_OOO_HOPS} so an A→B→C chain of
-   * absences still lands on someone present, but a cycle (A covers B while B
-   * covers A) simply stops rather than looping — leaving the original approver
-   * assigned, which is visible and fixable, unlike a hang.
+   * absences still lands on someone present. A cycle (A covers B while B
+   * covers A) stops rather than looping forever, halting at whichever id was
+   * reached just before the repeat — not necessarily back at the original
+   * approver — which is visible and fixable, unlike a hang.
    *
    * A provider that throws is treated as "no cover known": an HR lookup failing
    * must not block an approval from being routed at all.
