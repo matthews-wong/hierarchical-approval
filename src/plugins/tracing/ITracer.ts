@@ -43,14 +43,19 @@ export interface SpanOptions {
  * void-returning implementations satisfy the contract.
  */
 export interface TraceSpan {
+  /** Attach a key/value attribute to the span. */
   setAttribute(key: string, value: SpanAttributeValue): unknown;
+  /** Set the span's outcome. */
   setStatus(status: SpanStatus): unknown;
+  /** Record an exception that occurred within the span. */
   recordException(exception: Error): unknown;
+  /** Mark the span complete. */
   end(): void;
 }
 
 /** The subset of the OpenTelemetry `Tracer` surface this plug-in uses. */
 export interface Tracer {
+  /** Start a new span, active until {@link TraceSpan.end} is called on it. */
   startSpan(name: string, options?: SpanOptions): TraceSpan;
 }
 
