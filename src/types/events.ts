@@ -99,7 +99,7 @@ export interface SlaBreachedEvent extends ApprovalEvent {
  * did not affect it.
  */
 export interface DataUpdatedEvent extends ApprovalEvent {
-  /** Who made the change. */
+  /** Caller-supplied; not checked against the instance's submitter or approvers. */
   updatedBy: string;
   /** Caller-supplied explanation for the change, if any. */
   reason?: string;
@@ -123,9 +123,8 @@ export interface ReminderEvent extends ApprovalEvent {
 
 /** Emitted when an approver asks the submitter for clarification. */
 export interface InfoRequestedEvent extends ApprovalEvent {
-  /** The approver who asked. */
+  /** Must be an approver on `level` — enforced by requestInfo() before this is recorded. */
   askedBy: string;
-  /** What they asked. */
   question: string;
   /** The level `askedBy` was acting on when they asked. */
   level: number;
