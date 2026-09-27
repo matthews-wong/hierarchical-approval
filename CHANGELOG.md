@@ -5,6 +5,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `ImportResult` and `PreviewResult`'s array fields are now typed as
+  `readonly T[]`, not just `readonly` properties holding a mutable array —
+  callers could previously still `push`/`splice` the returned arrays in
+  place even though the property itself couldn't be reassigned.
+
 ## [4.0.6] - 2026-09-26
 
 ### Fixed
