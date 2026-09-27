@@ -94,6 +94,14 @@ describe('businessHoursCalendar', () => {
     );
   });
 
+  it('rejects a workday whose start and end hour are equal', () => {
+    // A zero-length working day is as invalid as a negative one — "greater
+    // than", not "greater than or equal to", so this boundary must also throw.
+    expect(() => businessHoursCalendar({ workdayStartHour: 9, workdayEndHour: 9 })).toThrow(
+      /workdayEndHour \(9\) must be greater than workdayStartHour \(9\)/,
+    );
+  });
+
   it('refuses a calendar where no day is ever a working day', () => {
     const never = businessHoursCalendar({ weekendDays: [0, 1, 2, 3, 4, 5, 6] });
     const start = at('2026-01-05T10:00:00');
