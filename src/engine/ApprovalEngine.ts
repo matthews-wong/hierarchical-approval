@@ -426,6 +426,7 @@ export type IdempotencyKeyFn = (
 
 // ─── Engine options ────────────────────────────────────────────────────────
 
+/** Constructor options for {@link ApprovalEngine}. Only `adapter` is required. */
 export interface ApprovalEngineOptions {
   adapter: IStorageAdapter;
   tenantId?: string;
