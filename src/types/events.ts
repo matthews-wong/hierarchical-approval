@@ -179,6 +179,7 @@ export interface CommentedEvent extends ApprovalEvent {
   recipients: string[];
 }
 
+/** Maps each lifecycle event name to its payload type. Keys are what {@link ApprovalEngine.on} accepts; see {@link ApprovalEventName}. */
 export interface ApprovalEventMap {
   'approval:submitted': SubmittedEvent;
   'approval:approved': ApprovedEvent;
@@ -206,6 +207,7 @@ export interface ApprovalEventMap {
 
 export type ApprovalEventName = keyof ApprovalEventMap;
 
+/** An {@link AuditEntry} tagged with the instance it belongs to, for callers aggregating history across several instances. */
 export interface HistoryEntry extends AuditEntry {
   instanceId: string;
 }
