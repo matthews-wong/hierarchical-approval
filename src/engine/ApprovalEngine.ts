@@ -483,6 +483,11 @@ export interface ApprovalEngineOptions {
 
 // ─── Engine ───────────────────────────────────────────────────────────────
 
+/**
+ * Runs multi-level approval workflows against a pluggable {@link IStorageAdapter}:
+ * submitting instances against a template, resolving and notifying approvers,
+ * recording decisions, and driving escalation, expiry and sub-workflows.
+ */
 export class ApprovalEngine {
   private readonly bus = new EventBus();
   private readonly registry: TemplateRegistry;
