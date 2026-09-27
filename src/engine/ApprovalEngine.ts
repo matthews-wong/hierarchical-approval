@@ -152,7 +152,7 @@ export interface CanApproveResult {
     | 'delegated_away';
 }
 
-/** One entry in a {@link ApprovalEngine.preview} result, resolved against the given data without persisting anything. */
+/** One entry in a {@link ApprovalEngine.previewApprovalChain} result, resolved against the given data without persisting anything. */
 export interface PreviewChainLevel {
   level: number;
   name: string;
@@ -161,7 +161,9 @@ export interface PreviewChainLevel {
   mode: ApprovalMode;
 }
 
+/** Return value of {@link ApprovalEngine.previewApprovalChain}. */
 export interface PreviewResult {
+  /** The resolved chain, in level order. */
   levels: PreviewChainLevel[];
   /** Indices (0-based) of conditions that fired for this data. */
   conditionsApplied: number[];
