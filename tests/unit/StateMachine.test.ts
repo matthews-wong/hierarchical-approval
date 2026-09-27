@@ -102,6 +102,15 @@ describe('isLevelApproved', () => {
     ).toBe(false);
   });
 
+  it('weighted — allows threshold equal to the total weight (exact boundary)', () => {
+    expect(
+      isLevelApproved(makeLevel('weighted', ['a', 'b'], [], [], { threshold: 2 })),
+    ).toBe(false);
+    expect(
+      isLevelApproved(makeLevel('weighted', ['a', 'b'], ['a', 'b'], [], { threshold: 2 })),
+    ).toBe(true);
+  });
+
   it('weighted — throws when threshold is invalid or unreachable', () => {
     expect(() => isLevelApproved(makeLevel('weighted', ['a'], [], []))).toThrow(/positive number/);
     expect(() =>
