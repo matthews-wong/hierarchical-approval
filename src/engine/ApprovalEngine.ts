@@ -313,11 +313,11 @@ export interface TemplateBundle {
 
 /** Outcome of {@link ApprovalEngine.importTemplates}. */
 export interface ImportResult {
-  created: string[];
-  updated: string[];
-  skipped: string[];
-  errors: Array<{ name: string; message: string }>;
-  dryRun: boolean;
+  readonly created: string[];
+  readonly updated: string[];
+  readonly skipped: string[];
+  readonly errors: Array<{ name: string; message: string }>;
+  readonly dryRun: boolean;
 }
 
 /** Outcome of a {@link ApprovalEngine.purgeInstances} sweep. */
