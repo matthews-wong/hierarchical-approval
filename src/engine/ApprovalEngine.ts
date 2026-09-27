@@ -164,9 +164,9 @@ export interface PreviewChainLevel {
 /** Return value of {@link ApprovalEngine.previewApprovalChain}. */
 export interface PreviewResult {
   /** The resolved chain, in level order. */
-  readonly levels: PreviewChainLevel[];
+  readonly levels: readonly PreviewChainLevel[];
   /** Indices (0-based) of conditions that fired for this data. */
-  readonly conditionsApplied: number[];
+  readonly conditionsApplied: readonly number[];
 }
 
 /** Where one level in an explained chain came from. */
@@ -313,10 +313,10 @@ export interface TemplateBundle {
 
 /** Outcome of {@link ApprovalEngine.importTemplates}. */
 export interface ImportResult {
-  readonly created: string[];
-  readonly updated: string[];
-  readonly skipped: string[];
-  readonly errors: Array<{ name: string; message: string }>;
+  readonly created: readonly string[];
+  readonly updated: readonly string[];
+  readonly skipped: readonly string[];
+  readonly errors: readonly Readonly<{ name: string; message: string }>[];
   readonly dryRun: boolean;
 }
 
@@ -3610,24 +3610,27 @@ export class ApprovalEngine {
       );
     }
 
-    const result: ImportResult = { created: [], updated: [], skipped: [], errors: [], dryRun };
+    const created: string[] = [];
+    const updated: string[] = [];
+    const skipped: string[] = [];
+    const errors: Array<{ name: string; message: string }> = [];
 
     for (const config of bundle.templates) {
       const existing = await this.opts.adapter.getTemplate(this.tenantId, config.name);
       try {
         if (existing && mode === 'create') {
-          result.skipped.push(config.name);
+          skipped.push(config.name);
           continue;
         }
         if (existing) {
           if (!dryRun) await this.registry.update(config);
-          result.updated.push(config.name);
+          updated.push(config.name);
         } else {
           if (!dryRun) await this.registry.define(config);
-          result.created.push(config.name);
+          created.push(config.name);
         }
       } catch (err) {
-        result.errors.push({ name: config.name, message: (err as Error).message });
+        errors.push({ name: config.name, message: (err as Error).message });
       }
     }
 
@@ -3635,13 +3638,13 @@ export class ApprovalEngine {
       tenantId: this.tenantId,
       mode,
       dryRun,
-      created: result.created.length,
-      updated: result.updated.length,
-      skipped: result.skipped.length,
-      errors: result.errors.length,
+      created: created.length,
+      updated: updated.length,
+      skipped: skipped.length,
+      errors: errors.length,
     });
 
-    return result;
+    return { created, updated, skipped, errors, dryRun };
   }
 
   /**
