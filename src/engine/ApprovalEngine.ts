@@ -164,9 +164,9 @@ export interface PreviewChainLevel {
 /** Return value of {@link ApprovalEngine.previewApprovalChain}. */
 export interface PreviewResult {
   /** The resolved chain, in level order. */
-  levels: PreviewChainLevel[];
+  readonly levels: PreviewChainLevel[];
   /** Indices (0-based) of conditions that fired for this data. */
-  conditionsApplied: number[];
+  readonly conditionsApplied: number[];
 }
 
 /** Where one level in an explained chain came from. */
