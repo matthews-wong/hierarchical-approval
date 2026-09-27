@@ -55,6 +55,12 @@ describe('isLevelApproved', () => {
     ).toBe(false);
   });
 
+  it('quorum — allows minApprovals equal to the approver count (exact boundary)', () => {
+    expect(
+      isLevelApproved(makeLevel('quorum', ['a', 'b'], ['a', 'b'], [], { minApprovals: 2 })),
+    ).toBe(true);
+  });
+
   it('quorum — throws when minApprovals is invalid or exceeds approvers', () => {
     expect(() => isLevelApproved(makeLevel('quorum', ['a', 'b'], [], []))).toThrow(
       /positive integer/,
