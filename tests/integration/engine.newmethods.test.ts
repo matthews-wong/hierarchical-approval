@@ -323,6 +323,17 @@ describe('bulkApprove', () => {
     await engine2.shutdown();
   });
 
+  it('allows exactly maxBulkItems instances (exact boundary)', async () => {
+    const engine2 = new ApprovalEngine({ adapter: new MemoryAdapter(), tenantId: 'x', escalationPollIntervalMs: 999999, maxBulkItems: 2 });
+    await engine2.defineTemplate(simpleTemplate);
+    const inst1 = await engine2.submit({ templateName: 'Simple', documentId: 'BF-3', documentType: 'doc', submittedBy: 'alice', data: {} });
+    const inst2 = await engine2.submit({ templateName: 'Simple', documentId: 'BF-4', documentType: 'doc', submittedBy: 'alice', data: {} });
+    const result = await engine2.bulkApprove([inst1.id, inst2.id], { approverId: 'approver1' });
+    expect(result.succeeded).toHaveLength(2);
+    expect(result.failed).toHaveLength(0);
+    await engine2.shutdown();
+  });
+
   it('is a no-op success on an empty instance list', async () => {
     const result = await engine.bulkApprove([], { approverId: 'approver1' });
     expect(result).toEqual({ succeeded: [], failed: [], total: 0 });
