@@ -18,6 +18,7 @@ export type MetricName =
   | 'approval.conflict_retry'
   | 'approval.operation_duration_ms';
 
+/** Sink for engine metrics. Implementations are called synchronously and must not throw. */
 export interface IMetricsAdapter {
   /** Increment a counter. Synchronous — never awaited. */
   increment(metric: MetricName, labels?: Record<string, string>): void;
