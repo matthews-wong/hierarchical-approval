@@ -1,5 +1,6 @@
 import type { ApprovalEventName, ApprovalEventMap } from '../types/events.js';
 
+/** Normalized envelope passed to {@link INotificationAdapter.notify} for every approval event. */
 export interface NotificationEvent {
   /** The event that fired, e.g. `'submitted'`, `'approved'`, `'escalated'`. */
   type: ApprovalEventName;
@@ -21,6 +22,7 @@ export interface NotificationEvent {
   payload: ApprovalEventMap[ApprovalEventName];
 }
 
+/** Sink for approval-event notifications (email, Slack, webhooks, ...). */
 export interface INotificationAdapter {
   /** Called after every emitted approval event. Must not throw — errors are logged and swallowed. */
   notify(event: NotificationEvent): Promise<void>;
