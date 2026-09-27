@@ -7,8 +7,15 @@ import type { ApproverConfig } from './approver.js';
  * submitter or an admin, or past its deadline unresolved ('expired').
  */
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired';
+
+/**
+ * Status of a single level within an instance: not yet reachable
+ * ('waiting'), currently collecting decisions ('pending'), decided either
+ * way, or removed from the chain by a condition ('skipped').
+ */
 export type LevelStatus = 'waiting' | 'pending' | 'approved' | 'rejected' | 'skipped';
 
+/** The kind of state change recorded by one {@link AuditEntry}. */
 export type AuditAction =
   | 'submitted'
   | 'approved'
