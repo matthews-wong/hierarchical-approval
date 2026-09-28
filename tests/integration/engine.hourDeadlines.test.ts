@@ -114,6 +114,14 @@ describe('hour-based deadlines', () => {
       expect(engine.validateTemplate(template({ slaDeadlineHours: -1 })).valid).toBe(false);
     });
 
+    it('rejects a slaDeadlineHours of exactly 0', () => {
+      const r = engine.validateTemplate(template({ slaDeadlineHours: 0 }));
+      expect(r.valid).toBe(false);
+      expect(r.errors.map((e) => e.message).join(' ')).toMatch(
+        /slaDeadlineHours must be a positive number/,
+      );
+    });
+
     it('rejects a non-positive escalationAfterDays', () => {
       const r = engine.validateTemplate(template({}, { escalationAfterDays: 0 }));
       expect(r.valid).toBe(false);
