@@ -131,7 +131,7 @@ export class RbacAuthorizationPolicy implements IAuthorizationPolicy {
         actorId: ctx.actorId,
         tenantId,
       });
-      return `Operation "${ctx.operation}" is denied: unable to resolve actor roles.`;
+      return `Operation "${ctx.operation}" is denied: unable to resolve roles for actor "${ctx.actorId}".`;
     }
 
     const actorRoles = new Set(roles);
