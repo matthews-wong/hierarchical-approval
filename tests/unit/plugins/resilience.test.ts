@@ -141,7 +141,7 @@ describe('RbacAuthorizationPolicy — fail-closed provider', () => {
 
     const denial = await policy.authorize(authCtx());
 
-    expect(denial).toMatch(/unable to resolve actor roles/);
+    expect(denial).toMatch(/unable to resolve roles for actor "user-1"/);
     expect(logged[0][0]).toContain('roleProvider failed');
     expect(logged[0][1]).toBeInstanceOf(Error);
   });
@@ -152,7 +152,7 @@ describe('RbacAuthorizationPolicy — fail-closed provider', () => {
       defaultMode: 'allow',
       roleProvider: () => Promise.reject(new Error('down')),
     });
-    expect(await policy.authorize(authCtx())).toMatch(/unable to resolve actor roles/);
+    expect(await policy.authorize(authCtx())).toMatch(/unable to resolve roles for actor "user-1"/);
   });
 });
 

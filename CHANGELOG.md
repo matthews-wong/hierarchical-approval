@@ -7,6 +7,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `RbacAuthorizationPolicy`'s roleProvider-failure denial message now names
+  the offending actor id, instead of a message that gave no clue which actor
+  triggered the fail-closed denial.
 - `ImportResult` and `PreviewResult`'s array fields are now typed as
   `readonly T[]`, not just `readonly` properties holding a mutable array —
   callers could previously still `push`/`splice` the returned arrays in
