@@ -5,6 +5,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.0.7] - 2026-09-28
+
 ### Fixed
 
 - `RbacAuthorizationPolicy`'s roleProvider-failure denial message now names
