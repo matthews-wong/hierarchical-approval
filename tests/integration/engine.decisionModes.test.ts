@@ -105,6 +105,26 @@ describe('ApprovalEngine — quorum mode', () => {
     await engine.shutdown();
   });
 
+  it('allows a quorum minApprovals exactly equal to the static approver count', async () => {
+    const engine = makeEngine();
+    await expect(
+      engine.defineTemplate({
+        name: 'Exact Quorum',
+        documentType: 'x',
+        levels: [
+          {
+            level: 1,
+            name: 'L1',
+            mode: 'quorum',
+            minApprovals: 2,
+            approvers: [{ type: 'user', userId: 'a' }, { type: 'user', userId: 'b' }],
+          },
+        ],
+      }),
+    ).resolves.not.toThrow();
+    await engine.shutdown();
+  });
+
   it('allows minApprovals exceeding the approver count when a role approver could resolve to more than one user', async () => {
     const engine = makeEngine();
     await expect(
