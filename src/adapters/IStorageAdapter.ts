@@ -43,6 +43,7 @@ export interface CursorPaginatedResult<T> {
   hasMore: boolean;
 }
 
+/** Query filter for listing/counting instances; every set field narrows the match. */
 export interface InstanceFilter {
   /** Match only instances in this status. */
   status?: ApprovalStatus;
