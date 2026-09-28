@@ -27,6 +27,7 @@ import type {
 } from '../types/index.js';
 import { ApprovalConflictError, ApprovalValidationError } from '../errors.js';
 
+/** Construction options for {@link PostgresAdapter}. */
 export interface PostgresAdapterOptions {
   connectionString?: string;
   /** Bring your own pre-configured pg.Pool instead of a connectionString. */
