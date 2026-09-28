@@ -311,6 +311,12 @@ describe('RateLimitMiddleware — constructor validation', () => {
       () => new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 1, costPerRequest: 3 }),
     ).toThrow(/costPerRequest \(3\) cannot exceed capacity \(2\)/);
   });
+
+  it('allows a costPerRequest exactly equal to capacity', () => {
+    expect(
+      () => new RateLimitMiddleware({ capacity: 2, refillTokensPerSecond: 1, costPerRequest: 2 }),
+    ).not.toThrow();
+  });
 });
 
 describe('RateLimitMiddleware — token bucket', () => {
