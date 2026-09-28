@@ -32,6 +32,7 @@ export interface SpanStatus {
   message?: string;
 }
 
+/** Options for starting a new span via {@link Tracer.startSpan}. */
 export interface SpanOptions {
   /** Attributes attached at span creation. */
   attributes?: Record<string, SpanAttributeValue>;
