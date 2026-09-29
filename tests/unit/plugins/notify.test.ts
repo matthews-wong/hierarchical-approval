@@ -57,6 +57,12 @@ describe('InMemoryOutboxStore', () => {
     expect((await store.due(200)).map((r) => r.id).sort()).toEqual(['a', 'b']);
   });
 
+  it('due() includes a record whose nextAttemptAt exactly equals now', async () => {
+    const store = new InMemoryOutboxStore();
+    await store.enqueue(rec({ id: 'a', nextAttemptAt: 100 }));
+    expect((await store.due(100)).map((r) => r.id)).toEqual(['a']);
+  });
+
   it('due() sorts by enqueuedAt then id (FIFO best-effort)', async () => {
     const store = new InMemoryOutboxStore();
     await store.enqueue(rec({ id: 'z', enqueuedAt: 1 }));
