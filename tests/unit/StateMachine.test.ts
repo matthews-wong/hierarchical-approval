@@ -188,6 +188,12 @@ describe('isLevelRejected', () => {
     expect(isLevelRejected(makeLevel('majority', ['a', 'b', 'c'], [], ['a']))).toBe(false);
   });
 
+  it('majority — an exact half of an even total is not yet a majority rejection', () => {
+    expect(
+      isLevelRejected(makeLevel('majority', ['a', 'b', 'c', 'd'], [], ['a', 'b'])),
+    ).toBe(false);
+  });
+
   it('quorum — rejected once quorum becomes unreachable (need 2 of 3)', () => {
     // 2 of 3: one rejection still leaves 2 possible approvals → not rejected.
     expect(
