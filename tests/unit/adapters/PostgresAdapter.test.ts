@@ -687,6 +687,19 @@ describe('PostgresAdapter — getInstancesByCursor', () => {
     expect(result.nextCursor).toBeUndefined();
   });
 
+  it('hasMore is false when exactly limit rows come back (no extra row to detect more)', async () => {
+    const { pool, adapter } = freshAdapter();
+    const rows = [
+      instanceToRow(makeInstance({ id: 'a' })),
+      instanceToRow(makeInstance({ id: 'b' })),
+    ];
+    pool.queueResult({ rows });
+    const result = await adapter.getInstancesByCursor('tenant-1', {}, { limit: 2 });
+    expect(result.items).toHaveLength(2);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeUndefined();
+  });
+
   it('serializes an undefined data-filter value as JSON null rather than dropping the param', async () => {
     const { pool, adapter } = freshAdapter();
     pool.queueResult({ rows: [] });
