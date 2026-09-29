@@ -289,6 +289,14 @@ describe('PrometheusMetricsAdapter', () => {
     expect(order).toEqual([10, 50, 100]);
   });
 
+  it('keeps a bucket of exactly 0 rather than filtering it out', () => {
+    const m = new PrometheusMetricsAdapter({ buckets: [0, 10] });
+    m.timing('approval.operation_duration_ms', 1000, { operation: 'x' });
+    const out = m.scrape();
+    const order = [...out.matchAll(/le="(\d+)"/g)].map((mm) => Number(mm[1]));
+    expect(order).toEqual([0, 10]);
+  });
+
   it('falls back to default buckets when all configured buckets are invalid', () => {
     const m = new PrometheusMetricsAdapter({ buckets: [-5, NaN, Infinity] });
     m.timing('approval.operation_duration_ms', 1000, { operation: 'x' });
