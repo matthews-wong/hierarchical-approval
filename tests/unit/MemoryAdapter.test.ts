@@ -435,6 +435,27 @@ describe('MemoryAdapter', () => {
       expect(pending.items.map((i) => i.id)).toEqual(['older', 'a']);
     });
 
+    it('breaks a same-updatedAt tie by id when paging past a cursor', async () => {
+      const adapter = new MemoryAdapter();
+      const sameUpdatedAt = new Date('2026-06-03T00:00:00.000Z');
+      await adapter.saveInstance(
+        makeInstance({ id: 'a', createdAt: sameUpdatedAt, updatedAt: sameUpdatedAt }),
+      );
+      await adapter.saveInstance(
+        makeInstance({ id: 'b', createdAt: sameUpdatedAt, updatedAt: sameUpdatedAt }),
+      );
+
+      const page1 = await adapter.getInstancesByCursor('t1', {}, { limit: 1 });
+      expect(page1.items.map((i) => i.id)).toEqual(['a']);
+
+      const page2 = await adapter.getInstancesByCursor(
+        't1',
+        {},
+        { limit: 1, cursor: page1.nextCursor },
+      );
+      expect(page2.items.map((i) => i.id)).toEqual(['b']);
+    });
+
     it('returns an empty page with no cursors when nothing matches', async () => {
       const adapter = new MemoryAdapter();
       const result = await adapter.getInstancesByCursor('t1', {}, { limit: 5 });
