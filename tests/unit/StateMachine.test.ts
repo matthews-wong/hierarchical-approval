@@ -44,6 +44,12 @@ describe('isLevelApproved', () => {
     expect(isLevelApproved(makeLevel('majority', ['a', 'b', 'c'], ['a'], []))).toBe(false);
   });
 
+  it('majority — an exact half of an even total is not yet a majority', () => {
+    expect(
+      isLevelApproved(makeLevel('majority', ['a', 'b', 'c', 'd'], ['a', 'b'], [])),
+    ).toBe(false);
+  });
+
   it('quorum — approved when minApprovals reached (2 of 4)', () => {
     expect(
       isLevelApproved(
