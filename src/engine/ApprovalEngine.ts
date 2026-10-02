@@ -894,6 +894,17 @@ export class ApprovalEngine {
    * @throws {@link ApprovalTemplateNotFoundError} if `raw.templateName` is not defined.
    * @throws {@link ApprovalValidationError} if `raw` fails schema validation, or if
    *   condition evaluation leaves no levels (or a duplicate level number) to open.
+   *
+   * @example
+   * ```ts
+   * const instance = await engine.submit({
+   *   templateName: 'purchase-order',
+   *   documentId: 'PO-1042',
+   *   documentType: 'purchase_order',
+   *   submittedBy: 'alice',
+   *   data: { amount: 12_500 },
+   * });
+   * ```
    */
   async submit(
     raw: SubmitOptions,
@@ -1105,6 +1116,14 @@ export class ApprovalEngine {
    *   configured {@link IAuthorizationPolicy}.
    * @throws {@link ApprovalValidationError} if `opts.approverId` sits on more than one
    *   open parallel level and `opts.level` was not supplied to disambiguate.
+   *
+   * @example
+   * ```ts
+   * const updated = await engine.approve(instance.id, {
+   *   approverId: 'bob',
+   *   comment: 'Within budget',
+   * });
+   * ```
    */
   async approve(
     instanceId: string,
@@ -3021,6 +3040,12 @@ export class ApprovalEngine {
    * theirs away), or they already voted on it.
    *
    * @returns `{ eligible: true }`, or `{ eligible: false, reason }`.
+   *
+   * @example
+   * ```ts
+   * const check = await engine.canApprove(instance.id, 'bob');
+   * if (!check.eligible) console.log(check.reason);
+   * ```
    */
   async canApprove(instanceId: string, userId: string): Promise<CanApproveResult> {
     let instance: ApprovalInstance;
@@ -3256,7 +3281,15 @@ export class ApprovalEngine {
     return result;
   }
 
-  /** Approve multiple instances in one call. Never throws — failures collected in result.failed. */
+  /**
+   * Approve multiple instances in one call. Never throws — failures collected in result.failed.
+   *
+   * @example
+   * ```ts
+   * const { succeeded, failed } = await engine.bulkApprove(ids, { approverId: 'bob' });
+   * for (const { instanceId, error } of failed) console.warn(instanceId, error.code);
+   * ```
+   */
   async bulkApprove(
     instanceIds: string[],
     raw: ApproveOptions,
