@@ -3177,7 +3177,6 @@ export class ApprovalEngine {
     return overridden;
   }
 
-  /** Approve multiple instances in one call. Never throws — failures collected in result.failed. */
   /**
    * Move every pending approval assigned to one person over to another.
    *
