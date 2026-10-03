@@ -903,6 +903,7 @@ export class ApprovalEngine {
    *   documentType: 'purchase_order',
    *   submittedBy: 'alice',
    *   data: { amount: 12_500 },
+   *   metadata: {},
    * });
    * ```
    */
