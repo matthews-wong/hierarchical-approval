@@ -1390,6 +1390,15 @@ export class ApprovalEngine {
    * @throws {@link ApprovalValidationError} if `opts.approverId` sits on more than one
    *   open parallel level with `opts.level` unset, or if `opts.returnTo === 'previous'`
    *   but the failing level is already the first level in the chain.
+   *
+   * @example
+   * ```ts
+   * const updated = await engine.reject(instance.id, {
+   *   approverId: 'bob',
+   *   reason: 'Over budget',
+   *   returnTo: 'previous',
+   * });
+   * ```
    */
   async reject(
     instanceId: string,
@@ -1553,6 +1562,16 @@ export class ApprovalEngine {
    *   configured {@link IAuthorizationPolicy}.
    * @throws {@link ApprovalValidationError} if `opts.fromApprover` sits on more than one
    *   open parallel level and `opts.level` was not supplied to disambiguate.
+   *
+   * @example
+   * ```ts
+   * await engine.delegate(instance.id, {
+   *   fromApprover: 'bob',
+   *   toApprover: 'carol',
+   *   reason: 'On leave',
+   *   until: new Date('2026-11-01'),
+   * });
+   * ```
    */
   async delegate(instanceId: string, raw: DelegateOptions, auditCtx?: AuditContext): Promise<void> {
     const opts = parseOrThrow(() => DelegateOptionsSchema.parse(raw));
@@ -3346,7 +3365,14 @@ export class ApprovalEngine {
     return this.requireInstance(instanceId);
   }
 
-  /** Page through every instance with an open level assigned to one approver. */
+  /**
+   * Page through every instance with an open level assigned to one approver.
+   *
+   * @example
+   * ```ts
+   * const page = await engine.getPendingFor('bob', { limit: 20, offset: 0 });
+   * ```
+   */
   async getPendingFor(
     approverId: string,
     opts?: PaginationOpts,
