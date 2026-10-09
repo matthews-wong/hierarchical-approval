@@ -129,7 +129,14 @@ export const UpdateDataOptionsSchema = z.object({
   recomputeChain: z.boolean().default(true),
 });
 
-export type SubmitOptions = z.infer<typeof SubmitOptionsSchema>;
+/**
+ * Input shape: `data` and `metadata` are optional because the schema defaults
+ * them. `expiresAt` is re-declared since zod types a coerced date's input as
+ * `unknown`, which would let any value through at compile time.
+ */
+export type SubmitOptions = Omit<z.input<typeof SubmitOptionsSchema>, 'expiresAt'> & {
+  expiresAt?: Date | string | number;
+};
 export type ApproveOptions = z.infer<typeof ApproveOptionsSchema>;
 export type RejectOptions = z.infer<typeof RejectOptionsSchema>;
 export type DelegateOptions = z.infer<typeof DelegateOptionsSchema>;
