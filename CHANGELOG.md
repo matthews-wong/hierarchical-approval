@@ -5,6 +5,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `SubmitOptions` now describes what `submit` accepts: `data` and `metadata` are
+  optional (they default to `{}`) and `expiresAt` may be a `Date`, ISO string or
+  epoch milliseconds.
+
 ## [4.0.7] - 2026-09-28
 
 ### Fixed
