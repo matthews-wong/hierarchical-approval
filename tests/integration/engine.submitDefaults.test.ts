@@ -38,4 +38,57 @@ describe('submit defaults', () => {
     });
     expect(instance.expiresAt).toEqual(new Date('2030-01-01T00:00:00.000Z'));
   });
+
+  it('coerces epoch-millisecond expiresAt to a Date', async () => {
+    const engine = await setup();
+    const epoch = Date.UTC(2030, 0, 1);
+    const instance = await engine.submit({
+      templateName: 'PO',
+      documentId: 'po-3',
+      documentType: 'purchase_order',
+      submittedBy: 'buyer',
+      expiresAt: epoch,
+    });
+    expect(instance.expiresAt).toEqual(new Date(epoch));
+  });
+
+  it('keeps a Date expiresAt as the same instant', async () => {
+    const engine = await setup();
+    const when = new Date('2031-06-15T12:00:00.000Z');
+    const instance = await engine.submit({
+      templateName: 'PO',
+      documentId: 'po-4',
+      documentType: 'purchase_order',
+      submittedBy: 'buyer',
+      expiresAt: when,
+    });
+    expect(instance.expiresAt?.getTime()).toBe(when.getTime());
+  });
+
+  it('keeps explicit data and metadata instead of defaulting them', async () => {
+    const engine = await setup();
+    const instance = await engine.submit({
+      templateName: 'PO',
+      documentId: 'po-5',
+      documentType: 'purchase_order',
+      submittedBy: 'buyer',
+      data: { amount: 250 },
+      metadata: { region: 'emea' },
+    });
+    expect(instance.data).toEqual({ amount: 250 });
+    expect(instance.metadata).toEqual({ region: 'emea' });
+  });
+
+  it('rejects an expiresAt string that is not a date', async () => {
+    const engine = await setup();
+    await expect(
+      engine.submit({
+        templateName: 'PO',
+        documentId: 'po-6',
+        documentType: 'purchase_order',
+        submittedBy: 'buyer',
+        expiresAt: 'not-a-date',
+      }),
+    ).rejects.toThrow();
+  });
 });
