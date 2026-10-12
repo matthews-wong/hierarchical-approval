@@ -5,6 +5,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-10-12
+
 ### Changed
 
 - `SubmitOptions` now describes what `submit` accepts: `data` and `metadata` are
