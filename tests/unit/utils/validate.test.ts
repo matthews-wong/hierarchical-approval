@@ -43,6 +43,33 @@ describe('validate schemas', () => {
       expect(parsed.deadlineAction).toBe('reject');
     });
 
+    it.each([
+      ['a Date', new Date('2026-12-31T23:59:59.000Z')],
+      ['an epoch-millisecond number', Date.parse('2026-12-31T23:59:59.000Z')],
+    ])('accepts %s for expiresAt, matching the SubmitOptions type', (_label, expiresAt) => {
+      const parsed = SubmitOptionsSchema.parse({
+        templateName: 'expense-approval',
+        documentId: 'doc-123',
+        documentType: 'expense',
+        submittedBy: 'alice',
+        expiresAt,
+      });
+
+      expect(parsed.expiresAt?.toISOString()).toBe('2026-12-31T23:59:59.000Z');
+    });
+
+    it('rejects an unparseable expiresAt string', () => {
+      expect(() =>
+        SubmitOptionsSchema.parse({
+          templateName: 'expense-approval',
+          documentId: 'doc-123',
+          documentType: 'expense',
+          submittedBy: 'alice',
+          expiresAt: 'not-a-date',
+        })
+      ).toThrow();
+    });
+
     it('rejects empty strings for required fields', () => {
       expect(() =>
         SubmitOptionsSchema.parse({
