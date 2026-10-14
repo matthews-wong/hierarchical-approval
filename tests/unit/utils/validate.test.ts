@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ZodError } from 'zod';
 import {
   AddCommentOptionsSchema,
   ApproveOptionsSchema,
@@ -67,7 +68,37 @@ describe('validate schemas', () => {
           submittedBy: 'alice',
           expiresAt: 'not-a-date',
         })
-      ).toThrow();
+      ).toThrow(ZodError);
+    });
+
+    it.each([
+      ['an invalid Date', new Date(Number.NaN)],
+      ['NaN', Number.NaN],
+      ['Infinity', Number.POSITIVE_INFINITY],
+      ['a numeric string', '1700000000000'],
+    ])('rejects %s for expiresAt and reports the expiresAt path', (_label, expiresAt) => {
+      const result = SubmitOptionsSchema.safeParse({
+        templateName: 'expense-approval',
+        documentId: 'doc-123',
+        documentType: 'expense',
+        submittedBy: 'alice',
+        expiresAt,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.issues.map((issue) => issue.path)).toEqual([['expiresAt']]);
+    });
+
+    it('accepts an expiresAt already in the past', () => {
+      const parsed = SubmitOptionsSchema.parse({
+        templateName: 'expense-approval',
+        documentId: 'doc-123',
+        documentType: 'expense',
+        submittedBy: 'alice',
+        expiresAt: '2000-01-01T00:00:00.000Z',
+      });
+
+      expect(parsed.expiresAt?.toISOString()).toBe('2000-01-01T00:00:00.000Z');
     });
 
     it('rejects empty strings for required fields', () => {
