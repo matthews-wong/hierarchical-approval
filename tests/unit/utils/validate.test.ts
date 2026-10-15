@@ -76,6 +76,8 @@ describe('validate schemas', () => {
       ['NaN', Number.NaN],
       ['Infinity', Number.POSITIVE_INFINITY],
       ['a numeric string', '1700000000000'],
+      ['an empty string', ''],
+      ['-Infinity', Number.NEGATIVE_INFINITY],
     ])('rejects %s for expiresAt and reports the expiresAt path', (_label, expiresAt) => {
       const result = SubmitOptionsSchema.safeParse({
         templateName: 'expense-approval',
@@ -87,6 +89,17 @@ describe('validate schemas', () => {
 
       expect(result.success).toBe(false);
       expect(result.error?.issues.map((issue) => issue.path)).toEqual([['expiresAt']]);
+    });
+
+    it('accepts the same payload once expiresAt is omitted', () => {
+      const result = SubmitOptionsSchema.safeParse({
+        templateName: 'expense-approval',
+        documentId: 'doc-123',
+        documentType: 'expense',
+        submittedBy: 'alice',
+      });
+
+      expect(result.success).toBe(true);
     });
 
     it('accepts an expiresAt already in the past', () => {
