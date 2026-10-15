@@ -7,7 +7,9 @@ export const SubmitOptionsSchema = z.object({
   submittedBy: z.string().min(1),
   data: z.record(z.string(), z.unknown()).default({}),
   metadata: z.record(z.string(), z.unknown()).default({}),
-  expiresAt: z.coerce.date().optional(),
+  // z.coerce.date() alone turns null and booleans into 1970 timestamps, which
+  // would expire the instance on the first scheduler tick.
+  expiresAt: z.union([z.date(), z.string(), z.number()]).pipe(z.coerce.date()).optional(),
   deadlineAction: z.enum(['cancel', 'reject']).optional(),
 });
 
