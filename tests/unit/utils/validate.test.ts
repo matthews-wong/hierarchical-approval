@@ -76,7 +76,9 @@ describe('validate schemas', () => {
       ['NaN', Number.NaN],
       ['Infinity', Number.POSITIVE_INFINITY],
       ['a numeric string', '1700000000000'],
+      ['null', null],
       ['an empty string', ''],
+      ['a boolean', true],
       ['-Infinity', Number.NEGATIVE_INFINITY],
     ])('rejects %s for expiresAt and reports the expiresAt path', (_label, expiresAt) => {
       const result = SubmitOptionsSchema.safeParse({
