@@ -5,6 +5,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `submit` now rejects a `null` or boolean `expiresAt` instead of coercing it to a
+  1970 timestamp that expired the instance on the first scheduler tick.
+
 ## [4.1.0] - 2026-10-12
 
 ### Changed
