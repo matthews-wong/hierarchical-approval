@@ -78,7 +78,11 @@ describe('validate schemas', () => {
       ['a numeric string', '1700000000000'],
       ['null', null],
       ['an empty string', ''],
-      ['a boolean', true],
+      ['true', true],
+      ['false', false],
+      ['an array', []],
+      ['an object', {}],
+      ['a bigint', 10n],
       ['-Infinity', Number.NEGATIVE_INFINITY],
     ])('rejects %s for expiresAt and reports the expiresAt path', (_label, expiresAt) => {
       const result = SubmitOptionsSchema.safeParse({
@@ -102,6 +106,18 @@ describe('validate schemas', () => {
       });
 
       expect(result.success).toBe(true);
+    });
+
+    it('treats an explicit undefined expiresAt as no expiry', () => {
+      const parsed = SubmitOptionsSchema.parse({
+        templateName: 'expense-approval',
+        documentId: 'doc-123',
+        documentType: 'expense',
+        submittedBy: 'alice',
+        expiresAt: undefined,
+      });
+
+      expect(parsed.expiresAt).toBeUndefined();
     });
 
     it('accepts an expiresAt already in the past', () => {
