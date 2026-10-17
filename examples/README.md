@@ -16,5 +16,6 @@ Then run any example with Node:
 | **conditional-chain** | How the chain reshapes from document data — `addLevels` by amount and `skipLevels` for trusted vendors — previewed without creating an instance. | `node examples/conditional-chain/index.mjs` |
 | **decision-modes** | `quorum` (any 2 of 3 directors) and `weighted` voting (CFO's vote clears the threshold alone). | `node examples/decision-modes/index.mjs` |
 | **delegation-escalation** | `delegate()` (by the approver), `reassign()` (by an admin), and `escalate()` to a higher authority, with the resulting audit trail. | `node examples/delegation-escalation/index.mjs` |
+| **webhook-notifications** | Signed webhook delivery to a local HTTP receiver that verifies the HMAC, compares with `timingSafeEqual` and rejects stale timestamps. | `node examples/webhook-notifications/index.mjs` |
 
 > Tip: for time-dependent behaviour (auto-escalation, SLA breaches, expiry) without real timers, see the **Testing** section of the [main README](../README.md) — `ApprovalTestKit` + `ManualClock`.

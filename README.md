@@ -2134,7 +2134,7 @@ Yes — every record is scoped by `tenantId`. See [Multi-tenancy](#multi-tenancy
 Both — the package ships dual ESM + CJS builds with full TypeScript declarations.
 
 **Runnable examples?**
-See the [`examples/`](./examples) directory — purchase orders, conditional chains, quorum/weighted voting, and delegation + escalation, each runnable with `node`.
+See the [`examples/`](./examples) directory — purchase orders, conditional chains, quorum/weighted voting, delegation + escalation, and signed webhook notifications, each runnable with `node`.
 
 ---
 
