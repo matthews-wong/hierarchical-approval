@@ -45,6 +45,18 @@ export interface PostgresAdapterOptions {
 // to safe SQL identifiers to avoid injection via adapter construction options.
 const TABLE_PREFIX_RE = /^[a-z][a-z0-9_]*$/;
 
+// `pg` is an optional peer, so a missing install surfaces here, at first use, not at import.
+async function loadPg(): Promise<typeof import('pg').default> {
+  try {
+    return (await import('pg')).default;
+  } catch (cause) {
+    throw new ApprovalValidationError(
+      'PostgresAdapter: the "pg" package is required when no `pool` is supplied. Install it with `npm install pg`, or pass an existing pool via the `pool` option.',
+      cause,
+    );
+  }
+}
+
 /**
  * Restores `createdAt` to a real `Date` on a template read back from JSONB.
  *
@@ -123,7 +135,7 @@ export class PostgresAdapter implements IStorageAdapter {
   private async getPool(): Promise<import('pg').Pool> {
     if (this.externalPool) return this.externalPool;
     if (this._pool) return this._pool;
-    const { default: pg } = await import('pg');
+    const pg = await loadPg();
     this._pool = new pg.Pool({
       connectionString: this.opts.connectionString,
       ssl: this.opts.ssl,

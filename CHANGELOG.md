@@ -7,6 +7,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `PostgresAdapter` now throws an `ApprovalValidationError` telling the caller to install
+  `pg` (or pass a `pool`) when the optional peer is missing, instead of a bare module
+  resolution error.
 - `submit` now rejects a `null` or boolean `expiresAt` instead of coercing it to a
   1970 timestamp that expired the instance on the first scheduler tick.
 
