@@ -5,6 +5,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.1.1] - 2026-10-18
+
 ### Fixed
 
 - `PostgresAdapter` now throws an `ApprovalValidationError` telling the caller to install
