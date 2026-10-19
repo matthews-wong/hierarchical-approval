@@ -4,6 +4,20 @@
  * an actionable error rather than a bare module-resolution failure.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import type { ApprovalValidationError } from '../../../src/errors.js';
+
+// vitest rewraps errors thrown by a mock factory, so fail on property access instead.
+function failingModule(cause: Error): object {
+  return Object.defineProperty({}, 'default', {
+    get() {
+      throw cause;
+    },
+  });
+}
+
+function resolutionError(code: string): Error {
+  return Object.assign(new Error("Cannot find package 'pg'"), { code });
+}
 
 describe('PostgresAdapter without the pg peer dependency', () => {
   afterEach(() => {
@@ -11,14 +25,45 @@ describe('PostgresAdapter without the pg peer dependency', () => {
     vi.resetModules();
   });
 
-  it('tells the caller to install pg when the driver cannot be loaded', async () => {
+  it.each(['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND'])(
+    'tells the caller to install pg when resolution fails with %s',
+    async (code) => {
+      const cause = resolutionError(code);
+      vi.resetModules();
+      vi.doMock('pg', () => failingModule(cause));
+      const { PostgresAdapter } = await import('../../../src/adapters/PostgresAdapter.js');
+      const adapter = new PostgresAdapter({ connectionString: 'postgres://localhost/db' });
+
+      const error = await adapter.migrate().catch((e: unknown) => e);
+
+      // resetModules gives the adapter its own copy of the error class, so match on name.
+      expect((error as ApprovalValidationError).name).toBe('ApprovalValidationError');
+      expect((error as ApprovalValidationError).message).toMatch(/npm install pg/);
+      expect((error as ApprovalValidationError).cause).toBe(cause);
+    },
+  );
+
+  it('rethrows a load failure that is not a missing module unchanged', async () => {
+    const cause = new Error('boom while evaluating pg');
     vi.resetModules();
-    vi.doMock('pg', () => {
-      throw new Error("Cannot find package 'pg'");
-    });
+    vi.doMock('pg', () => failingModule(cause));
     const { PostgresAdapter } = await import('../../../src/adapters/PostgresAdapter.js');
     const adapter = new PostgresAdapter({ connectionString: 'postgres://localhost/db' });
 
-    await expect(adapter.migrate()).rejects.toThrow(/npm install pg/);
+    await expect(adapter.migrate()).rejects.toBe(cause);
+  });
+
+  it('never loads pg when an existing pool is supplied', async () => {
+    const factory = vi.fn(() => failingModule(resolutionError('ERR_MODULE_NOT_FOUND')));
+    vi.resetModules();
+    vi.doMock('pg', factory);
+    const { PostgresAdapter } = await import('../../../src/adapters/PostgresAdapter.js');
+    const pool = { query: vi.fn().mockResolvedValue({ rows: [] }) };
+    const adapter = new PostgresAdapter({ pool: pool as never });
+
+    await adapter.migrate();
+
+    expect(pool.query).toHaveBeenCalled();
+    expect(factory).not.toHaveBeenCalled();
   });
 });
