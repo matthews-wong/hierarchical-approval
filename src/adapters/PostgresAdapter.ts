@@ -45,15 +45,24 @@ export interface PostgresAdapterOptions {
 // to safe SQL identifiers to avoid injection via adapter construction options.
 const TABLE_PREFIX_RE = /^[a-z][a-z0-9_]*$/;
 
+const MODULE_NOT_FOUND_CODES: ReadonlySet<unknown> = new Set([
+  'ERR_MODULE_NOT_FOUND',
+  'MODULE_NOT_FOUND',
+]);
+
+const PG_MISSING_MESSAGE =
+  'PostgresAdapter: the "pg" package is required when no `pool` is supplied. Install it with `npm install pg`, or pass an existing pool via the `pool` option.';
+
 // `pg` is an optional peer, so a missing install surfaces here, at first use, not at import.
+// Only a resolution failure means "not installed"; a pg that is present but throws while
+// loading must surface as-is rather than send the caller off to reinstall it.
 async function loadPg(): Promise<typeof import('pg').default> {
   try {
     return (await import('pg')).default;
   } catch (cause) {
-    throw new ApprovalValidationError(
-      'PostgresAdapter: the "pg" package is required when no `pool` is supplied. Install it with `npm install pg`, or pass an existing pool via the `pool` option.',
-      cause,
-    );
+    const code = (cause as { code?: unknown } | null)?.code;
+    if (!MODULE_NOT_FOUND_CODES.has(code)) throw cause;
+    throw new ApprovalValidationError(PG_MISSING_MESSAGE, cause);
   }
 }
 
