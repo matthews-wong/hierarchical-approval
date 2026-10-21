@@ -53,6 +53,33 @@ describe('PostgresAdapter without the pg peer dependency', () => {
     await expect(adapter.migrate()).rejects.toBe(cause);
   });
 
+  it('rethrows a missing transitive dependency of pg instead of asking for pg', async () => {
+    const cause = Object.assign(new Error("Cannot find package 'pg-pool' imported from pg"), {
+      code: 'ERR_MODULE_NOT_FOUND',
+    });
+    vi.resetModules();
+    vi.doMock('pg', () => failingModule(cause));
+    const { PostgresAdapter } = await import('../../../src/adapters/PostgresAdapter.js');
+    const adapter = new PostgresAdapter({ connectionString: 'postgres://localhost/db' });
+
+    await expect(adapter.migrate()).rejects.toBe(cause);
+  });
+
+  it.each([null, undefined, 'boom'])('rethrows a non-error value %j unchanged', async (thrown) => {
+    vi.resetModules();
+    vi.doMock('pg', () =>
+      Object.defineProperty({}, 'default', {
+        get() {
+          throw thrown;
+        },
+      }),
+    );
+    const { PostgresAdapter } = await import('../../../src/adapters/PostgresAdapter.js');
+    const adapter = new PostgresAdapter({ connectionString: 'postgres://localhost/db' });
+
+    await expect(adapter.migrate()).rejects.toBe(thrown);
+  });
+
   it('never loads pg when an existing pool is supplied', async () => {
     const factory = vi.fn(() => failingModule(resolutionError('ERR_MODULE_NOT_FOUND')));
     vi.resetModules();

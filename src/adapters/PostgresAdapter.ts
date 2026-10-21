@@ -53,6 +53,17 @@ const MODULE_NOT_FOUND_CODES: ReadonlySet<unknown> = new Set([
 const PG_MISSING_MESSAGE =
   'PostgresAdapter: the "pg" package is required when no `pool` is supplied. Install it with `npm install pg`, or pass an existing pool via the `pool` option.';
 
+// ERR_MODULE_NOT_FOUND is also raised when one of pg's own dependencies (pg-pool, say) is
+// missing; that is a broken install of pg, not an absent one, so the message must name pg itself.
+const PG_SPECIFIER_RE = /['"]pg['"]/;
+
+function isPgNotInstalled(cause: unknown): boolean {
+  const { code, message } = (cause ?? {}) as { code?: unknown; message?: unknown };
+  return (
+    MODULE_NOT_FOUND_CODES.has(code) && typeof message === 'string' && PG_SPECIFIER_RE.test(message)
+  );
+}
+
 // `pg` is an optional peer, so a missing install surfaces here, at first use, not at import.
 // Only a resolution failure means "not installed"; a pg that is present but throws while
 // loading must surface as-is rather than send the caller off to reinstall it.
@@ -60,8 +71,7 @@ async function loadPg(): Promise<typeof import('pg').default> {
   try {
     return (await import('pg')).default;
   } catch (cause) {
-    const code = (cause as { code?: unknown } | null)?.code;
-    if (!MODULE_NOT_FOUND_CODES.has(code)) throw cause;
+    if (!isPgNotInstalled(cause)) throw cause;
     throw new ApprovalValidationError(PG_MISSING_MESSAGE, cause);
   }
 }
