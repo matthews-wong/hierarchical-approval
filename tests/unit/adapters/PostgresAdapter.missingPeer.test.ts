@@ -85,6 +85,13 @@ describe('PostgresAdapter without the pg peer dependency', () => {
     await expect(adapter.migrate()).rejects.toBe(thrown);
   });
 
+  it('rethrows a message naming pg when no resolution code accompanies it', async () => {
+    const cause = new Error("Cannot find package 'pg'");
+    const adapter = await adapterWhosePgFails(cause);
+
+    await expect(adapter.migrate()).rejects.toBe(cause);
+  });
+
   it.each([
     ['null', null],
     ['undefined', undefined],
