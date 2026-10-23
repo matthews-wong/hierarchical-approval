@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ApprovalValidationError } from '../../../src/errors.js';
+import type { PostgresAdapter } from '../../../src/adapters/PostgresAdapter.js';
 
 // vitest rewraps errors thrown by a mock factory, so fail on property access instead.
 function failingModule(cause: unknown): object {
@@ -13,6 +14,13 @@ function failingModule(cause: unknown): object {
       throw cause;
     },
   });
+}
+
+async function adapterWhosePgFails(thrown: unknown): Promise<PostgresAdapter> {
+  vi.resetModules();
+  vi.doMock('pg', () => failingModule(thrown));
+  const { PostgresAdapter } = await import('../../../src/adapters/PostgresAdapter.js');
+  return new PostgresAdapter({ connectionString: 'postgres://localhost/db' });
 }
 
 function resolutionError(code: string): Error {
@@ -29,10 +37,7 @@ describe('PostgresAdapter without the pg peer dependency', () => {
     'tells the caller to install pg when resolution fails with %s',
     async (code) => {
       const cause = resolutionError(code);
-      vi.resetModules();
-      vi.doMock('pg', () => failingModule(cause));
-      const { PostgresAdapter } = await import('../../../src/adapters/PostgresAdapter.js');
-      const adapter = new PostgresAdapter({ connectionString: 'postgres://localhost/db' });
+      const adapter = await adapterWhosePgFails(cause);
 
       const error = await adapter.migrate().catch((e: unknown) => e);
 
@@ -45,10 +50,7 @@ describe('PostgresAdapter without the pg peer dependency', () => {
 
   it('rethrows a load failure that is not a missing module unchanged', async () => {
     const cause = new Error('boom while evaluating pg');
-    vi.resetModules();
-    vi.doMock('pg', () => failingModule(cause));
-    const { PostgresAdapter } = await import('../../../src/adapters/PostgresAdapter.js');
-    const adapter = new PostgresAdapter({ connectionString: 'postgres://localhost/db' });
+    const adapter = await adapterWhosePgFails(cause);
 
     await expect(adapter.migrate()).rejects.toBe(cause);
   });
@@ -57,10 +59,7 @@ describe('PostgresAdapter without the pg peer dependency', () => {
     const cause = Object.assign(new Error("Cannot find package 'pg-pool' imported from pg"), {
       code: 'ERR_MODULE_NOT_FOUND',
     });
-    vi.resetModules();
-    vi.doMock('pg', () => failingModule(cause));
-    const { PostgresAdapter } = await import('../../../src/adapters/PostgresAdapter.js');
-    const adapter = new PostgresAdapter({ connectionString: 'postgres://localhost/db' });
+    const adapter = await adapterWhosePgFails(cause);
 
     await expect(adapter.migrate()).rejects.toBe(cause);
   });
@@ -72,10 +71,7 @@ describe('PostgresAdapter without the pg peer dependency', () => {
       ),
       { code: 'MODULE_NOT_FOUND' },
     );
-    vi.resetModules();
-    vi.doMock('pg', () => failingModule(cause));
-    const { PostgresAdapter } = await import('../../../src/adapters/PostgresAdapter.js');
-    const adapter = new PostgresAdapter({ connectionString: 'postgres://localhost/db' });
+    const adapter = await adapterWhosePgFails(cause);
 
     await expect(adapter.migrate()).rejects.toBe(cause);
   });
@@ -84,10 +80,7 @@ describe('PostgresAdapter without the pg peer dependency', () => {
     ['without a message', { code: 'ERR_MODULE_NOT_FOUND' }],
     ['with a non-string message', { code: 'ERR_MODULE_NOT_FOUND', message: 42 }],
   ])('rethrows a not-found failure %s unchanged', async (_label, thrown) => {
-    vi.resetModules();
-    vi.doMock('pg', () => failingModule(thrown));
-    const { PostgresAdapter } = await import('../../../src/adapters/PostgresAdapter.js');
-    const adapter = new PostgresAdapter({ connectionString: 'postgres://localhost/db' });
+    const adapter = await adapterWhosePgFails(thrown);
 
     await expect(adapter.migrate()).rejects.toBe(thrown);
   });
@@ -97,10 +90,7 @@ describe('PostgresAdapter without the pg peer dependency', () => {
     ['undefined', undefined],
     ['a string', 'boom'],
   ])('rethrows %s unchanged', async (_label, thrown) => {
-    vi.resetModules();
-    vi.doMock('pg', () => failingModule(thrown));
-    const { PostgresAdapter } = await import('../../../src/adapters/PostgresAdapter.js');
-    const adapter = new PostgresAdapter({ connectionString: 'postgres://localhost/db' });
+    const adapter = await adapterWhosePgFails(thrown);
 
     await expect(adapter.migrate()).rejects.toBe(thrown);
   });
