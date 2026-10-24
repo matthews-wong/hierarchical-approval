@@ -5,6 +5,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.1.2] - 2026-10-24
+
 ### Fixed
 
 - `PostgresAdapter` only reports a missing `pg` install when the module genuinely cannot be
