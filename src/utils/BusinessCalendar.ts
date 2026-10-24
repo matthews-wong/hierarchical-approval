@@ -26,6 +26,8 @@ export interface BusinessCalendar {
 }
 
 const DAY_MS = 86_400_000;
+/** Ten years: a calendar that finds no working day in this span is misconfigured. */
+const MAX_SCAN_DAYS = 3660;
 
 function dayKey(d: Date): string {
   // Local-date key (YYYY-MM-DD) for holiday comparison.
@@ -65,10 +67,20 @@ export function weekendCalendar(options: WeekendCalendarOptions = {}): BusinessC
 
       const cursor = new Date(from.getTime());
       let remaining = whole;
+      let idleDays = 0;
       // Advance one calendar day at a time, counting only business days.
       while (remaining > 0) {
         cursor.setDate(cursor.getDate() + 1);
-        if (isBusinessDay(cursor)) remaining--;
+        if (isBusinessDay(cursor)) {
+          remaining--;
+          idleDays = 0;
+          continue;
+        }
+        if (++idleDays >= MAX_SCAN_DAYS) {
+          throw new ApprovalValidationError(
+            `weekendCalendar: no business day found within 10 years of ${from.toISOString()} — check weekendDays and holidays.`,
+          );
+        }
       }
 
       return fraction > 0 ? new Date(cursor.getTime() + fraction * DAY_MS) : cursor;
@@ -138,7 +150,7 @@ export function businessHoursCalendar(
   /** Move to the next moment that is inside a working window. */
   const toWorkingMoment = (from: Date): Date => {
     const cursor = new Date(from.getTime());
-    for (let guard = 0; guard < 3660; guard++) {
+    for (let guard = 0; guard < MAX_SCAN_DAYS; guard++) {
       if (!isBusinessDay(cursor)) {
         cursor.setDate(cursor.getDate() + 1);
         cursor.setHours(startHour, 0, 0, 0);
@@ -169,7 +181,7 @@ export function businessHoursCalendar(
       let cursor = toWorkingMoment(from);
       let remainingMs = Math.round(hours * HOUR_MS);
 
-      for (let guard = 0; remainingMs > 0 && guard < 3660; guard++) {
+      for (let guard = 0; remainingMs > 0 && guard < MAX_SCAN_DAYS; guard++) {
         const dayEnd = endOfWorkday(cursor);
         const availableMs = dayEnd.getTime() - cursor.getTime();
 

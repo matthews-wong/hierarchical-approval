@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { weekendCalendar } from '../../src/utils/BusinessCalendar.js';
+import { ApprovalValidationError } from '../../src/errors.js';
 
 describe('weekendCalendar', () => {
   it('skips weekends when adding business days', () => {
@@ -102,5 +103,15 @@ describe('weekendCalendar', () => {
     const result = cal.addBusinessDays(d, 0);
     expect(result).not.toBe(d);
     expect(result.getTime()).toBe(d.getTime());
+  });
+
+  it('refuses a calendar where every weekday is a weekend instead of looping forever', () => {
+    const never = weekendCalendar({ weekendDays: [0, 1, 2, 3, 4, 5, 6] });
+    const start = new Date('2026-06-19T09:00:00');
+
+    expect(() => never.addBusinessDays(start, 1)).toThrow(ApprovalValidationError);
+    expect(() => never.addBusinessDays(start, 1)).toThrow(
+      new RegExp(`no business day found within 10 years of ${start.toISOString()}`),
+    );
   });
 });
