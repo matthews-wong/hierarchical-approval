@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `PostgresAdapter` only reports a missing `pg` install when the module genuinely cannot be
   resolved; an installed `pg` that throws while loading now surfaces its own error.
+- `weekendCalendar().addBusinessDays` throws `ApprovalValidationError` when `weekendDays` and
+  `holidays` leave no business day within ten years, instead of spinning for tens of seconds.
 
 ## [4.1.1] - 2026-10-18
 
