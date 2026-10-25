@@ -185,4 +185,58 @@ describe('EventBus', () => {
 
     expect(() => bus.emit('approval:submitted', submittedEvent())).not.toThrow();
   });
+
+  describe('listener failure isolation', () => {
+    it('reports a synchronous throw with the event name and still runs later listeners', () => {
+      const bus = new EventBus();
+      const onError = vi.fn();
+      const boom = new Error('boom');
+      const later = vi.fn();
+      bus.setListenerErrorHandler(onError);
+      bus.on('approval:submitted', () => {
+        throw boom;
+      });
+      bus.on('approval:submitted', later);
+
+      expect(() => bus.emit('approval:submitted', submittedEvent())).not.toThrow();
+
+      expect(onError).toHaveBeenCalledWith(boom, 'approval:submitted');
+      expect(later).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports a rejecting async listener through the error handler', async () => {
+      const bus = new EventBus();
+      const onError = vi.fn();
+      const boom = new Error('async boom');
+      bus.setListenerErrorHandler(onError);
+      bus.on('approval:submitted', () => Promise.reject(boom));
+
+      bus.emit('approval:submitted', submittedEvent());
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(onError).toHaveBeenCalledWith(boom, 'approval:submitted');
+    });
+
+    it('swallows a throw silently when no error handler is set', () => {
+      const bus = new EventBus();
+      bus.on('approval:submitted', () => {
+        throw new Error('ignored');
+      });
+
+      expect(() => bus.emit('approval:submitted', submittedEvent())).not.toThrow();
+    });
+
+    it('still unregisters a once listener that throws', () => {
+      const bus = new EventBus();
+      const listener = vi.fn(() => {
+        throw new Error('once boom');
+      });
+      bus.once('approval:submitted', listener);
+
+      bus.emit('approval:submitted', submittedEvent());
+      bus.emit('approval:submitted', submittedEvent());
+
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+  });
 });
