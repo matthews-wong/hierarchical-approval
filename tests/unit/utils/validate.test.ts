@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 import {
+  AddAttachmentOptionsSchema,
   AddCommentOptionsSchema,
   ApproveOptionsSchema,
   CancelOptionsSchema,
@@ -11,6 +12,8 @@ import {
   RejectOptionsSchema,
   ResubmitOptionsSchema,
   SubmitOptionsSchema,
+  TransferApprovalsOptionsSchema,
+  UpdateDataOptionsSchema,
 } from '../../../src/utils/validate.js';
 
 describe('validate schemas', () => {
@@ -296,6 +299,70 @@ describe('validate schemas', () => {
           justification: '',
         })
       ).toThrow();
+    });
+  });
+
+  describe('AddAttachmentOptionsSchema', () => {
+    const base = { actorId: 'alice', name: 'quote.pdf', uri: 's3://bucket/quote.pdf' };
+
+    it('accepts a zero-byte attachment', () => {
+      expect(AddAttachmentOptionsSchema.parse({ ...base, sizeBytes: 0 }).sizeBytes).toBe(0);
+    });
+
+    it('rejects a negative or fractional sizeBytes', () => {
+      expect(() => AddAttachmentOptionsSchema.parse({ ...base, sizeBytes: -1 })).toThrow(ZodError);
+      expect(() => AddAttachmentOptionsSchema.parse({ ...base, sizeBytes: 1.5 })).toThrow(ZodError);
+    });
+
+    it('rejects an empty uri', () => {
+      expect(() => AddAttachmentOptionsSchema.parse({ ...base, uri: '' })).toThrow(ZodError);
+    });
+  });
+
+  describe('TransferApprovalsOptionsSchema', () => {
+    const base = {
+      fromApprover: 'alice',
+      toApprover: 'bob',
+      transferredBy: 'admin',
+      reason: 'leaving',
+    };
+
+    it('defaults to a real run capped at 500 instances', () => {
+      const parsed = TransferApprovalsOptionsSchema.parse(base);
+
+      expect(parsed.dryRun).toBe(false);
+      expect(parsed.limit).toBe(500);
+    });
+
+    it('rejects a zero, negative or fractional limit', () => {
+      for (const limit of [0, -5, 2.5]) {
+        expect(() => TransferApprovalsOptionsSchema.parse({ ...base, limit })).toThrow(ZodError);
+      }
+    });
+  });
+
+  describe('UpdateDataOptionsSchema', () => {
+    it('defaults to merging and recomputing the chain', () => {
+      const parsed = UpdateDataOptionsSchema.parse({ updatedBy: 'alice', data: { amount: 5 } });
+
+      expect(parsed.mode).toBe('merge');
+      expect(parsed.recomputeChain).toBe(true);
+    });
+
+    it('rejects an unknown mode', () => {
+      expect(() =>
+        UpdateDataOptionsSchema.parse({ updatedBy: 'alice', data: {}, mode: 'append' })
+      ).toThrow(ZodError);
+    });
+
+    it('requires data to be present', () => {
+      expect(() => UpdateDataOptionsSchema.parse({ updatedBy: 'alice' })).toThrow(ZodError);
+    });
+  });
+
+  describe('level targeting', () => {
+    it('rejects a fractional level on approve', () => {
+      expect(() => ApproveOptionsSchema.parse({ approverId: 'bob', level: 1.5 })).toThrow(ZodError);
     });
   });
 });
