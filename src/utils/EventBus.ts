@@ -92,11 +92,11 @@ export class EventBus {
         // rejection would otherwise escape as a process-level warning.
         if (typeof (result as PromiseLike<void> | undefined)?.then === 'function') {
           void Promise.resolve(result).catch((err: unknown) => {
-            this.onListenerError?.(err, event);
+            this.report(err, event);
           });
         }
       } catch (err) {
-        this.onListenerError?.(err, event);
+        this.report(err, event);
       } finally {
         // eventemitter3 removes a `once` registration itself; drop our bookkeeping too.
         if (once) this.forget(event, listener, wrapped);
@@ -115,6 +115,19 @@ export class EventBus {
     }
     perListener.push(wrapped);
     return wrapped;
+  }
+
+  /**
+   * Hands a listener failure to the configured handler. A throwing handler is
+   * swallowed: it would otherwise escape `emit()` and skip the remaining listeners,
+   * defeating the isolation this bus promises.
+   */
+  private report(error: unknown, event: ApprovalEventName): void {
+    try {
+      this.onListenerError?.(error, event);
+    } catch {
+      // Nowhere left to report to.
+    }
   }
 
   /** Drop the bookkeeping for one specific wrapper, identified by reference. */
