@@ -238,5 +238,40 @@ describe('EventBus', () => {
 
       expect(listener).toHaveBeenCalledTimes(1);
     });
+
+    it('keeps running later listeners when the error handler itself throws', () => {
+      const bus = new EventBus();
+      const later = vi.fn();
+      bus.setListenerErrorHandler(() => {
+        throw new Error('handler boom');
+      });
+      bus.on('approval:submitted', () => {
+        throw new Error('listener boom');
+      });
+      bus.on('approval:submitted', later);
+
+      expect(() => bus.emit('approval:submitted', submittedEvent())).not.toThrow();
+
+      expect(later).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not leak an unhandled rejection when the handler throws for an async failure', async () => {
+      const bus = new EventBus();
+      const unhandled = vi.fn();
+      process.on('unhandledRejection', unhandled);
+      try {
+        bus.setListenerErrorHandler(() => {
+          throw new Error('handler boom');
+        });
+        bus.on('approval:submitted', () => Promise.reject(new Error('listener boom')));
+
+        bus.emit('approval:submitted', submittedEvent());
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(unhandled).not.toHaveBeenCalled();
+      } finally {
+        process.off('unhandledRejection', unhandled);
+      }
+    });
   });
 });

@@ -5,6 +5,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- An `engine.on()` error handler that itself throws no longer aborts `emit()` or skips the
+  remaining listeners; the failure is dropped instead of escaping the operation that emitted
+  the event.
+
 ## [4.1.2] - 2026-10-24
 
 ### Fixed
