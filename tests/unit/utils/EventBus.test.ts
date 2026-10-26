@@ -217,13 +217,17 @@ describe('EventBus', () => {
       expect(onError).toHaveBeenCalledWith(boom, 'approval:submitted');
     });
 
-    it('swallows a throw silently when no error handler is set', () => {
+    it('still runs later listeners when a throw has no error handler to go to', () => {
       const bus = new EventBus();
+      const later = vi.fn();
       bus.on('approval:submitted', () => {
         throw new Error('ignored');
       });
+      bus.on('approval:submitted', later);
 
-      expect(() => bus.emit('approval:submitted', submittedEvent())).not.toThrow();
+      bus.emit('approval:submitted', submittedEvent());
+
+      expect(later).toHaveBeenCalledTimes(1);
     });
 
     it('still unregisters a once listener that throws', () => {
@@ -234,6 +238,39 @@ describe('EventBus', () => {
       bus.once('approval:submitted', listener);
 
       bus.emit('approval:submitted', submittedEvent());
+      bus.emit('approval:submitted', submittedEvent());
+
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('still unregisters a once listener that rejects', async () => {
+      const bus = new EventBus();
+      const onError = vi.fn();
+      const boom = new Error('once async boom');
+      const listener = vi.fn(() => Promise.reject(boom));
+      bus.setListenerErrorHandler(onError);
+      bus.once('approval:submitted', listener);
+
+      bus.emit('approval:submitted', submittedEvent());
+      bus.emit('approval:submitted', submittedEvent());
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(boom, 'approval:submitted');
+    });
+
+    it('still unregisters a once listener that throws while the error handler also throws', () => {
+      const bus = new EventBus();
+      const listener = vi.fn(() => {
+        throw new Error('once boom');
+      });
+      bus.setListenerErrorHandler(() => {
+        throw new Error('handler boom');
+      });
+      bus.once('approval:submitted', listener);
+
+      expect(() => bus.emit('approval:submitted', submittedEvent())).not.toThrow();
       bus.emit('approval:submitted', submittedEvent());
 
       expect(listener).toHaveBeenCalledTimes(1);
