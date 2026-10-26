@@ -10,6 +10,7 @@ import {
   OverrideOptionsSchema,
   ReassignOptionsSchema,
   RejectOptionsSchema,
+  RequestInfoOptionsSchema,
   ResubmitOptionsSchema,
   SubmitOptionsSchema,
   TransferApprovalsOptionsSchema,
@@ -309,9 +310,20 @@ describe('validate schemas', () => {
       expect(AddAttachmentOptionsSchema.parse({ ...base, sizeBytes: 0 }).sizeBytes).toBe(0);
     });
 
-    it('rejects a negative or fractional sizeBytes', () => {
+    it('leaves sizeBytes undefined when omitted', () => {
+      expect(AddAttachmentOptionsSchema.parse(base).sizeBytes).toBeUndefined();
+    });
+
+    it('rejects a negative sizeBytes', () => {
       expect(() => AddAttachmentOptionsSchema.parse({ ...base, sizeBytes: -1 })).toThrow(ZodError);
+    });
+
+    it('rejects a fractional sizeBytes', () => {
       expect(() => AddAttachmentOptionsSchema.parse({ ...base, sizeBytes: 1.5 })).toThrow(ZodError);
+    });
+
+    it('rejects an empty name', () => {
+      expect(() => AddAttachmentOptionsSchema.parse({ ...base, name: '' })).toThrow(ZodError);
     });
 
     it('rejects an empty uri', () => {
@@ -349,6 +361,18 @@ describe('validate schemas', () => {
       expect(parsed.recomputeChain).toBe(true);
     });
 
+    it('accepts replace mode and an explicit recomputeChain of false', () => {
+      const parsed = UpdateDataOptionsSchema.parse({
+        updatedBy: 'alice',
+        data: {},
+        mode: 'replace',
+        recomputeChain: false,
+      });
+
+      expect(parsed.mode).toBe('replace');
+      expect(parsed.recomputeChain).toBe(false);
+    });
+
     it('rejects an unknown mode', () => {
       expect(() =>
         UpdateDataOptionsSchema.parse({ updatedBy: 'alice', data: {}, mode: 'append' })
@@ -363,6 +387,39 @@ describe('validate schemas', () => {
   describe('level targeting', () => {
     it('rejects a fractional level on approve', () => {
       expect(() => ApproveOptionsSchema.parse({ approverId: 'bob', level: 1.5 })).toThrow(ZodError);
+    });
+
+    it('rejects a fractional level on reject', () => {
+      expect(() =>
+        RejectOptionsSchema.parse({ approverId: 'bob', reason: 'no', level: 0.5 })
+      ).toThrow(ZodError);
+    });
+
+    it('rejects a fractional level on delegate, reassign and request-info', () => {
+      expect(() =>
+        DelegateOptionsSchema.parse({
+          fromApprover: 'a',
+          toApprover: 'b',
+          reason: 'away',
+          level: 1.5,
+        })
+      ).toThrow(ZodError);
+      expect(() =>
+        ReassignOptionsSchema.parse({
+          reassignedBy: 'admin',
+          fromApprover: 'a',
+          toApprover: 'b',
+          reason: 'away',
+          level: 1.5,
+        })
+      ).toThrow(ZodError);
+      expect(() =>
+        RequestInfoOptionsSchema.parse({ approverId: 'a', question: 'why?', level: 1.5 })
+      ).toThrow(ZodError);
+    });
+
+    it('accepts an integer level of zero on approve', () => {
+      expect(ApproveOptionsSchema.parse({ approverId: 'bob', level: 0 }).level).toBe(0);
     });
   });
 });
