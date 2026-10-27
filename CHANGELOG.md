@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `weekendCalendar().addBusinessDays()` now throws an `ApprovalValidationError` for an infinite
+  day count instead of spinning forever.
 - An `engine.on()` error handler that itself throws no longer aborts `emit()` or skips the
   remaining listeners; the failure is dropped instead of escaping the operation that emitted
   the event.
