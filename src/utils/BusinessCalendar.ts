@@ -61,6 +61,12 @@ export function weekendCalendar(options: WeekendCalendarOptions = {}): BusinessC
   return {
     addBusinessDays(from: Date, days: number): Date {
       if (days <= 0 || Number.isNaN(days)) return new Date(from.getTime());
+      // Business days keep existing forever, so the idle-day guard below never trips for Infinity.
+      if (!Number.isFinite(days)) {
+        throw new ApprovalValidationError(
+          `weekendCalendar: cannot add ${days} business days to ${from.toISOString()} — days must be finite.`,
+        );
+      }
 
       const whole = Math.floor(days);
       const fraction = days - whole;

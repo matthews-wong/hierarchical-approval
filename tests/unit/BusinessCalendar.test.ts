@@ -114,4 +114,19 @@ describe('weekendCalendar', () => {
       new RegExp(`no business day found within 10 years of ${start.toISOString()}`),
     );
   });
+
+  it('refuses an infinite day count instead of looping forever', () => {
+    const cal = weekendCalendar();
+    const start = new Date('2026-06-19T09:00:00');
+
+    expect(() => cal.addBusinessDays(start, Infinity)).toThrow(ApprovalValidationError);
+    expect(() => cal.addBusinessDays(start, Infinity)).toThrow(
+      new RegExp(`cannot add Infinity business days to ${start.toISOString()}`),
+    );
+  });
+
+  it('still returns the start for a negative infinite day count', () => {
+    const start = new Date('2026-06-19T09:00:00');
+    expect(weekendCalendar().addBusinessDays(start, -Infinity).getTime()).toBe(start.getTime());
+  });
 });
