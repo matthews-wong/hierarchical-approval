@@ -132,6 +132,14 @@ describe('weekendCalendar', () => {
     );
   });
 
+  it('refuses a finite day count too large to walk day by day', () => {
+    const start = new Date('2026-06-19T09:00:00');
+
+    expect(() => weekendCalendar().addBusinessDays(start, 1e12)).toThrow(
+      /cannot add 1000000000000 business days/,
+    );
+  });
+
   it('returns the start for a negative infinite day count, ahead of the finite check', () => {
     const start = new Date('2026-06-19T09:00:00');
     expect(weekendCalendar().addBusinessDays(start, -Infinity).getTime()).toBe(start.getTime());

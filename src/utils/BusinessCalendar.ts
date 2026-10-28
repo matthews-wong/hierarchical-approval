@@ -28,6 +28,8 @@ export interface BusinessCalendar {
 const DAY_MS = 86_400_000;
 /** Ten years: a calendar that finds no working day in this span is misconfigured. */
 const MAX_SCAN_DAYS = 3660;
+/** About a century of business days; beyond this the day-by-day walk is a hang, not a deadline. */
+const MAX_BUSINESS_DAYS = 36_600;
 
 function dayKey(d: Date): string {
   // Local-date key (YYYY-MM-DD) for holiday comparison.
@@ -61,10 +63,10 @@ export function weekendCalendar(options: WeekendCalendarOptions = {}): BusinessC
   return {
     addBusinessDays(from: Date, days: number): Date {
       if (days <= 0 || Number.isNaN(days)) return new Date(from.getTime());
-      // Business days keep existing forever, so the idle-day guard below never trips for Infinity.
-      if (!Number.isFinite(days)) {
+      // Business days keep existing forever, so the idle-day guard below never trips for a huge count.
+      if (days > MAX_BUSINESS_DAYS) {
         throw new ApprovalValidationError(
-          `weekendCalendar: cannot add ${days} business days to ${from.toISOString()} — days must be finite.`,
+          `weekendCalendar: cannot add ${days} business days to ${from.toISOString()} — days must be at most ${MAX_BUSINESS_DAYS}.`,
         );
       }
 
