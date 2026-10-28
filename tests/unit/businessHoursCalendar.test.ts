@@ -123,4 +123,16 @@ describe('businessHoursCalendar', () => {
       /could not be scheduled within 10 years/,
     );
   });
+
+  it('refuses an infinite hours count with the bounded-scan error', () => {
+    expect(() => cal.addBusinessHours(at('2026-01-05T10:00:00'), Infinity)).toThrow(
+      /could not be scheduled within 10 years/,
+    );
+  });
+
+  it('inherits the infinite day count refusal from the weekend calendar', () => {
+    expect(() => cal.addBusinessDays(at('2026-01-05T10:00:00'), Infinity)).toThrow(
+      ApprovalValidationError,
+    );
+  });
 });
