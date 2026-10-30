@@ -148,6 +148,13 @@ describe('weekendCalendar', () => {
     expect(() => cal.addBusinessDays(start, 36_601)).toThrow(/cannot add 36601 business days/);
   });
 
+  it('names an invalid start date in an ApprovalValidationError instead of a bare RangeError', () => {
+    const cal = weekendCalendar();
+
+    expect(() => cal.addBusinessDays(new Date(NaN), 1e12)).toThrow(ApprovalValidationError);
+    expect(() => cal.addBusinessDays(new Date(NaN), 1e12)).toThrow(/Invalid Date/);
+  });
+
   it('returns the start for a negative infinite day count, since the non-positive early return runs first', () => {
     const start = new Date('2026-06-19T09:00:00');
     expect(weekendCalendar().addBusinessDays(start, -Infinity).getTime()).toBe(start.getTime());

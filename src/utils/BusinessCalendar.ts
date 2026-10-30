@@ -31,6 +31,11 @@ const MAX_SCAN_DAYS = 3660;
 /** About a century of business days; beyond this the day-by-day walk is a hang, not a deadline. */
 const MAX_BUSINESS_DAYS = 36_600;
 
+/** `toISOString` throws a RangeError on an Invalid Date, which would mask the validation error being built. */
+function describeDate(d: Date): string {
+  return Number.isNaN(d.getTime()) ? 'Invalid Date' : d.toISOString();
+}
+
 function dayKey(d: Date): string {
   // Local-date key (YYYY-MM-DD) for holiday comparison.
   const y = d.getFullYear();
@@ -66,7 +71,7 @@ export function weekendCalendar(options: WeekendCalendarOptions = {}): BusinessC
       // Business days keep existing forever, so the idle-day guard below never trips for a huge count.
       if (days > MAX_BUSINESS_DAYS) {
         throw new ApprovalValidationError(
-          `weekendCalendar: cannot add ${days} business days to ${from.toISOString()} — days must be at most ${MAX_BUSINESS_DAYS}.`,
+          `weekendCalendar: cannot add ${days} business days to ${describeDate(from)} — days must be at most ${MAX_BUSINESS_DAYS}.`,
         );
       }
 
@@ -86,7 +91,7 @@ export function weekendCalendar(options: WeekendCalendarOptions = {}): BusinessC
         }
         if (++idleDays >= MAX_SCAN_DAYS) {
           throw new ApprovalValidationError(
-            `weekendCalendar: no business day found within 10 years of ${from.toISOString()} — check weekendDays and holidays.`,
+            `weekendCalendar: no business day found within 10 years of ${describeDate(from)} — check weekendDays and holidays.`,
           );
         }
       }
@@ -174,7 +179,7 @@ export function businessHoursCalendar(
     }
     // Every day for ten years was a holiday; a caller misconfigured the calendar.
     throw new ApprovalValidationError(
-      `businessHoursCalendar: no working day found within 10 years of ${from.toISOString()} — check weekendDays and holidays.`,
+      `businessHoursCalendar: no working day found within 10 years of ${describeDate(from)} — check weekendDays and holidays.`,
     );
   };
 
