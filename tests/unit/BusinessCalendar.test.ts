@@ -140,7 +140,15 @@ describe('weekendCalendar', () => {
     );
   });
 
-  it('returns the start for a negative infinite day count, ahead of the finite check', () => {
+  it('accepts exactly the maximum day count and refuses one more', () => {
+    const cal = weekendCalendar();
+    const start = new Date('2026-06-19T09:00:00');
+
+    expect(cal.addBusinessDays(start, 36_600).getTime()).toBeGreaterThan(start.getTime());
+    expect(() => cal.addBusinessDays(start, 36_601)).toThrow(/cannot add 36601 business days/);
+  });
+
+  it('returns the start for a negative infinite day count, since the non-positive early return runs first', () => {
     const start = new Date('2026-06-19T09:00:00');
     expect(weekendCalendar().addBusinessDays(start, -Infinity).getTime()).toBe(start.getTime());
   });
