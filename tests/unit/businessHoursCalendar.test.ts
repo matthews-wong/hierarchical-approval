@@ -131,8 +131,16 @@ describe('businessHoursCalendar', () => {
   });
 
   it('inherits the infinite day count refusal from the weekend calendar', () => {
-    expect(() => cal.addBusinessDays(at('2026-01-05T10:00:00'), Infinity)).toThrow(
-      /weekendCalendar: cannot add Infinity business days/,
+    let caught: unknown;
+    try {
+      cal.addBusinessDays(at('2026-01-05T10:00:00'), Infinity);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(ApprovalValidationError);
+    expect((caught as Error).message).toContain(
+      'weekendCalendar: cannot add Infinity business days',
     );
   });
 });
