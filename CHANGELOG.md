@@ -5,6 +5,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `weekendCalendar` and `businessHoursCalendar` now report an invalid start date as `Invalid Date`
+  in their `ApprovalValidationError` messages instead of failing with a bare `RangeError`.
+
 ## [4.1.3] - 2026-10-28
 
 ### Fixed
