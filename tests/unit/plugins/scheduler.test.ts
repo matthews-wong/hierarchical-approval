@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { InMemorySchedulerAdapter } from '../../../src/plugins/scheduler/index.js';
+import { ApprovalError } from '../../../src/errors.js';
 import { spyLogger } from './_helpers.js';
 
 describe('InMemorySchedulerAdapter', () => {
@@ -74,6 +75,18 @@ describe('InMemorySchedulerAdapter', () => {
     await expect(
       adapter.scheduleAt('job-4', new Date(Date.now() + 1000), async () => {}),
     ).rejects.toThrow('InMemorySchedulerAdapter: cannot schedule "job-4" after shutdown() has been called.');
+  });
+
+  it('rejects scheduleAt() after shutdown() with a coded ApprovalError', async () => {
+    const adapter = new InMemorySchedulerAdapter();
+    await adapter.shutdown();
+
+    const error = await adapter
+      .scheduleAt('job-5', new Date(Date.now() + 1000), async () => {})
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApprovalError);
+    expect((error as ApprovalError).code).toBe('SCHEDULER_SHUTDOWN');
   });
 
   it('logs and swallows an error thrown by the scheduled callback (never crashes the process)', async () => {

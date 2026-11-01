@@ -5,6 +5,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `InMemorySchedulerAdapter.scheduleAt` now rejects after `shutdown()` with an `ApprovalError`
+  (code `SCHEDULER_SHUTDOWN`) instead of a plain `Error`; the message is unchanged.
+
 ### Fixed
 
 - `weekendCalendar` and `businessHoursCalendar` now report an invalid start date as `Invalid Date`
