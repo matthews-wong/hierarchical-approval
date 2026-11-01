@@ -1,8 +1,11 @@
+import { ApprovalError } from '../../errors.js';
 import type { ISchedulerAdapter } from '../../adapters/ISchedulerAdapter.js';
 import type { Clock } from '../../utils/Clock.js';
 import { systemClock } from '../../utils/Clock.js';
 import type { Logger } from '../../utils/Logger.js';
 import { noopLogger } from '../../utils/Logger.js';
+
+const SCHEDULER_SHUTDOWN_CODE = 'SCHEDULER_SHUTDOWN';
 
 /** Configuration for {@link InMemorySchedulerAdapter}. */
 export interface InMemorySchedulerAdapterOptions {
@@ -43,8 +46,9 @@ export class InMemorySchedulerAdapter implements ISchedulerAdapter {
   /** @inheritdoc */
   async scheduleAt(id: string, runAt: Date, callback: () => Promise<void>): Promise<string> {
     if (this.shuttingDown) {
-      throw new Error(
+      throw new ApprovalError(
         `InMemorySchedulerAdapter: cannot schedule "${id}" after shutdown() has been called.`,
+        SCHEDULER_SHUTDOWN_CODE,
       );
     }
 
