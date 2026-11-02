@@ -1,3 +1,5 @@
+import { ApprovalValidationError } from '../../errors.js';
+
 /**
  * Minimal, dependency-free HTTP port shaped after the WHATWG `fetch` function.
  *
@@ -21,7 +23,7 @@ export type HttpClient = (input: string | URL, init?: RequestInit) => Promise<Re
  * Resolves the default {@link HttpClient}: `globalThis.fetch`, bound so it can
  * be invoked detached from `globalThis`.
  *
- * @throws {Error} If no global `fetch` exists (Node.js < 18). The message
+ * @throws {ApprovalValidationError} If no global `fetch` exists (Node.js < 18). The message
  *   names both ways to fix it: upgrade Node.js, or pass an explicit
  *   `httpClient` (any fetch-shaped function) via
  *   `WebhookNotificationAdapterOptions`.
@@ -29,7 +31,7 @@ export type HttpClient = (input: string | URL, init?: RequestInit) => Promise<Re
 export function getDefaultHttpClient(): HttpClient {
   const globalFetch = globalThis.fetch;
   if (typeof globalFetch !== 'function') {
-    throw new Error(
+    throw new ApprovalValidationError(
       'hierarchical-approval/plugins/webhook: no global `fetch` was found. This is built into ' +
         'Node.js 18+ — on an older runtime, either upgrade Node.js or pass an explicit ' +
         '`httpClient` (any function shaped like `fetch`) via WebhookNotificationAdapterOptions.',

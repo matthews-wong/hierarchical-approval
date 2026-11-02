@@ -8,6 +8,7 @@ import {
   DEFAULT_SIGNATURE_HEADER,
   getDefaultHttpClient,
 } from '../../../src/plugins/webhook/index.js';
+import { ApprovalValidationError } from '../../../src/errors.js';
 import type { HttpClient } from '../../../src/plugins/webhook/index.js';
 import { OutboxNotificationAdapter } from '../../../src/plugins/notify/index.js';
 import type { NotificationEvent } from '../../../src/adapters/INotificationAdapter.js';
@@ -572,6 +573,7 @@ describe('getDefaultHttpClient', () => {
   it('throws a clear error naming both fixes when no global fetch exists (simulated Node < 18)', () => {
     vi.stubGlobal('fetch', undefined);
     try {
+      expect(() => getDefaultHttpClient()).toThrow(ApprovalValidationError);
       expect(() => getDefaultHttpClient()).toThrow(/no global `fetch`/);
     } finally {
       vi.unstubAllGlobals();
