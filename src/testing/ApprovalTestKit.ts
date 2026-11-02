@@ -3,6 +3,7 @@ import type { ApprovalInstance } from '../types/index.js';
 import type { ApprovalEngineOptions } from '../engine/ApprovalEngine.js';
 import { ApprovalEngine } from '../engine/ApprovalEngine.js';
 import { MemoryAdapter } from '../adapters/MemoryAdapter.js';
+import { ApprovalValidationError } from '../errors.js';
 
 /**
  * A `Clock` a test controls directly, so escalation/reminder/SLA deadlines
@@ -86,7 +87,7 @@ export class ApprovalTestKit {
       for (const level of open) {
         const approverId = approverMap[level.level];
         if (!approverId) {
-          throw new Error(
+          throw new ApprovalValidationError(
             `No approver provided for level ${level.level}. Pass all levels in approverMap.`,
           );
         }
