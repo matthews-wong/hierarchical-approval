@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ApprovalTestKit } from '../../../src/testing/ApprovalTestKit.js';
 import { MemoryAdapter } from '../../../src/adapters/MemoryAdapter.js';
+import { ApprovalValidationError } from '../../../src/errors.js';
 
 describe('ApprovalTestKit.create', () => {
   it('reuses a caller-supplied MemoryAdapter instead of creating a new one', async () => {
@@ -21,6 +22,27 @@ describe('ApprovalTestKit.create', () => {
 
     const stored = await suppliedAdapter.getInstance('t1', instance.id);
     expect(stored).not.toBeNull();
+    await engine.shutdown();
+  });
+});
+
+describe('ApprovalTestKit.fullyApprove', () => {
+  it('rejects with an ApprovalValidationError naming the level that has no approver', async () => {
+    const { engine } = ApprovalTestKit.create();
+    await engine.defineTemplate({
+      name: 'T',
+      documentType: 'doc',
+      levels: [
+        { level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'u1' }], mode: 'any' },
+        { level: 2, name: 'L2', approvers: [{ type: 'user', userId: 'u2' }], mode: 'any' },
+      ],
+    });
+    const instance = await engine.submit({ templateName: 'T', documentId: 'D1', documentType: 'doc', submittedBy: 'sub', data: {} });
+
+    const failure = ApprovalTestKit.fullyApprove(engine, instance.id, { 1: 'u1' });
+
+    await expect(failure).rejects.toBeInstanceOf(ApprovalValidationError);
+    await expect(failure).rejects.toThrow('No approver provided for level 2');
     await engine.shutdown();
   });
 });
