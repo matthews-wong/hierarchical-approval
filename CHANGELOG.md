@@ -5,6 +5,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `ApprovalTestKit.fullyApprove` now rejects with an `ApprovalValidationError` instead of a plain
+  `Error` when `approverMap` has no entry for an open level; the message is unchanged.
+
 ## [4.1.4] - 2026-11-01
 
 ### Changed
