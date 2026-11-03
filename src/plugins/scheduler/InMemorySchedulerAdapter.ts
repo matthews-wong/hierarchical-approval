@@ -5,7 +5,8 @@ import { systemClock } from '../../utils/Clock.js';
 import type { Logger } from '../../utils/Logger.js';
 import { noopLogger } from '../../utils/Logger.js';
 
-const SCHEDULER_SHUTDOWN_CODE = 'SCHEDULER_SHUTDOWN';
+/** {@link ApprovalError.code} raised when a job is scheduled after `shutdown()`. */
+export const SCHEDULER_SHUTDOWN_CODE = 'SCHEDULER_SHUTDOWN';
 
 /** Configuration for {@link InMemorySchedulerAdapter}. */
 export interface InMemorySchedulerAdapterOptions {
