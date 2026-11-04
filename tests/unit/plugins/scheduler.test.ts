@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { InMemorySchedulerAdapter } from '../../../src/plugins/scheduler/index.js';
-import { SCHEDULER_SHUTDOWN_CODE } from '../../../src/plugins/scheduler/InMemorySchedulerAdapter.js';
 import { ApprovalError } from '../../../src/errors.js';
 import { spyLogger } from './_helpers.js';
 
@@ -87,7 +86,7 @@ describe('InMemorySchedulerAdapter', () => {
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(ApprovalError);
-    expect((error as ApprovalError).code).toBe(SCHEDULER_SHUTDOWN_CODE);
+    expect((error as ApprovalError).code).toBe('SCHEDULER_SHUTDOWN');
   });
 
   it('logs and swallows an error thrown by the scheduled callback (never crashes the process)', async () => {
