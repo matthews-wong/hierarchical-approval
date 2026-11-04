@@ -45,4 +45,37 @@ describe('ApprovalTestKit.fullyApprove', () => {
     await expect(failure).rejects.toThrow('No approver provided for level 2');
     await engine.shutdown();
   });
+
+  it('rejects before approving anything when level 1 has no approver', async () => {
+    const { engine } = ApprovalTestKit.create();
+    await engine.defineTemplate({
+      name: 'T',
+      documentType: 'doc',
+      levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'u1' }], mode: 'any' }],
+    });
+    const instance = await engine.submit({ templateName: 'T', documentId: 'D1', documentType: 'doc', submittedBy: 'sub', data: {} });
+
+    await expect(ApprovalTestKit.fullyApprove(engine, instance.id, {})).rejects.toThrow(
+      'No approver provided for level 1',
+    );
+
+    const after = await engine.getInstance(instance.id);
+    expect(after.status).toBe('pending');
+    await engine.shutdown();
+  });
+
+  it('treats an empty-string approver id as missing', async () => {
+    const { engine } = ApprovalTestKit.create();
+    await engine.defineTemplate({
+      name: 'T',
+      documentType: 'doc',
+      levels: [{ level: 1, name: 'L1', approvers: [{ type: 'user', userId: 'u1' }], mode: 'any' }],
+    });
+    const instance = await engine.submit({ templateName: 'T', documentId: 'D1', documentType: 'doc', submittedBy: 'sub', data: {} });
+
+    await expect(ApprovalTestKit.fullyApprove(engine, instance.id, { 1: '' })).rejects.toBeInstanceOf(
+      ApprovalValidationError,
+    );
+    await engine.shutdown();
+  });
 });
