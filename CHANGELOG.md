@@ -5,6 +5,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-11-05
+
 ### Added
 
 - The scheduler plugin entry point now exports `SCHEDULER_SHUTDOWN_CODE`, so callers can match the
