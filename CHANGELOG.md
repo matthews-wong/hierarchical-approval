@@ -5,6 +5,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- The scheduler plugin entry point now exports `SCHEDULER_SHUTDOWN_CODE`, so callers can match the
+  `ApprovalError` code thrown by `scheduleAt` after `shutdown()` without copying the string.
+
 ### Changed
 
 - `ApprovalTestKit.fullyApprove` now rejects with an `ApprovalValidationError` instead of a plain
