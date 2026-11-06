@@ -87,7 +87,10 @@ describe('InMemorySchedulerAdapter', () => {
 
     expect(error).toBeInstanceOf(ApprovalError);
     expect((error as ApprovalError).code).toBe('SCHEDULER_SHUTDOWN');
-    expect((error as ApprovalError).code).toBe(SCHEDULER_SHUTDOWN_CODE);
+  });
+
+  it('exports the shutdown error code as its wire-visible literal', () => {
+    expect(SCHEDULER_SHUTDOWN_CODE).toBe('SCHEDULER_SHUTDOWN');
   });
 
   it('logs and swallows an error thrown by the scheduled callback (never crashes the process)', async () => {
