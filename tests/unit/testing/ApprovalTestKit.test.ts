@@ -73,9 +73,19 @@ describe('ApprovalTestKit.fullyApprove', () => {
     });
     const instance = await engine.submit({ templateName: 'T', documentId: 'D1', documentType: 'doc', submittedBy: 'sub', data: {} });
 
-    await expect(ApprovalTestKit.fullyApprove(engine, instance.id, { 1: '' })).rejects.toBeInstanceOf(
-      ApprovalValidationError,
+    await expect(ApprovalTestKit.fullyApprove(engine, instance.id, { 1: '' })).rejects.toThrow(
+      /No approver provided for level 1/,
     );
+
+    const after = await engine.getInstance(instance.id);
+    expect(after.status).toBe('pending');
+    await engine.shutdown();
+  });
+    const instance = await engine.submit({ templateName: 'PAR', documentId: 'D1', documentType: 'doc', submittedBy: 'sub', data: {} });
+
+    const done = await ApprovalTestKit.fullyApprove(engine, instance.id, { 1: 'u1', 2: 'u2' });
+
+    expect(done.status).toBe('approved');
     await engine.shutdown();
   });
 });
