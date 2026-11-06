@@ -81,6 +81,17 @@ describe('ApprovalTestKit.fullyApprove', () => {
     expect(after.status).toBe('pending');
     await engine.shutdown();
   });
+
+  it('approves every open branch of a parallel group', async () => {
+    const { engine } = ApprovalTestKit.create();
+    await engine.defineTemplate({
+      name: 'PAR',
+      documentType: 'doc',
+      levels: [
+        { level: 1, name: 'Finance', approvers: [{ type: 'user', userId: 'u1' }], mode: 'any', group: 'review' },
+        { level: 2, name: 'Legal', approvers: [{ type: 'user', userId: 'u2' }], mode: 'any', group: 'review' },
+      ],
+    });
     const instance = await engine.submit({ templateName: 'PAR', documentId: 'D1', documentType: 'doc', submittedBy: 'sub', data: {} });
 
     const done = await ApprovalTestKit.fullyApprove(engine, instance.id, { 1: 'u1', 2: 'u2' });
