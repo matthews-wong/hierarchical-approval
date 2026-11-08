@@ -12,6 +12,7 @@ export class ApprovalError extends Error {
     return { code: this.code, message: this.message, name: this.name };
   }
 
+  /** Maps `code` to an HTTP status: 404, 409, 403, 422, 503 for a shut-down scheduler, else 500. */
   toHttpStatus(): number {
     const map: Record<string, number> = {
       NOT_FOUND: 404,
@@ -19,6 +20,8 @@ export class ApprovalError extends Error {
       FORBIDDEN: 403,
       VALIDATION: 422,
       TEMPLATE_NOT_FOUND: 404,
+      // Literal, not SCHEDULER_SHUTDOWN_CODE: core must not import plugin code.
+      SCHEDULER_SHUTDOWN: 503,
     };
     return map[this.code] ?? 500;
   }
