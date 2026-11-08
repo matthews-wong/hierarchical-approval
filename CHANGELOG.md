@@ -5,6 +5,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `ApprovalError.toHttpStatus()` now returns 503 instead of 500 for the `SCHEDULER_SHUTDOWN` code thrown
+  by `scheduleAt` after `shutdown()`, since the condition is temporary.
+
 ## [4.2.0] - 2026-11-05
 
 ### Added

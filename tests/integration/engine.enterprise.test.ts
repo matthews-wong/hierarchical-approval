@@ -718,6 +718,11 @@ describe('Error utilities', () => {
     expect(err.toHttpStatus()).toBe(404);
   });
 
+  it("maps the scheduler's 'SCHEDULER_SHUTDOWN' code to 503", () => {
+    const err = new ApprovalError('scheduler is shut down', 'SCHEDULER_SHUTDOWN');
+    expect(err.toHttpStatus()).toBe(503);
+  });
+
   it('toJSON() returns plain object with code, message, name', () => {
     const err = new ApprovalForbiddenError('nope');
     const j = err.toJSON();
