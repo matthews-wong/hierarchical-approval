@@ -89,6 +89,17 @@ describe('InMemorySchedulerAdapter', () => {
     expect((error as ApprovalError).code).toBe('SCHEDULER_SHUTDOWN');
   });
 
+  it('surfaces a shut-down scheduler as HTTP 503', async () => {
+    const adapter = new InMemorySchedulerAdapter();
+    await adapter.shutdown();
+
+    const error = await adapter
+      .scheduleAt('job-6', new Date(Date.now() + 1000), async () => {})
+      .catch((e: unknown) => e);
+
+    expect((error as ApprovalError).toHttpStatus()).toBe(503);
+  });
+
   it('exports the shutdown error code as its wire-visible literal', () => {
     expect(SCHEDULER_SHUTDOWN_CODE).toBe('SCHEDULER_SHUTDOWN');
   });
