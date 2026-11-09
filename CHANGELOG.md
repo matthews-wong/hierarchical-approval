@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `ApprovalError.toHttpStatus()` now returns 409 instead of 500 for the `CANNOT_CANCEL` code thrown by
+  `cancel()` on an already approved or rejected instance, since the request conflicts with its state.
 - `ApprovalError.toHttpStatus()` now returns 503 instead of 500 for the `SCHEDULER_SHUTDOWN` code thrown
   by `scheduleAt` after `shutdown()`, since the condition is temporary.
 
