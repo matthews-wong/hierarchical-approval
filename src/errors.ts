@@ -12,7 +12,7 @@ export class ApprovalError extends Error {
     return { code: this.code, message: this.message, name: this.name };
   }
 
-  /** Maps `code` to an HTTP status: 404, 409, 403, 422, 503 for a shut-down scheduler, else 500. */
+  /** Maps `code` to an HTTP status using the table below; unmapped codes yield 500. */
   toHttpStatus(): number {
     const map: Record<string, number> = {
       NOT_FOUND: 404,
