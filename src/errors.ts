@@ -17,6 +17,7 @@ export class ApprovalError extends Error {
     const map: Record<string, number> = {
       NOT_FOUND: 404,
       CONFLICT: 409,
+      CANNOT_CANCEL: 409,
       FORBIDDEN: 403,
       VALIDATION: 422,
       TEMPLATE_NOT_FOUND: 404,
