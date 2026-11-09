@@ -5,6 +5,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.2.1] - 2026-11-09
+
 ### Changed
 
 - `ApprovalError.toHttpStatus()` now returns 409 instead of 500 for the `CANNOT_CANCEL` code thrown by
