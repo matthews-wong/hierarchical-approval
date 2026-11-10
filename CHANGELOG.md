@@ -5,6 +5,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `ApprovalError.toHttpStatus()` returned a non-numeric value for a code that matched an inherited object
+  member such as `toString`; it now returns 500 for any unmapped code.
+
 ## [4.2.1] - 2026-11-09
 
 ### Changed
