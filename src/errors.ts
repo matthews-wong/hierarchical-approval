@@ -1,3 +1,14 @@
+const HTTP_STATUS_BY_CODE: Readonly<Record<string, number>> = {
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  CANNOT_CANCEL: 409,
+  FORBIDDEN: 403,
+  VALIDATION: 422,
+  TEMPLATE_NOT_FOUND: 404,
+  // Literal, not SCHEDULER_SHUTDOWN_CODE: core must not import plugin code.
+  SCHEDULER_SHUTDOWN: 503,
+};
+
 /** Base class for all errors thrown by this library; carries a stable machine-readable `code`. */
 export class ApprovalError extends Error {
   constructor(
@@ -14,17 +25,7 @@ export class ApprovalError extends Error {
 
   /** Maps `code` to an HTTP status using the table below; unmapped codes yield 500. */
   toHttpStatus(): number {
-    const map: Record<string, number> = {
-      NOT_FOUND: 404,
-      CONFLICT: 409,
-      CANNOT_CANCEL: 409,
-      FORBIDDEN: 403,
-      VALIDATION: 422,
-      TEMPLATE_NOT_FOUND: 404,
-      // Literal, not SCHEDULER_SHUTDOWN_CODE: core must not import plugin code.
-      SCHEDULER_SHUTDOWN: 503,
-    };
-    return map[this.code] ?? 500;
+    return HTTP_STATUS_BY_CODE[this.code] ?? 500;
   }
 }
 
