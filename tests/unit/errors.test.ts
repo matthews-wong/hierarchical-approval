@@ -17,4 +17,11 @@ describe('ApprovalError.toHttpStatus', () => {
   it('returns 500 for an unmapped code', () => {
     expect(new ApprovalError('x', 'UNKNOWN').toHttpStatus()).toBe(500);
   });
+
+  it.each(['toString', 'constructor', '__proto__'])(
+    'returns 500 for the inherited object key %s',
+    (code) => {
+      expect(new ApprovalError('x', code).toHttpStatus()).toBe(500);
+    },
+  );
 });

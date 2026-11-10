@@ -1,13 +1,14 @@
-const HTTP_STATUS_BY_CODE: Readonly<Record<string, number>> = {
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  CANNOT_CANCEL: 409,
-  FORBIDDEN: 403,
-  VALIDATION: 422,
-  TEMPLATE_NOT_FOUND: 404,
+// A Map, not an object literal: a code like "toString" must not resolve to an inherited member.
+const HTTP_STATUS_BY_CODE: ReadonlyMap<string, number> = new Map([
+  ['NOT_FOUND', 404],
+  ['CONFLICT', 409],
+  ['CANNOT_CANCEL', 409],
+  ['FORBIDDEN', 403],
+  ['VALIDATION', 422],
+  ['TEMPLATE_NOT_FOUND', 404],
   // Literal, not SCHEDULER_SHUTDOWN_CODE: core must not import plugin code.
-  SCHEDULER_SHUTDOWN: 503,
-};
+  ['SCHEDULER_SHUTDOWN', 503],
+]);
 
 /** Base class for all errors thrown by this library; carries a stable machine-readable `code`. */
 export class ApprovalError extends Error {
@@ -25,7 +26,7 @@ export class ApprovalError extends Error {
 
   /** Maps `code` to an HTTP status using the table below; unmapped codes yield 500. */
   toHttpStatus(): number {
-    return HTTP_STATUS_BY_CODE[this.code] ?? 500;
+    return HTTP_STATUS_BY_CODE.get(this.code) ?? 500;
   }
 }
 
