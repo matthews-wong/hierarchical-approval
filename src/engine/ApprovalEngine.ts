@@ -1795,7 +1795,7 @@ export class ApprovalEngine {
     let cancelled: ApprovalInstance | null = null;
     const result = await this.withOptimisticRetry(instanceId, async (instance) => {
       if (instance.status === 'approved' || instance.status === 'rejected') {
-        throw new ApprovalError(`Cannot cancel a "${instance.status}" approval.`, 'CANNOT_CANCEL');
+        throw new ApprovalError(`Cannot cancel an approval that is already "${instance.status}".`, 'CANNOT_CANCEL');
       }
 
       await this.runAuthorizationPolicy({

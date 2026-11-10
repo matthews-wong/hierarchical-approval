@@ -723,12 +723,19 @@ describe('Error utilities', () => {
     expect(err.toHttpStatus()).toBe(503);
   });
 
-  it('cancelling an already approved instance fails with HTTP 409', async () => {
+  it.each([
+    ['approved', async (engine: ApprovalEngine, id: string) => {
+      await engine.approve(id, { approverId: 'mgr1' });
+      await engine.approve(id, { approverId: 'dir1' });
+    }],
+    ['rejected', async (engine: ApprovalEngine, id: string) => {
+      await engine.reject(id, { approverId: 'mgr1', reason: 'nope' });
+    }],
+  ])('cancelling an already %s instance fails with HTTP 409', async (status, finish) => {
     const { engine } = ApprovalTestKit.create();
     await engine.defineTemplate(basicTemplate);
     const instance = await engine.submit({ templateName: 'enterprise-test', documentId: 'doc-cancel', documentType: 'invoice', submittedBy: 'user1', data: {} });
-    await engine.approve(instance.id, { approverId: 'mgr1' });
-    await engine.approve(instance.id, { approverId: 'dir1' });
+    await finish(engine, instance.id);
 
     const error = await engine
       .cancel(instance.id, { cancelledBy: 'user1', reason: 'too late' })
@@ -736,7 +743,7 @@ describe('Error utilities', () => {
 
     expect(error).toBeInstanceOf(ApprovalError);
     expect((error as ApprovalError).code).toBe('CANNOT_CANCEL');
-    expect((error as ApprovalError).message).toBe('Cannot cancel a "approved" approval.');
+    expect((error as ApprovalError).message).toContain(`"${status}"`);
     expect((error as ApprovalError).toHttpStatus()).toBe(409);
   });
 
