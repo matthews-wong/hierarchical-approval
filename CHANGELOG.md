@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `ApprovalError.toHttpStatus()` returned a non-numeric value for a code that matched an inherited object
   member such as `toString`; it now returns 500 for any unmapped code.
+- The `CANNOT_CANCEL` message now reads `Cannot cancel an approval that is already "approved".` instead of the
+  ungrammatical `Cannot cancel a "approved" approval.`; the code is unchanged.
 
 ## [4.2.1] - 2026-11-09
 
