@@ -747,6 +747,24 @@ describe('Error utilities', () => {
     expect((error as ApprovalError).toHttpStatus()).toBe(409);
   });
 
+  it('cancelling an already cancelled instance fails with HTTP 409 and keeps one history entry', async () => {
+    const { engine } = ApprovalTestKit.create();
+    await engine.defineTemplate(basicTemplate);
+    const instance = await engine.submit({ templateName: 'enterprise-test', documentId: 'doc-recancel', documentType: 'invoice', submittedBy: 'user1', data: {} });
+    await engine.cancel(instance.id, { cancelledBy: 'user1', reason: 'first' });
+    const historyLength = (await engine.getHistory(instance.id)).length;
+
+    const error = await engine
+      .cancel(instance.id, { cancelledBy: 'user1', reason: 'second' })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApprovalError);
+    expect((error as ApprovalError).code).toBe('CANNOT_CANCEL');
+    expect((error as ApprovalError).message).toBe('Cannot cancel an approval that is already "cancelled".');
+    expect((error as ApprovalError).toHttpStatus()).toBe(409);
+    expect(await engine.getHistory(instance.id)).toHaveLength(historyLength);
+  });
+
   it('toJSON() returns plain object with code, message, name', () => {
     const err = new ApprovalForbiddenError('nope');
     const j = err.toJSON();

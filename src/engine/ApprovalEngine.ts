@@ -1794,7 +1794,7 @@ export class ApprovalEngine {
     const opts = parseOrThrow(() => CancelOptionsSchema.parse(raw));
     let cancelled: ApprovalInstance | null = null;
     const result = await this.withOptimisticRetry(instanceId, async (instance) => {
-      if (instance.status === 'approved' || instance.status === 'rejected') {
+      if (TERMINAL_STATUSES.has(instance.status)) {
         throw new ApprovalError(`Cannot cancel an approval that is already "${instance.status}".`, 'CANNOT_CANCEL');
       }
 
