@@ -18,6 +18,13 @@ describe('ApprovalError.toHttpStatus', () => {
     expect(new ApprovalError('x', 'UNKNOWN').toHttpStatus()).toBe(500);
   });
 
+  it.each(['', 'not_found', 'Not_Found', ' NOT_FOUND'])(
+    'matches codes exactly, so %j yields 500',
+    (code) => {
+      expect(new ApprovalError('x', code).toHttpStatus()).toBe(500);
+    },
+  );
+
   it.each(['toString', 'constructor', '__proto__'])(
     'returns 500 for the inherited object key %s',
     (code) => {
