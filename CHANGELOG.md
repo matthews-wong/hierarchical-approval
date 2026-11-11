@@ -11,6 +11,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   member such as `toString`; it now returns 500 for any unmapped code.
 - The `CANNOT_CANCEL` message now reads `Cannot cancel an approval that is already "approved".` instead of the
   ungrammatical `Cannot cancel a "approved" approval.`; the code is unchanged.
+- `cancel()` on an already cancelled or expired instance now throws `CANNOT_CANCEL` instead of cancelling it a
+  second time and appending a duplicate audit entry.
 
 ## [4.2.1] - 2026-11-09
 
