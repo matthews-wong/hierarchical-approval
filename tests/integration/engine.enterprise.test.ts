@@ -743,7 +743,7 @@ describe('Error utilities', () => {
 
     expect(error).toBeInstanceOf(ApprovalError);
     expect((error as ApprovalError).code).toBe('CANNOT_CANCEL');
-    expect((error as ApprovalError).message).toContain(`"${status}"`);
+    expect((error as ApprovalError).message).toBe(`Cannot cancel an approval that is already "${status}".`);
     expect((error as ApprovalError).toHttpStatus()).toBe(409);
   });
 
