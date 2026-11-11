@@ -24,7 +24,7 @@ export class ApprovalError extends Error {
     return { code: this.code, message: this.message, name: this.name };
   }
 
-  /** Maps `code` to an HTTP status using the table below; unmapped codes yield 500. */
+  /** Maps `code` to an HTTP status using `HTTP_STATUS_BY_CODE`; unmapped codes yield 500. */
   toHttpStatus(): number {
     return HTTP_STATUS_BY_CODE.get(this.code) ?? 500;
   }
