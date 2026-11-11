@@ -5,6 +5,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.2.2] - 2026-11-11
+
 ### Fixed
 
 - `ApprovalError.toHttpStatus()` returned a non-numeric value for a code that matched an inherited object
