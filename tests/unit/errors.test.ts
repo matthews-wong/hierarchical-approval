@@ -25,6 +25,11 @@ describe('ApprovalError.toHttpStatus', () => {
     },
   );
 
+  it('does not trim a trailing space, while the exact code still maps', () => {
+    expect(new ApprovalError('x', 'NOT_FOUND').toHttpStatus()).toBe(404);
+    expect(new ApprovalError('x', 'NOT_FOUND ').toHttpStatus()).toBe(500);
+  });
+
   it.each(['toString', 'constructor', '__proto__'])(
     'returns 500 for the inherited object key %s',
     (code) => {
