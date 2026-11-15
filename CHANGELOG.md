@@ -5,6 +5,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `weekendCalendar()` and `businessHoursCalendar()` now throw `ApprovalValidationError` at creation when
+  `weekendDays` holds a value outside 0-6, a non-integer, or all seven days. Previously the mistake showed up
+  later as a "no business day found" error on the first deadline calculation.
+
 ## [4.2.2] - 2026-11-11
 
 ### Fixed

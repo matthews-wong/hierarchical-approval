@@ -105,13 +105,19 @@ describe('weekendCalendar', () => {
     expect(result.getTime()).toBe(d.getTime());
   });
 
-  it('refuses a calendar where every weekday is a weekend instead of looping forever', () => {
-    const never = weekendCalendar({ weekendDays: [0, 1, 2, 3, 4, 5, 6] });
-    const start = new Date('2026-06-19T09:00:00');
+  it('rejects a calendar where every weekday is a weekend when it is created', () => {
+    expect(() => weekendCalendar({ weekendDays: [0, 1, 2, 3, 4, 5, 6] })).toThrow(
+      ApprovalValidationError,
+    );
+    expect(() => weekendCalendar({ weekendDays: [0, 1, 2, 3, 4, 5, 6] })).toThrow(
+      /weekendCalendar: weekendDays \[0, 1, 2, 3, 4, 5, 6\] leaves no working day/,
+    );
+  });
 
-    expect(() => never.addBusinessDays(start, 1)).toThrow(ApprovalValidationError);
-    expect(() => never.addBusinessDays(start, 1)).toThrow(
-      new RegExp(`no business day found within 10 years of ${start.toISOString()}`),
+  it.each([7, -1, 1.5, Number.NaN])('rejects weekendDays containing %s when created', (day) => {
+    expect(() => weekendCalendar({ weekendDays: [day] })).toThrow(ApprovalValidationError);
+    expect(() => weekendCalendar({ weekendDays: [day] })).toThrow(
+      new RegExp(`weekendCalendar: weekendDays contains ${day}, expected an integer from 0 to 6`),
     );
   });
 

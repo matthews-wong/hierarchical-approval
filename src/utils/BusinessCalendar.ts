@@ -37,8 +37,24 @@ function describeDate(d: Date): string {
   return Number.isNaN(d.getTime()) ? 'Invalid Date' : d.toISOString();
 }
 
-function resolveWeekend(weekendDays: number[] | undefined): Set<number> {
-  return new Set(weekendDays ?? DEFAULT_WEEKEND_DAYS);
+const DAYS_IN_WEEK = 7;
+
+/** A misconfigured weekend would otherwise surface only as a 10-year scan on every deadline. */
+function resolveWeekend(factory: string, weekendDays: number[] | undefined): Set<number> {
+  const weekend = new Set(weekendDays ?? DEFAULT_WEEKEND_DAYS);
+  for (const day of weekend) {
+    if (!Number.isInteger(day) || day < 0 || day >= DAYS_IN_WEEK) {
+      throw new ApprovalValidationError(
+        `${factory}: weekendDays contains ${day}, expected an integer from 0 to 6.`,
+      );
+    }
+  }
+  if (weekend.size === DAYS_IN_WEEK) {
+    throw new ApprovalValidationError(
+      `${factory}: weekendDays [${[...weekend].join(', ')}] leaves no working day — leave at least one weekday out.`,
+    );
+  }
+  return weekend;
 }
 
 function dayKey(d: Date): string {
@@ -56,6 +72,9 @@ export interface WeekendCalendarOptions {
    * Weekday numbers (0 = Sunday … 6 = Saturday) that count as weekend.
    * Defaults to [0, 6]. Override for regions with different work weeks
    * (e.g. [5, 6] for a Friday/Saturday weekend).
+   *
+   * @throws {ApprovalValidationError} from the calendar factory when a value is not
+   * an integer from 0 to 6, or when all seven days are listed.
    */
   weekendDays?: number[];
 }
@@ -65,7 +84,7 @@ export interface WeekendCalendarOptions {
  * holidays. Day arithmetic is performed in the host's local timezone.
  */
 export function weekendCalendar(options: WeekendCalendarOptions = {}): BusinessCalendar {
-  const weekend = resolveWeekend(options.weekendDays);
+  const weekend = resolveWeekend('weekendCalendar', options.weekendDays);
   const holidays = new Set((options.holidays ?? []).map(dayKey));
 
   const isBusinessDay = (d: Date): boolean => !weekend.has(d.getDay()) && !holidays.has(dayKey(d));
@@ -150,7 +169,7 @@ export function businessHoursCalendar(
     );
   }
 
-  const weekend = resolveWeekend(options.weekendDays);
+  const weekend = resolveWeekend('businessHoursCalendar', options.weekendDays);
   const holidays = new Set((options.holidays ?? []).map(dayKey));
   const isBusinessDay = (d: Date): boolean => !weekend.has(d.getDay()) && !holidays.has(dayKey(d));
 
