@@ -26,6 +26,7 @@ export interface BusinessCalendar {
 }
 
 const DAY_MS = 86_400_000;
+const DEFAULT_WEEKEND_DAYS: readonly number[] = [0, 6];
 /** Ten years: a calendar that finds no working day in this span is misconfigured. */
 const MAX_SCAN_DAYS = 3660;
 /** About a century of business days; beyond this the day-by-day walk is a hang, not a deadline. */
@@ -34,6 +35,10 @@ const MAX_BUSINESS_DAYS = 36_600;
 /** `toISOString` throws a RangeError on an Invalid Date, which would mask the validation error being built. */
 function describeDate(d: Date): string {
   return Number.isNaN(d.getTime()) ? 'Invalid Date' : d.toISOString();
+}
+
+function resolveWeekend(weekendDays: number[] | undefined): Set<number> {
+  return new Set(weekendDays ?? DEFAULT_WEEKEND_DAYS);
 }
 
 function dayKey(d: Date): string {
@@ -60,7 +65,7 @@ export interface WeekendCalendarOptions {
  * holidays. Day arithmetic is performed in the host's local timezone.
  */
 export function weekendCalendar(options: WeekendCalendarOptions = {}): BusinessCalendar {
-  const weekend = new Set(options.weekendDays ?? [0, 6]);
+  const weekend = resolveWeekend(options.weekendDays);
   const holidays = new Set((options.holidays ?? []).map(dayKey));
 
   const isBusinessDay = (d: Date): boolean => !weekend.has(d.getDay()) && !holidays.has(dayKey(d));
@@ -145,7 +150,7 @@ export function businessHoursCalendar(
     );
   }
 
-  const weekend = new Set(options.weekendDays ?? [0, 6]);
+  const weekend = resolveWeekend(options.weekendDays);
   const holidays = new Set((options.holidays ?? []).map(dayKey));
   const isBusinessDay = (d: Date): boolean => !weekend.has(d.getDay()) && !holidays.has(dayKey(d));
 
