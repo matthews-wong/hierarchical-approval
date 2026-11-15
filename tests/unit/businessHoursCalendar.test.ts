@@ -102,12 +102,21 @@ describe('businessHoursCalendar', () => {
     );
   });
 
-  it('refuses a calendar where no day is ever a working day', () => {
-    const never = businessHoursCalendar({ weekendDays: [0, 1, 2, 3, 4, 5, 6] });
-    const start = at('2026-01-05T10:00:00');
-    expect(() => never.addBusinessHours(start, 1)).toThrow(ApprovalValidationError);
-    expect(() => never.addBusinessHours(start, 1)).toThrow(
-      new RegExp(`no working day found within 10 years of ${start.toISOString()}`),
+  it('rejects a calendar where every weekday is a weekend when it is created', () => {
+    expect(() => businessHoursCalendar({ weekendDays: [0, 1, 2, 3, 4, 5, 6] })).toThrow(
+      ApprovalValidationError,
+    );
+    expect(() => businessHoursCalendar({ weekendDays: [0, 1, 2, 3, 4, 5, 6] })).toThrow(
+      /businessHoursCalendar: weekendDays \[0, 1, 2, 3, 4, 5, 6\] leaves no working day/,
+    );
+  });
+
+  it.each([7, -1, 1.5, Number.NaN])('rejects weekendDays containing %s when created', (day) => {
+    expect(() => businessHoursCalendar({ weekendDays: [day] })).toThrow(ApprovalValidationError);
+    expect(() => businessHoursCalendar({ weekendDays: [day] })).toThrow(
+      new RegExp(
+        `businessHoursCalendar: weekendDays contains ${day}, expected an integer from 0 to 6`,
+      ),
     );
   });
 
