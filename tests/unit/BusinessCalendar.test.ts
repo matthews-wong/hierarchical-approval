@@ -121,6 +121,37 @@ describe('weekendCalendar', () => {
     );
   });
 
+  it('accepts a six-day weekend, an empty weekend and duplicate days', () => {
+    const start = new Date('2026-06-22T09:00:00'); // Monday
+
+    // Only Saturday works, so one business day after Monday is the 27th.
+    const sixDay = weekendCalendar({ weekendDays: [0, 1, 2, 3, 4, 5] });
+    expect(sixDay.addBusinessDays(start, 1).getDate()).toBe(27);
+
+    const noWeekend = weekendCalendar({ weekendDays: [] });
+    expect(noWeekend.addBusinessDays(new Date('2026-06-26T09:00:00'), 2).getDate()).toBe(28);
+
+    // Eight entries, six distinct days: the size check must count distinct days, not entries.
+    const duplicates = weekendCalendar({ weekendDays: [0, 0, 1, 2, 3, 4, 5, 5] });
+    expect(duplicates.addBusinessDays(start, 1).getDate()).toBe(27);
+  });
+
+  it('gives up with a validation error when holidays cover every day for ten years', () => {
+    const start = new Date('2026-06-22T09:00:00');
+    const holidays: Date[] = [];
+    for (let i = 1; i <= 3700; i++) {
+      const day = new Date(start.getTime());
+      day.setDate(day.getDate() + i);
+      holidays.push(day);
+    }
+    const cal = weekendCalendar({ holidays });
+
+    expect(() => cal.addBusinessDays(start, 1)).toThrow(ApprovalValidationError);
+    expect(() => cal.addBusinessDays(start, 1)).toThrow(
+      /weekendCalendar: no business day found within 10 years of .* — check weekendDays and holidays\./,
+    );
+  });
+
   it('refuses an infinite day count instead of looping forever', () => {
     const cal = weekendCalendar();
     const start = new Date('2026-06-19T09:00:00');
