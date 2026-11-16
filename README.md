@@ -2037,6 +2037,15 @@ try {
 | `ApprovalConflictError`         | 409  | Optimistic lock version mismatch (after all retries)  |
 | `ApprovalValidationError`       | 422  | Zod input validation failure, invalid template config |
 
+Two codes are raised on a plain `ApprovalError`, so match them on `err.code`:
+
+| `code`               | HTTP | Thrown when                                                                  |
+| -------------------- | ---- | ---------------------------------------------------------------------------- |
+| `CANNOT_CANCEL`      | 409  | `cancel()` on an instance that is already approved, rejected, cancelled or expired |
+| `SCHEDULER_SHUTDOWN` | 503  | `scheduleAt()` on an `InMemorySchedulerAdapter` after `shutdown()`           |
+
+Any other code maps to 500.
+
 ---
 
 ## Multi-tenancy
