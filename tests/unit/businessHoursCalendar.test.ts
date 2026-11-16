@@ -152,4 +152,20 @@ describe('businessHoursCalendar', () => {
       'weekendCalendar: cannot add Infinity business days',
     );
   });
+
+  it('gives up with a validation error when holidays cover every day for ten years', () => {
+    const start = at('2026-06-22T10:00:00');
+    const holidays: Date[] = [];
+    for (let i = 0; i <= 3700; i++) {
+      const day = new Date(start.getTime());
+      day.setDate(day.getDate() + i);
+      holidays.push(day);
+    }
+    const closed = businessHoursCalendar({ holidays });
+
+    expect(() => closed.addBusinessHours(start, 1)).toThrow(ApprovalValidationError);
+    expect(() => closed.addBusinessHours(start, 1)).toThrow(
+      /businessHoursCalendar: no working day found within 10 years of .* — check weekendDays and holidays\./,
+    );
+  });
 });
