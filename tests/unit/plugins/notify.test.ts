@@ -670,6 +670,21 @@ describe('CompositeNotificationAdapter', () => {
     expect(logger.error).toHaveBeenCalledOnce();
   });
 
+  it('still resolves when the logger itself throws while reporting a child failure', async () => {
+    const logger = spyLogger();
+    logger.error.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+    const bad: INotificationAdapter = {
+      notify: async () => {
+        throw new Error('boom');
+      },
+    };
+    const c = new CompositeNotificationAdapter({ children: [bad, bad], logger });
+    await expect(c.notify(makeEvent())).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledTimes(2);
+  });
+
   it('every child throwing still resolves and logs all errors', async () => {
     const logger = spyLogger();
     const mk = (): INotificationAdapter => ({

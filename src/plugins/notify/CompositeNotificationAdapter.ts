@@ -74,12 +74,16 @@ export class CompositeNotificationAdapter implements INotificationAdapter {
     results.forEach((result, i) => {
       if (result.status === 'rejected') {
         const child = this.children[i]!;
-        this.logger.error('CompositeNotificationAdapter: child failed to notify', result.reason, {
-          child: child.name,
-          type: event.type,
-          instanceId: event.instanceId,
-          tenantId: event.tenantId,
-        });
+        try {
+          this.logger.error('CompositeNotificationAdapter: child failed to notify', result.reason, {
+            child: child.name,
+            type: event.type,
+            instanceId: event.instanceId,
+            tenantId: event.tenantId,
+          });
+        } catch {
+          // A throwing logger must not escape: the promise is documented as never rejecting.
+        }
       }
     });
   }
