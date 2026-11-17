@@ -754,6 +754,21 @@ describe('CompositeAuditAdapter', () => {
     expect(logger.error).toHaveBeenCalledOnce();
   });
 
+  it('still resolves when the logger itself throws while reporting a child failure', async () => {
+    const logger = spyLogger();
+    logger.error.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+    const bad: IAuditAdapter = {
+      append: async () => {
+        throw new Error('boom');
+      },
+    };
+    const composite = new CompositeAuditAdapter({ children: [bad, bad], logger });
+    await expect(composite.append('t', 'i', makeEntry(), INST)).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledTimes(2);
+  });
+
   it('every child throwing still resolves and logs all errors', async () => {
     const logger = spyLogger();
     const mk = (): IAuditAdapter => ({
