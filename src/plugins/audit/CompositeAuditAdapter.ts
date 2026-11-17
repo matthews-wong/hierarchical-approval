@@ -81,11 +81,15 @@ export class CompositeAuditAdapter implements IAuditAdapter {
       const result = results[i]!;
       if (result.status === 'rejected') {
         const child = this.children[i]!;
-        this.logger.error(
-          `CompositeAuditAdapter: child "${child.id}" failed to append`,
-          result.reason,
-          { tenantId, instanceId, childId: child.id, childIndex: i },
-        );
+        try {
+          this.logger.error(
+            `CompositeAuditAdapter: child "${child.id}" failed to append`,
+            result.reason,
+            { tenantId, instanceId, childId: child.id, childIndex: i },
+          );
+        } catch {
+          // A throwing logger must not escape: append is documented as never throwing.
+        }
       }
     }
   }
