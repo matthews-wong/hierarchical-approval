@@ -124,6 +124,34 @@ describe('InMemorySchedulerAdapter', () => {
     );
   });
 
+  it('does not leak an unhandled rejection when the logger throws for a failed callback', async () => {
+    const logger = spyLogger();
+    logger.error.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const adapter = new InMemorySchedulerAdapter({ logger });
+      await adapter.scheduleAt('job-5b', new Date(Date.now() + 1000), async () => {
+        throw new Error('boom');
+      });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      // Fake timers also fake setImmediate; unhandledRejection fires on a later real tick.
+      vi.useRealTimers();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(logger.error).toHaveBeenCalledOnce();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
   it('computes the delay from the injected clock, not the real system clock', async () => {
     const clock = { now: () => new Date('2026-01-01T00:00:00.000Z') };
     const adapter = new InMemorySchedulerAdapter({ clock });

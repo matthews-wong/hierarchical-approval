@@ -59,10 +59,14 @@ export class InMemorySchedulerAdapter implements ISchedulerAdapter {
     const timer = setTimeout(() => {
       this.timers.delete(handle);
       callback().catch((err: unknown) => {
-        this.logger.error('InMemorySchedulerAdapter: scheduled callback threw', err, {
-          id,
-          handle,
-        });
+        try {
+          this.logger.error('InMemorySchedulerAdapter: scheduled callback threw', err, {
+            id,
+            handle,
+          });
+        } catch {
+          // Nothing awaits this chain, so a throwing logger would surface as an unhandled rejection.
+        }
       });
     }, delayMs);
 
