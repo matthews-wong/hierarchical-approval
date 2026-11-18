@@ -14,6 +14,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   when the configured logger throws while reporting a failed child.
 - `InMemorySchedulerAdapter` no longer produces an unhandled promise rejection when the configured logger
   throws while reporting a failed scheduled callback.
+- `HashChainAuditAdapter.append()` no longer rejects when the configured logger throws while reporting a
+  writer or hashing failure.
 
 ### Changed
 
