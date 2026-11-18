@@ -430,6 +430,22 @@ describe('HashChainAuditAdapter — never throws', () => {
     expect(logger.error).toHaveBeenCalled();
   });
 
+  it('still resolves when the logger throws while reporting a writer rejection', async () => {
+    const logger = spyLogger();
+    logger.error.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+    const adapter = new HashChainAuditAdapter({
+      writer: async () => {
+        throw new Error('sink down');
+      },
+      reader: async () => [],
+      logger,
+    });
+    await expect(adapter.append('t', 'i', makeEntry(), INST)).resolves.toBeUndefined();
+    await expect(adapter.append('t', 'i', makeEntry(), INST)).resolves.toBeUndefined();
+  });
+
   it('writer rejection on the genesis entry keeps the in-process head advanced (next seq is 1)', async () => {
     const persisted: ChainRecord[] = [];
     let calls = 0;

@@ -206,21 +206,21 @@ export class HashChainAuditAdapter implements IAuditAdapter {
         // Writer failure (including on the genesis entry) is logged and swallowed.
         // The in-process head already advanced, so subsequent appends stay linked;
         // if the sink dropped this record, verify() will surface the gap deterministically.
-        this.logger.error(
-          'HashChainAuditAdapter: writer rejected; entry not durably persisted',
-          err,
-          { tenantId, instanceId, seq },
-        );
+        this.logError('HashChainAuditAdapter: writer rejected; entry not durably persisted', err, {
+          tenantId,
+          instanceId,
+          seq,
+        });
       }
     } catch (err) {
       // Canonicalization/hashing failure (e.g. circular reference). Swallow per contract.
       if (err instanceof CircularReferenceError) {
-        this.logger.error('HashChainAuditAdapter: entry could not be canonicalized', err, {
+        this.logError('HashChainAuditAdapter: entry could not be canonicalized', err, {
           tenantId,
           instanceId,
         });
       } else {
-        this.logger.error('HashChainAuditAdapter: unexpected error during append', err, {
+        this.logError('HashChainAuditAdapter: unexpected error during append', err, {
           tenantId,
           instanceId,
         });
@@ -229,6 +229,14 @@ export class HashChainAuditAdapter implements IAuditAdapter {
   }
 
   /** Compute the SHA-256 (hex) hash for a record's `{ seq, prevHash, entry }`. */
+  private logError(message: string, err: unknown, context: Record<string, unknown>): void {
+    try {
+      this.logger.error(message, err, context);
+    } catch {
+      // append is documented as never throwing, so a throwing logger must not escape it.
+    }
+  }
+
   private computeHash(seq: number, prevHash: string, entry: AuditEntry): string {
     const canonical = canonicalize({ seq, prevHash, entry });
     return createHash('sha256').update(canonical, 'utf8').digest('hex');
