@@ -10,6 +10,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `CompositeNotificationAdapter.notify()` and `CompositeAuditAdapter.append()` no longer reject when the
   configured logger throws while reporting a failed child; the log failure is dropped and the other
   children are unaffected.
+- `CompositeMetricsAdapter.increment()` and `timing()` no longer throw, or skip the remaining children,
+  when the configured logger throws while reporting a failed child.
 
 ### Changed
 

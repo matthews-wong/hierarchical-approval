@@ -382,6 +382,27 @@ describe('CompositeMetricsAdapter', () => {
     expect(logger.error).toHaveBeenCalledTimes(2);
   });
 
+  it('still reaches later children when the logger throws while reporting a child failure', () => {
+    const logger = spyLogger();
+    logger.error.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+    const good = { increment: vi.fn(), timing: vi.fn() };
+    const bad: IMetricsAdapter = {
+      increment: () => {
+        throw new Error('boom');
+      },
+      timing: () => {
+        throw new Error('boom');
+      },
+    };
+    const c = new CompositeMetricsAdapter({ children: [bad, good], logger });
+    expect(() => c.increment('approval.submitted')).not.toThrow();
+    expect(() => c.timing('approval.operation_duration_ms', 5)).not.toThrow();
+    expect(good.increment).toHaveBeenCalledOnce();
+    expect(good.timing).toHaveBeenCalledOnce();
+  });
+
   it('forwards the actual metric/labels to children, and to Prometheus + InMemory together', () => {
     const prom = new PrometheusMetricsAdapter();
     const mem = new InMemoryMetricsAdapter();

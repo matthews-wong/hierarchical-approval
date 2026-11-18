@@ -54,10 +54,7 @@ export class CompositeMetricsAdapter implements IMetricsAdapter {
       try {
         child.increment(metric, labels);
       } catch (err) {
-        this.logger.error('CompositeMetricsAdapter: child increment() threw', err, {
-          childIndex: i,
-          metric,
-        });
+        this.reportChildFailure('increment', err, i, metric);
       }
     }
   }
@@ -69,11 +66,24 @@ export class CompositeMetricsAdapter implements IMetricsAdapter {
       try {
         child.timing(metric, durationMs, labels);
       } catch (err) {
-        this.logger.error('CompositeMetricsAdapter: child timing() threw', err, {
-          childIndex: i,
-          metric,
-        });
+        this.reportChildFailure('timing', err, i, metric);
       }
+    }
+  }
+
+  private reportChildFailure(
+    method: 'increment' | 'timing',
+    err: unknown,
+    childIndex: number,
+    metric: MetricName,
+  ): void {
+    try {
+      this.logger.error(`CompositeMetricsAdapter: child ${method}() threw`, err, {
+        childIndex,
+        metric,
+      });
+    } catch {
+      // Metrics are fire-and-forget: a throwing logger must not stop the remaining children.
     }
   }
 }
