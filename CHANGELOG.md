@@ -12,6 +12,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   children are unaffected.
 - `CompositeMetricsAdapter.increment()` and `timing()` no longer throw, or skip the remaining children,
   when the configured logger throws while reporting a failed child.
+- `InMemorySchedulerAdapter` no longer produces an unhandled promise rejection when the configured logger
+  throws while reporting a failed scheduled callback.
 
 ### Changed
 
