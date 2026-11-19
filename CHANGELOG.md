@@ -7,6 +7,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `TemplatedNotificationAdapter`, `DigestNotificationAdapter`, `OutboxNotificationAdapter` and
+  `RbacAuthorizationPolicy` no longer reject, skip the outbox retry update, or leak an unhandled
+  rejection from the scheduled digest flush when the configured logger throws while reporting a failure.
 - `CompositeNotificationAdapter.notify()` and `CompositeAuditAdapter.append()` no longer reject when the
   configured logger throws while reporting a failed child; the log failure is dropped and the other
   children are unaffected.
