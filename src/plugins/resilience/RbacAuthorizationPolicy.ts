@@ -126,11 +126,15 @@ export class RbacAuthorizationPolicy implements IAuthorizationPolicy {
     try {
       roles = await this.roleProvider(ctx.actorId, tenantId);
     } catch (err) {
-      this.logger.error('RbacAuthorizationPolicy: roleProvider failed; denying (fail-closed)', err, {
-        operation: ctx.operation,
-        actorId: ctx.actorId,
-        tenantId,
-      });
+      try {
+        this.logger.error('RbacAuthorizationPolicy: roleProvider failed; denying (fail-closed)', err, {
+          operation: ctx.operation,
+          actorId: ctx.actorId,
+          tenantId,
+        });
+      } catch {
+        // A throwing logger must not turn the denial into a rejection.
+      }
       return `Operation "${ctx.operation}" is denied: unable to resolve roles for actor "${ctx.actorId}".`;
     }
 
