@@ -149,11 +149,15 @@ export class TemplatedNotificationAdapter implements INotificationAdapter {
 
       await this.send(message);
     } catch (err) {
-      this.logger.error('TemplatedNotificationAdapter: failed to render/send notification', err, {
-        type: event.type,
-        instanceId: event.instanceId,
-        tenantId: event.tenantId,
-      });
+      try {
+        this.logger.error('TemplatedNotificationAdapter: failed to render/send notification', err, {
+          type: event.type,
+          instanceId: event.instanceId,
+          tenantId: event.tenantId,
+        });
+      } catch {
+        // A throwing logger must not escape: notify() is documented as never rejecting.
+      }
     }
   }
 

@@ -945,6 +945,22 @@ describe('TemplatedNotificationAdapter', () => {
     expect(logger.error).toHaveBeenCalledOnce();
   });
 
+  it('still resolves when the logger itself throws while reporting a send failure', async () => {
+    const logger = spyLogger();
+    logger.error.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+    const adapter = new TemplatedNotificationAdapter({
+      send: () => {
+        throw new Error('send down');
+      },
+      templates: { 'approval:approved': { subject: 's', body: 'b' } },
+      logger,
+    });
+    await expect(adapter.notify(makeEvent())).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledOnce();
+  });
+
   it('payload field absent on a different event type interpolates safely (no throw)', async () => {
     const sent: { body: string }[] = [];
     const adapter = new TemplatedNotificationAdapter({
