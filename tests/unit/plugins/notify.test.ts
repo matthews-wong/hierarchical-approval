@@ -510,6 +510,41 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     );
   });
 
+  it('still persists the retry state when the logger throws while reporting a failed delivery', async () => {
+    const logger = spyLogger();
+    logger.warn.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+    const update = vi.fn(async () => {});
+    const store: IOutboxStore = {
+      enqueue: async () => {},
+      due: async () => [
+        {
+          id: 'r1',
+          partitionKey: 'tenant-1:inst-1',
+          tenantId: 'tenant-1',
+          event: makeEvent(),
+          status: 'pending',
+          attempts: 0,
+          nextAttemptAt: 0,
+          enqueuedAt: 0,
+        },
+      ],
+      update,
+      remove: async () => {},
+      pending: async () => [],
+      deadLettered: async () => [],
+    };
+    const transport = vi.fn(async () => {
+      throw new Error('transport down');
+    });
+    const adapter = new OutboxNotificationAdapter({ transport, store, clock: new ManualClock(0), logger });
+
+    expect(await adapter.drain()).toBe(0);
+    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1', lastError: 'transport down' }));
+  });
+
   it('counts a delivery as delivered even when store.remove fails (at-least-once)', async () => {
     const clock = new ManualClock(0);
     const logger = spyLogger();
