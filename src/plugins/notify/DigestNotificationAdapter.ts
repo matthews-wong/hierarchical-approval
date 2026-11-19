@@ -116,7 +116,7 @@ export class DigestNotificationAdapter implements INotificationAdapter {
       }
       this.timer = setInterval(() => {
         void this.flush().catch((err) => {
-          this.logger.error('DigestNotificationAdapter: scheduled flush failed', err);
+          this.logError('DigestNotificationAdapter: scheduled flush failed', err);
         });
       }, this.intervalMs);
       // Never hold the process open for a convenience digest.
@@ -192,10 +192,19 @@ export class DigestNotificationAdapter implements INotificationAdapter {
     try {
       await this.send(digest);
     } catch (err) {
-      this.logger.error('DigestNotificationAdapter: send failed', err, {
+      this.logError('DigestNotificationAdapter: send failed', err, {
         recipient: digest.recipient,
         events: digest.events.length,
       });
+    }
+  }
+
+  private logError(...args: Parameters<Logger['error']>): void {
+    try {
+      this.logger.error(...args);
+    } catch {
+      // A throwing logger must not escape: the adapter contract is to never reject, and the
+      // scheduled flush has no caller left to catch it.
     }
   }
 }

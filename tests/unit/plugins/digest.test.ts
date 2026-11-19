@@ -166,6 +166,22 @@ describe('DigestNotificationAdapter', () => {
       await expect(adapter.flush()).resolves.toBeUndefined();
     });
 
+    it('still resolves when the logger throws while reporting a failed send', async () => {
+      const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+      logger.error.mockImplementation(() => {
+        throw new Error('logger boom');
+      });
+      const adapter = new DigestNotificationAdapter({
+        send: () => {
+          throw new Error('mailer down');
+        },
+        logger,
+      });
+      await adapter.notify(event());
+      await expect(adapter.flush()).resolves.toBeUndefined();
+      expect(logger.error).toHaveBeenCalledOnce();
+    });
+
     it('does not replay a failed digest into the next one', async () => {
       const seen: number[] = [];
       let calls = 0;
