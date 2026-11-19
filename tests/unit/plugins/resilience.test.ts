@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   RbacAuthorizationPolicy,
   CompositeAuthorizationPolicy,
@@ -144,6 +144,20 @@ describe('RbacAuthorizationPolicy — fail-closed provider', () => {
     expect(denial).toMatch(/unable to resolve roles for actor "user-1"/);
     expect(logged[0][0]).toContain('roleProvider failed');
     expect(logged[0][1]).toBeInstanceOf(Error);
+  });
+
+  it('still returns the denial when the logger throws while reporting the provider failure', async () => {
+    const error = vi.fn(() => {
+      throw new Error('logger boom');
+    });
+    const policy = new RbacAuthorizationPolicy({
+      rules: { approve: { roles: ['manager'] } },
+      roleProvider: () => Promise.reject(new Error('roles service down')),
+      logger: { info: () => {}, warn: () => {}, error, fatal: () => {}, debug: () => {} },
+    });
+
+    expect(await policy.authorize(authCtx())).toMatch(/unable to resolve roles for actor "user-1"/);
+    expect(error).toHaveBeenCalledOnce();
   });
 
   it('denies fail-closed even when defaultMode is allow', async () => {
