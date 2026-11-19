@@ -5,6 +5,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [4.2.3] - 2026-11-19
+
 ### Fixed
 
 - `TemplatedNotificationAdapter`, `DigestNotificationAdapter`, `OutboxNotificationAdapter` and
