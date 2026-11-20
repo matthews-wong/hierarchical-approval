@@ -704,6 +704,21 @@ describe('RedactingAuditAdapter', () => {
     expect(seen[0]!.entry).toBe(original);
   });
 
+  it('still forwards the original entry when the logger throws while reporting a redaction failure', async () => {
+    const logger = spyLogger();
+    logger.error.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+    const { inner, seen } = capturingInner();
+    const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue.a'], logger });
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const original = makeEntry({ newValue: { a: circular } });
+    await expect(adapter.append('t', 'i', original, INST)).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledOnce();
+    expect(seen[0]!.entry).toBe(original);
+  });
+
   it('deep-clones array values, leaving them structurally intact but not the same reference', async () => {
     const { inner, seen } = capturingInner();
     const adapter = new RedactingAuditAdapter({ inner, fieldPaths: ['newValue.ssn'] });

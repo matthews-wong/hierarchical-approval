@@ -178,13 +178,21 @@ export class RedactingAuditAdapter implements IAuditAdapter {
       // Redaction must never break the audit path. On the unexpected event that
       // cloning/redaction fails, log and forward the original entry unmodified so
       // the audit record is not silently dropped.
-      this.logger.error('RedactingAuditAdapter: redaction failed; forwarding original entry', err, {
+      this.logError('RedactingAuditAdapter: redaction failed; forwarding original entry', err, {
         tenantId,
         instanceId,
       });
       redacted = entry;
     }
     await this.inner.append(tenantId, instanceId, redacted, instance);
+  }
+
+  private logError(...args: Parameters<Logger['error']>): void {
+    try {
+      this.logger.error(...args);
+    } catch {
+      // A throwing logger must not drop the audit record it was reporting on.
+    }
   }
 
   /** Produce a redacted deep clone of `entry` without touching the original. */
