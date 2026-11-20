@@ -299,6 +299,23 @@ describe('WebhookNotificationAdapter — exhausted retries', () => {
     await expect(adapter.notify(makeEvent())).resolves.toBeUndefined();
     expect(logger.error).toHaveBeenCalledOnce();
   });
+
+  it('notify() still resolves when the logger throws while reporting the give-up', async () => {
+    const logger = spyLogger();
+    logger.error.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+    const client: HttpClient = async () => fakeResponse(503);
+    const adapter = new WebhookNotificationAdapter({
+      url: 'https://example.com/hook',
+      httpClient: client,
+      sleep: noSleep,
+      maxAttempts: 1,
+      logger,
+    });
+    await expect(adapter.notify(makeEvent())).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledOnce();
+  });
 });
 
 describe('WebhookNotificationAdapter — non-retryable statuses', () => {
