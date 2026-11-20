@@ -5,6 +5,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `WebhookNotificationAdapter.notify()` no longer rejects when the configured logger throws while
+  reporting a failed delivery.
+- `RedactingAuditAdapter.append()` still forwards the original entry when the configured logger throws
+  while reporting a redaction failure, instead of dropping the audit record.
+
 ## [4.2.3] - 2026-11-19
 
 ### Fixed
