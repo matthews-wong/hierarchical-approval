@@ -197,7 +197,7 @@ export class WebhookNotificationAdapter implements INotificationAdapter {
     try {
       await this.deliver(event);
     } catch (err) {
-      this.logger.error(
+      this.logError(
         'WebhookNotificationAdapter: giving up on delivery, dropping notification',
         err,
         {
@@ -207,6 +207,14 @@ export class WebhookNotificationAdapter implements INotificationAdapter {
           url: this.url,
         },
       );
+    }
+  }
+
+  private logError(...args: Parameters<Logger['error']>): void {
+    try {
+      this.logger.error(...args);
+    } catch {
+      // A throwing logger must not escape: the adapter contract is to never reject.
     }
   }
 
