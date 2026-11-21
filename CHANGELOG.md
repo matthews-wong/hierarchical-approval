@@ -11,6 +11,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reporting a failed delivery.
 - `RedactingAuditAdapter.append()` still forwards the original entry when the configured logger throws
   while reporting a redaction failure, instead of dropping the audit record.
+- `ApprovalEngine` operations no longer reject after persisting state when the configured logger throws,
+  and a throwing logger can no longer escape the event-listener error handler.
 
 ## [4.2.3] - 2026-11-19
 
