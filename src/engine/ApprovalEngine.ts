@@ -62,7 +62,7 @@ import {
 import { MemoryAdapter } from '../adapters/MemoryAdapter.js';
 import { EventBus } from '../utils/EventBus.js';
 import type { Logger } from '../utils/Logger.js';
-import { noopLogger } from '../utils/Logger.js';
+import { noopLogger, safeLogger } from '../utils/Logger.js';
 import type { Clock } from '../utils/Clock.js';
 import { systemClock } from '../utils/Clock.js';
 import type { BusinessCalendar } from '../utils/BusinessCalendar.js';
@@ -512,7 +512,7 @@ export class ApprovalEngine {
 
   constructor(private readonly opts: ApprovalEngineOptions) {
     this.tenantId = opts.tenantId ?? 'default';
-    this.logger = opts.logger ?? noopLogger;
+    this.logger = opts.logger ? safeLogger(opts.logger) : noopLogger;
     // A subscriber's listener must never abort the operation that emitted the
     // event; report and carry on, as the notification/audit paths do.
     this.bus.setListenerErrorHandler((err, event) => {

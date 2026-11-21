@@ -169,3 +169,63 @@ describe('engine — a throwing engine.on() listener no longer breaks the operat
     expect(events.map((e) => e.type)).toContain('approval:completed');
   });
 });
+
+describe('engine — a throwing logger never aborts an operation', () => {
+  const throwingLogger = {
+    info: vi.fn(() => {
+      throw new Error('logger-boom');
+    }),
+    warn: vi.fn(() => {
+      throw new Error('logger-boom');
+    }),
+    error: vi.fn(() => {
+      throw new Error('logger-boom');
+    }),
+    fatal: vi.fn(() => {
+      throw new Error('logger-boom');
+    }),
+    debug: vi.fn(() => {
+      throw new Error('logger-boom');
+    }),
+  };
+
+  it('submits and approves although every logger call throws', async () => {
+    const { engine } = ApprovalTestKit.create({ logger: throwingLogger });
+    await engine.defineTemplate(singleLevelTemplate);
+
+    const instance = await engine.submit({
+      templateName: 'single-level',
+      documentId: 'doc-logger',
+      documentType: 'doc',
+      submittedBy: 'submitter1',
+      data: {},
+    });
+    await engine.approve(instance.id, { approverId: 'appr1' });
+
+    expect((await engine.getInstance(instance.id)).status).toBe('approved');
+    // The logger really was exercised, so the resolved calls above prove containment.
+    expect(throwingLogger.info).toHaveBeenCalled();
+  });
+
+  it('still reports a throwing listener when the logger that reports it throws', async () => {
+    const { engine } = ApprovalTestKit.create({ logger: throwingLogger });
+    await engine.defineTemplate(singleLevelTemplate);
+    const instance = await engine.submit({
+      templateName: 'single-level',
+      documentId: 'doc-logger-listener',
+      documentType: 'doc',
+      submittedBy: 'submitter1',
+      data: {},
+    });
+    engine.on('approval:approved', () => {
+      throw new Error('listener-boom');
+    });
+
+    await expect(engine.approve(instance.id, { approverId: 'appr1' })).resolves.toBeDefined();
+    expect(throwingLogger.error).toHaveBeenCalledWith(
+      'event listener threw',
+      expect.any(Error),
+      expect.anything(),
+    );
+  });
+});
