@@ -2101,6 +2101,15 @@ interface ApprovalLevelConfig {
 
 ---
 
+## Status
+
+- **Node.js**: 20, 22 and 24 are exercised in CI; `engines` declares `>=20`.
+- **Adapters**: `MemoryAdapter` for development and tests, `PostgresAdapter` for production
+  (`pg` is an optional peer dependency).
+- **Versioning**: semver. Breaking changes are called out in the [CHANGELOG](CHANGELOG.md).
+
+---
+
 ## Blog & further reading
 
 Posts by the author on real-world approval workflow patterns:
