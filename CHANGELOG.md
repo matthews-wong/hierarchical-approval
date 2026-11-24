@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `new ApprovalEngine()` now throws an `ApprovalValidationError` naming the `adapter` option when it is
+  omitted, instead of failing later with a bare `TypeError`.
 - `WebhookNotificationAdapter.notify()` no longer rejects when the configured logger throws while
   reporting a failed delivery.
 - `RedactingAuditAdapter.append()` still forwards the original entry when the configured logger throws
