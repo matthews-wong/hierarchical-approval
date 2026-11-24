@@ -510,7 +510,15 @@ export class ApprovalEngine {
   /** Set by {@link shutdown}; stops the self-rescheduling loop from scheduling another tick. */
   private schedulerStopped = false;
 
+  /**
+   * @throws {@link ApprovalValidationError} if `opts.adapter` is missing.
+   */
   constructor(private readonly opts: ApprovalEngineOptions) {
+    if (!opts.adapter) {
+      throw new ApprovalValidationError(
+        'ApprovalEngine requires an `adapter` option (an IStorageAdapter such as MemoryAdapter)',
+      );
+    }
     this.tenantId = opts.tenantId ?? 'default';
     this.logger = opts.logger ? safeLogger(opts.logger) : noopLogger;
     // A subscriber's listener must never abort the operation that emitted the
