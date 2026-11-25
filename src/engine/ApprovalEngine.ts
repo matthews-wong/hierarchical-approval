@@ -511,10 +511,10 @@ export class ApprovalEngine {
   private schedulerStopped = false;
 
   /**
-   * @throws {@link ApprovalValidationError} if `opts.adapter` is missing.
+   * @throws {@link ApprovalValidationError} if `opts` or `opts.adapter` is missing.
    */
   constructor(private readonly opts: ApprovalEngineOptions) {
-    if (!opts.adapter) {
+    if (!opts?.adapter) {
       throw new ApprovalValidationError(
         'ApprovalEngine requires an `adapter` option (an IStorageAdapter such as MemoryAdapter)',
       );
