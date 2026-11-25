@@ -1,7 +1,7 @@
 import type { IAuditAdapter } from '../../adapters/IAuditAdapter.js';
 import type { AuditEntry, ApprovalInstance } from '../../types/index.js';
 import type { Logger } from '../../utils/Logger.js';
-import { noopLogger } from '../../utils/Logger.js';
+import { noopLogger, safeLogger } from '../../utils/Logger.js';
 
 /** Default token substituted in place of redacted values. */
 export const DEFAULT_REDACTION_MASK = '[REDACTED]';
@@ -153,7 +153,7 @@ export class RedactingAuditAdapter implements IAuditAdapter {
     this.inner = options.inner;
     this.mask = options.mask ?? DEFAULT_REDACTION_MASK;
     this.freeTextFields = options.freeTextFields ?? [];
-    this.logger = options.logger ?? noopLogger;
+    this.logger = safeLogger(options.logger ?? noopLogger);
     this.parsedPaths = (options.fieldPaths ?? [])
       .map(parsePath)
       .filter((p): p is ParsedPath => p !== null);
@@ -178,21 +178,13 @@ export class RedactingAuditAdapter implements IAuditAdapter {
       // Redaction must never break the audit path. On the unexpected event that
       // cloning/redaction fails, log and forward the original entry unmodified so
       // the audit record is not silently dropped.
-      this.logError('RedactingAuditAdapter: redaction failed; forwarding original entry', err, {
+      this.logger.error('RedactingAuditAdapter: redaction failed; forwarding original entry', err, {
         tenantId,
         instanceId,
       });
       redacted = entry;
     }
     await this.inner.append(tenantId, instanceId, redacted, instance);
-  }
-
-  private logError(...args: Parameters<Logger['error']>): void {
-    try {
-      this.logger.error(...args);
-    } catch {
-      // A throwing logger must not drop the audit record it was reporting on.
-    }
   }
 
   /** Produce a redacted deep clone of `entry` without touching the original. */
