@@ -16,6 +16,13 @@ describe('ApprovalEngine construction', () => {
     expect(construct).toThrow(MISSING_ADAPTER);
   });
 
+  it('throws a validation error when the options object itself is missing', () => {
+    // @ts-expect-error -- options are required by the type; a JS caller may omit them.
+    const construct = () => new ApprovalEngine(undefined);
+    expect(construct).toThrow(ApprovalValidationError);
+    expect(construct).toThrow(MISSING_ADAPTER);
+  });
+
   it('constructs with only an adapter and starts with no templates', async () => {
     const engine = new ApprovalEngine({ adapter: new MemoryAdapter() });
     try {
