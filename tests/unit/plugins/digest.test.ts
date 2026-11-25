@@ -256,6 +256,7 @@ describe('DigestNotificationAdapter', () => {
           expect.objectContaining({ message: 'clock exploded' }),
           undefined,
         );
+        expect(logger.error).toHaveBeenCalledTimes(1);
         await adapter.stop();
       } finally {
         vi.useRealTimers();
