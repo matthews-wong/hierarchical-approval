@@ -3,7 +3,7 @@ import { createHmac } from 'node:crypto';
 import type { Clock } from '../../utils/Clock.js';
 import { systemClock } from '../../utils/Clock.js';
 import type { Logger } from '../../utils/Logger.js';
-import { noopLogger } from '../../utils/Logger.js';
+import { noopLogger, safeLogger } from '../../utils/Logger.js';
 import type {
   INotificationAdapter,
   NotificationEvent,
@@ -182,7 +182,7 @@ export class WebhookNotificationAdapter implements INotificationAdapter {
     this.backoffFactor = options.backoffFactor ?? DEFAULT_BACKOFF_FACTOR;
     this.maxDelayMs = Math.max(0, options.maxDelayMs ?? DEFAULT_MAX_DELAY_MS);
     this.clock = options.clock ?? systemClock;
-    this.logger = options.logger ?? noopLogger;
+    this.logger = safeLogger(options.logger ?? noopLogger);
     this.httpClient = options.httpClient ?? getDefaultHttpClient();
     this.sleep = options.sleep ?? defaultSleep;
     this.random = options.random ?? Math.random;
@@ -197,7 +197,7 @@ export class WebhookNotificationAdapter implements INotificationAdapter {
     try {
       await this.deliver(event);
     } catch (err) {
-      this.logError(
+      this.logger.error(
         'WebhookNotificationAdapter: giving up on delivery, dropping notification',
         err,
         {
@@ -207,14 +207,6 @@ export class WebhookNotificationAdapter implements INotificationAdapter {
           url: this.url,
         },
       );
-    }
-  }
-
-  private logError(...args: Parameters<Logger['error']>): void {
-    try {
-      this.logger.error(...args);
-    } catch {
-      // A throwing logger must not escape: the adapter contract is to never reject.
     }
   }
 
