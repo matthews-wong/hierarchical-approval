@@ -1,7 +1,7 @@
 import type { Clock } from '../../utils/Clock.js';
 import { systemClock } from '../../utils/Clock.js';
 import type { Logger } from '../../utils/Logger.js';
-import { noopLogger } from '../../utils/Logger.js';
+import { noopLogger, safeLogger } from '../../utils/Logger.js';
 import { ApprovalValidationError } from '../../errors.js';
 import type {
   INotificationAdapter,
@@ -105,7 +105,7 @@ export class DigestNotificationAdapter implements INotificationAdapter {
     this.passthrough = new Set(opts.passthrough ?? DEFAULT_PASSTHROUGH);
     this.maxBatchSize = opts.maxBatchSize ?? DEFAULT_MAX_BATCH_SIZE;
     this.intervalMs = opts.intervalMs;
-    this.logger = opts.logger ?? noopLogger;
+    this.logger = safeLogger(opts.logger ?? noopLogger);
     this.clock = opts.clock ?? systemClock;
 
     if (this.intervalMs !== undefined) {
@@ -116,7 +116,7 @@ export class DigestNotificationAdapter implements INotificationAdapter {
       }
       this.timer = setInterval(() => {
         void this.flush().catch((err) => {
-          this.logError('DigestNotificationAdapter: scheduled flush failed', err);
+          this.logger.error('DigestNotificationAdapter: scheduled flush failed', err);
         });
       }, this.intervalMs);
       // Never hold the process open for a convenience digest.
@@ -192,19 +192,10 @@ export class DigestNotificationAdapter implements INotificationAdapter {
     try {
       await this.send(digest);
     } catch (err) {
-      this.logError('DigestNotificationAdapter: send failed', err, {
+      this.logger.error('DigestNotificationAdapter: send failed', err, {
         recipient: digest.recipient,
         events: digest.events.length,
       });
-    }
-  }
-
-  private logError(...args: Parameters<Logger['error']>): void {
-    try {
-      this.logger.error(...args);
-    } catch {
-      // A throwing logger must not escape: the adapter contract is to never reject, and the
-      // scheduled flush has no caller left to catch it.
     }
   }
 }

@@ -254,6 +254,7 @@ describe('DigestNotificationAdapter', () => {
         expect(logger.error).toHaveBeenCalledWith(
           'DigestNotificationAdapter: scheduled flush failed',
           expect.objectContaining({ message: 'clock exploded' }),
+          undefined,
         );
         await adapter.stop();
       } finally {
