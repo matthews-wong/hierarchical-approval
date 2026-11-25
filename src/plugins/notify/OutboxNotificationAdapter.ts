@@ -1,7 +1,7 @@
 import type { Clock } from '../../utils/Clock.js';
 import { systemClock } from '../../utils/Clock.js';
 import type { Logger } from '../../utils/Logger.js';
-import { noopLogger } from '../../utils/Logger.js';
+import { noopLogger, safeLogger } from '../../utils/Logger.js';
 import type {
   INotificationAdapter,
   NotificationEvent,
@@ -84,7 +84,7 @@ export class OutboxNotificationAdapter implements INotificationAdapter {
     this.transport = options.transport;
     this.store = options.store ?? new InMemoryOutboxStore();
     this.clock = options.clock ?? systemClock;
-    this.logger = options.logger ?? noopLogger;
+    this.logger = safeLogger(options.logger ?? noopLogger);
     this.maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? 5));
     this.baseDelayMs = Math.max(0, options.baseDelayMs ?? 1000);
     this.backoffFactor = options.backoffFactor ?? 2;
@@ -111,7 +111,7 @@ export class OutboxNotificationAdapter implements INotificationAdapter {
       };
       await this.store.enqueue(record);
     } catch (err) {
-      this.logError('OutboxNotificationAdapter: failed to enqueue event', err, {
+      this.logger.error('OutboxNotificationAdapter: failed to enqueue event', err, {
         type: event.type,
         instanceId: event.instanceId,
         tenantId: event.tenantId,
@@ -147,7 +147,7 @@ export class OutboxNotificationAdapter implements INotificationAdapter {
     try {
       due = await this.store.due(this.clock.now().getTime());
     } catch (err) {
-      this.logError('OutboxNotificationAdapter: failed to read due records', err);
+      this.logger.error('OutboxNotificationAdapter: failed to read due records', err);
       return 0;
     }
 
@@ -172,7 +172,7 @@ export class OutboxNotificationAdapter implements INotificationAdapter {
       } catch (err) {
         // Delivery succeeded but cleanup failed: log. At-least-once means a
         // future drain may redeliver — acceptable and documented.
-        this.logError('OutboxNotificationAdapter: delivered but failed to remove record', err, {
+        this.logger.error('OutboxNotificationAdapter: delivered but failed to remove record', err, {
           id: record.id,
           tenantId: record.tenantId,
         });
@@ -188,7 +188,7 @@ export class OutboxNotificationAdapter implements INotificationAdapter {
       record.lastError = message;
       if (record.attempts >= this.maxAttempts) {
         record.status = 'dead';
-        this.logError(
+        this.logger.error(
           'OutboxNotificationAdapter: dead-lettered after exhausting retries',
           err,
           {
@@ -200,7 +200,7 @@ export class OutboxNotificationAdapter implements INotificationAdapter {
         );
       } else {
         record.nextAttemptAt = this.clock.now().getTime() + this.computeBackoff(record.attempts);
-        this.logWarn('OutboxNotificationAdapter: delivery failed, scheduling retry', {
+        this.logger.warn('OutboxNotificationAdapter: delivery failed, scheduling retry', {
           id: record.id,
           tenantId: record.tenantId,
           attempts: record.attempts,
@@ -211,7 +211,7 @@ export class OutboxNotificationAdapter implements INotificationAdapter {
       try {
         await this.store.update(record);
       } catch (updateErr) {
-        this.logError('OutboxNotificationAdapter: failed to persist record state', updateErr, {
+        this.logger.error('OutboxNotificationAdapter: failed to persist record state', updateErr, {
           id: record.id,
         });
       }
@@ -239,7 +239,7 @@ export class OutboxNotificationAdapter implements INotificationAdapter {
     try {
       return await this.store.pending();
     } catch (err) {
-      this.logError('OutboxNotificationAdapter: failed to read pending records', err);
+      this.logger.error('OutboxNotificationAdapter: failed to read pending records', err);
       return [];
     }
   }
@@ -252,26 +252,8 @@ export class OutboxNotificationAdapter implements INotificationAdapter {
     try {
       return await this.store.deadLettered();
     } catch (err) {
-      this.logError('OutboxNotificationAdapter: failed to read dead-lettered records', err);
+      this.logger.error('OutboxNotificationAdapter: failed to read dead-lettered records', err);
       return [];
-    }
-  }
-
-  // Logging is best effort: a throwing logger must not skip the store update that follows it
-  // or make notify()/drain() reject.
-  private logError(...args: Parameters<Logger['error']>): void {
-    try {
-      this.logger.error(...args);
-    } catch {
-      // Swallowed on purpose; there is nowhere left to report it.
-    }
-  }
-
-  private logWarn(...args: Parameters<Logger['warn']>): void {
-    try {
-      this.logger.warn(...args);
-    } catch {
-      // Swallowed on purpose; there is nowhere left to report it.
     }
   }
 }
