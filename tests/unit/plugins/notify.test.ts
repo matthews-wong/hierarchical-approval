@@ -158,6 +158,26 @@ describe('OutboxNotificationAdapter — notify/enqueue', () => {
     await expect(adapter.notify(makeEvent())).resolves.toBeUndefined();
     expect(logger.error).toHaveBeenCalledOnce();
   });
+
+  it('enqueue failure is swallowed even when the logger throws while reporting it', async () => {
+    const logger = spyLogger();
+    logger.error.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+    const store: IOutboxStore = {
+      enqueue: async () => {
+        throw new Error('store down');
+      },
+      due: async () => [],
+      update: async () => {},
+      remove: async () => {},
+      pending: async () => [],
+      deadLettered: async () => [],
+    };
+    const adapter = new OutboxNotificationAdapter({ transport: () => {}, store, logger });
+    await expect(adapter.notify(makeEvent())).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledOnce();
+  });
 });
 
 describe('OutboxNotificationAdapter — drain & delivery', () => {
