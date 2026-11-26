@@ -510,6 +510,20 @@ describe('HashChainAuditAdapter — never throws', () => {
     expect(await adapter.getChain('t', 'i')).toHaveLength(0);
   });
 
+  it('append still resolves when the logger throws while reporting a circular entry', async () => {
+    const logger = spyLogger();
+    logger.error.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+    const adapter = new HashChainAuditAdapter({ logger });
+    const cyclic = makeEntry() as unknown as Record<string, unknown>;
+    cyclic.newValue = {};
+    (cyclic.newValue as Record<string, unknown>).back = cyclic;
+    await expect(adapter.append('t', 'i', cyclic as never, INST)).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledOnce();
+    expect(await adapter.getChain('t', 'i')).toHaveLength(0);
+  });
+
   it('an unexpected canonicalization failure (not a circular reference) logs the generic message', async () => {
     // The circular-reference case above only drives the CircularReferenceError
     // branch of the outer catch; a throwing getter surfaces some other error
