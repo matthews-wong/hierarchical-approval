@@ -34,6 +34,17 @@ function makeEvent(over: Partial<NotificationEvent> = {}): NotificationEvent {
   };
 }
 
+/** Logger whose every method throws, to prove containment. */
+function throwingLogger(): ReturnType<typeof spyLogger> {
+  const logger = spyLogger();
+  for (const method of [logger.info, logger.warn, logger.error, logger.debug]) {
+    method.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+  }
+  return logger;
+}
+
 describe('InMemoryOutboxStore', () => {
   function rec(over: Partial<OutboxRecord> = {}): OutboxRecord {
     return {
@@ -160,10 +171,7 @@ describe('OutboxNotificationAdapter — notify/enqueue', () => {
   });
 
   it('enqueue failure is swallowed even when the logger throws while reporting it', async () => {
-    const logger = spyLogger();
-    logger.error.mockImplementation(() => {
-      throw new Error('logger boom');
-    });
+    const logger = throwingLogger();
     const store: IOutboxStore = {
       enqueue: async () => {
         throw new Error('store down');
@@ -267,6 +275,21 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
     expect(dead[0]!.attempts).toBe(3);
     expect(dead[0]!.lastError).toBe('always');
     expect(await adapter.pending()).toHaveLength(0);
+  });
+
+  it('dead-letters the record even when the logger throws while reporting it', async () => {
+    const clock = new ManualClock(0);
+    const logger = throwingLogger();
+    const transport = vi.fn(async () => {
+      throw new Error('always');
+    });
+    const adapter = new OutboxNotificationAdapter({ transport, clock, maxAttempts: 1, logger });
+    await adapter.notify(makeEvent());
+    await expect(adapter.drain()).resolves.toBeDefined();
+    const dead = await adapter.deadLettered();
+    expect(dead).toHaveLength(1);
+    expect(dead[0]!.lastError).toBe('always');
+    expect(logger.error).toHaveBeenCalled();
   });
 
   it('maxAttempts = 1 sends straight to dead-letter on a single failure (no retry)', async () => {
@@ -531,10 +554,7 @@ describe('OutboxNotificationAdapter — drain & delivery', () => {
   });
 
   it('still persists the retry state when the logger throws while reporting a failed delivery', async () => {
-    const logger = spyLogger();
-    logger.warn.mockImplementation(() => {
-      throw new Error('logger boom');
-    });
+    const logger = throwingLogger();
     const update = vi.fn(async () => {});
     const store: IOutboxStore = {
       enqueue: async () => {},
