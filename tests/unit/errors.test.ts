@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync, readdirSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ApprovalError } from '../../src/index.js';
 
 describe('ApprovalError.toHttpStatus', () => {
@@ -36,4 +39,36 @@ describe('ApprovalError.toHttpStatus', () => {
       expect(new ApprovalError('x', code).toHttpStatus()).toBe(500);
     },
   );
+});
+
+describe('README error-code table', () => {
+  const SRC_DIR = fileURLToPath(new URL('../../src', import.meta.url));
+  const README = readFileSync(fileURLToPath(new URL('../../README.md', import.meta.url)), 'utf8');
+  // The code is the last string argument of `new ApprovalError(message, 'CODE')`. errors.ts is
+  // skipped: its subclass codes are documented by class, not by code.
+  const CODE_ARG = /,\s*'([A-Z][A-Z_]+)',?\s*\)/g;
+
+  const sourceFiles = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory()
+        ? sourceFiles(join(dir, entry.name))
+        : entry.name.endsWith('.ts')
+          ? [join(dir, entry.name)]
+          : [],
+    );
+
+  const codesInSource = new Set(
+    sourceFiles(SRC_DIR)
+      .filter((file) => basename(file) !== 'errors.ts')
+      .flatMap((file) => [...readFileSync(file, 'utf8').matchAll(CODE_ARG)].map((m) => m[1]!)),
+  );
+
+  it('finds the codes it is meant to guard', () => {
+    expect(codesInSource).toContain('ALREADY_ACTED');
+    expect(codesInSource).toContain('INCOMPLETE_CHAIN');
+  });
+
+  it.each([...codesInSource])('documents %s', (code) => {
+    expect(README).toContain(`\`${code}\``);
+  });
 });
