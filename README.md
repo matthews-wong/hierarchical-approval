@@ -2037,14 +2037,25 @@ try {
 | `ApprovalConflictError`         | 409  | Optimistic lock version mismatch (after all retries)  |
 | `ApprovalValidationError`       | 422  | Zod input validation failure, invalid template config |
 
-Two codes are raised on a plain `ApprovalError`, so match them on `err.code`:
+These codes are raised on a plain `ApprovalError`, so match them on `err.code`:
 
-| `code`               | HTTP | Thrown when                                                                  |
-| -------------------- | ---- | ---------------------------------------------------------------------------- |
-| `CANNOT_CANCEL`      | 409  | `cancel()` on an instance that is already approved, rejected, cancelled or expired |
-| `SCHEDULER_SHUTDOWN` | 503  | `scheduleAt()` on an `InMemorySchedulerAdapter` after `shutdown()`           |
+| `code`                    | HTTP | Thrown when                                                                          |
+| ------------------------- | ---- | ------------------------------------------------------------------------------------ |
+| `CANNOT_CANCEL`           | 409  | `cancel()` on an instance that is already approved, rejected, cancelled or expired   |
+| `SCHEDULER_SHUTDOWN`      | 503  | `scheduleAt()` on an `InMemorySchedulerAdapter` after `shutdown()`                   |
+| `ALREADY_ACTED`           | 500  | The approver has already acted on the level                                          |
+| `CANNOT_UPDATE_DATA`      | 500  | Editing the data of an instance that is no longer pending                            |
+| `INFO_ALREADY_REQUESTED`  | 500  | Asking for clarification while a request is already open                             |
+| `NO_INFO_REQUESTED`       | 500  | Providing information when no clarification request is open                          |
+| `CANNOT_ATTACH`           | 500  | Adding or changing attachments on a terminal instance                                |
+| `ATTACHMENT_NOT_FOUND`    | 500  | Removing an attachment that is not on the instance                                   |
+| `COMMENT_NOT_FOUND`       | 500  | Replying to a comment that is not on the instance                                    |
+| `NOT_SUPPORTED`           | 500  | The storage adapter lacks an optional method, such as `getInstancesByCursor()`       |
+| `INVALID_LEVEL`           | 500  | The targeted level is not awaiting a decision or does not exist                      |
+| `INVALID_STATUS`          | 500  | The instance is not in the status the transition requires                            |
+| `INCOMPLETE_CHAIN`        | 500  | Completing an instance while unfinished levels remain                                |
 
-Any other code maps to 500.
+`toHttpStatus()` maps any code without a dedicated status to 500; map these to a 4xx yourself if your API needs one.
 
 ---
 
