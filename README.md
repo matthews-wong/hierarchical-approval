@@ -2054,6 +2054,7 @@ These codes are raised on a plain `ApprovalError`, so match them on `err.code`:
 | `INVALID_LEVEL`           | 500  | The targeted level is not awaiting a decision or does not exist                      |
 | `INVALID_STATUS`          | 500  | The instance is not in the status the transition requires                            |
 | `INCOMPLETE_CHAIN`        | 500  | Completing an instance while unfinished levels remain                                |
+| `UNKNOWN`                 | 500  | A bulk operation item failed with a non-`ApprovalError`; the original text is the message |
 
 `toHttpStatus()` maps any code without a dedicated status to 500; map these to a 4xx yourself if your API needs one.
 
