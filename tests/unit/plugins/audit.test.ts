@@ -547,6 +547,25 @@ describe('HashChainAuditAdapter — never throws', () => {
     expect(await adapter.getChain('t', 'i')).toHaveLength(0);
   });
 
+  it('append still resolves when the logger throws while reporting an unexpected failure', async () => {
+    const logger = spyLogger();
+    logger.error.mockImplementation(() => {
+      throw new Error('logger boom');
+    });
+    const adapter = new HashChainAuditAdapter({ logger });
+    const poisoned = makeEntry();
+    // Property access that throws is the only way to fail canonicalize() without a cycle.
+    Object.defineProperty(poisoned, 'newValue', {
+      enumerable: true,
+      get() {
+        throw new Error('getter exploded');
+      },
+    });
+    await expect(adapter.append('t', 'i', poisoned, INST)).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledOnce();
+    expect(await adapter.getChain('t', 'i')).toHaveLength(0);
+  });
+
   it('handles Date / nested objects in the entry without throwing', async () => {
     const adapter = new HashChainAuditAdapter();
     await adapter.append(
